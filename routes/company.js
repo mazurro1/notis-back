@@ -85,6 +85,33 @@ router.post(
   company.allCompanysOfType
 );
 
+router.post(
+  "/get-company-users-informations",
+  isAuth,
+  [body("companyId")],
+  company.getCompanyUsersInformations
+);
+
+router.post(
+  "/get-more-users-informations-history",
+  isAuth,
+  [body("companyId")],
+  [body("userHistoryId")],
+  [body("page")],
+  company.getMoreCompanyUsersInformationsHistory
+);
+
+router.post(
+  "/company-users-informations-block",
+  isAuth,
+  [body("companyId")],
+  [body("userHistoryId")],
+  [body("isBlocked")],
+  company.companyUsersInformationsBlock
+);
+
+
+
 router.patch(
   "/update-company-profil",
   isAuth,

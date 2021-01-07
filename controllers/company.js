@@ -1,4 +1,5 @@
 const Company = require("../models/company");
+const mongoose = require("mongoose");
 const User = require("../models/user");
 // const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator/check");
@@ -1094,7 +1095,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "workers.specialization workers.name adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title workers reservationMonthTime"
+      "workers.specialization workers.name adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title workers reservationMonthTime usersInformation.isBlocked usersInformation.userId"
     )
     .populate("owner", "name surname")
     .populate("workers.user", "name surname email")
@@ -1175,6 +1176,7 @@ exports.companyPath = (req, res, next) => {
         workers: mapedWorkers,
         _id: resultCompanyDoc._id,
         reservationMonthTime: resultCompanyDoc.reservationMonthTime,
+        usersInformation: resultCompanyDoc.usersInformation,
       };
 
       // dataCompany.workers = mapedWorkers;
@@ -1317,6 +1319,215 @@ exports.allCompanysOfType = (req, res, next) => {
         error.statusCode = 403;
         throw error;
       }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.getCompanyUsersInformations = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({ _id: companyId })
+    .select("_id usersInformation workers.permissions workers.user owner")
+    .populate("usersInformation.userId", "name surname")
+    .populate({
+      path: "usersInformation.allUserReserwations.reserwationId",
+      select:
+        "toWorkerUserId dateDay dateMonth dateYear dateStart dateEnd serviceName",
+      populate: {
+        path: "toWorkerUserId",
+        select: "name surname linkPath",
+      },
+    })
+    .populate(
+      "usersInformation.informations.workerWhoWritedUserId",
+      "name surname"
+    )
+    .slice("usersInformation.allUserReserwations", 10)
+    .slice("usersInformation.informations", 10)
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        const hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          res.status(201).json({
+            companysClientInformations: resultCompanyDoc.usersInformation,
+          });
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.getMoreCompanyUsersInformationsHistory = (req, res, next) => {
+  const userId = req.userId;
+  const page = req.body.page;
+  const userHistoryId = req.body.userHistoryId;
+  const companyId = req.body.companyId;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne(
+    {
+      _id: companyId,
+      "usersInformation._id": userHistoryId,
+    },
+    { usersInformation: 1 }
+  )
+    .slice("usersInformation.allUserReserwations", [10 * page, 10])
+    .select("_id usersInformation workers.permissions workers.user owner")
+    .populate("usersInformation.userId", "name surname")
+    .populate({
+      path: "usersInformation.allUserReserwations.reserwationId",
+      select:
+        "toWorkerUserId dateDay dateMonth dateYear dateStart dateEnd serviceName",
+      populate: {
+        path: "toWorkerUserId",
+        select: "name surname linkPath",
+      },
+    })
+    .populate(
+      "usersInformation.informations.workerWhoWritedUserId",
+      "name surname"
+    )
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        const hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          res.status(201).json({
+            newUserReserwations:
+              resultCompanyDoc.usersInformation[0].allUserReserwations,
+          });
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+
+exports.companyUsersInformationsBlock = (req, res, next) => {
+  const userId = req.userId;
+  const userHistoryId = req.body.userHistoryId;
+  const companyId = req.body.companyId;
+  const isBlocked = req.body.isBlocked
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne(
+    {
+      _id: companyId,
+      "usersInformation._id": userHistoryId,
+    },
+    { usersInformation: 1 }
+  )
+    .select(
+      "_id usersInformation._id usersInformation.isBlocked workers.permissions workers.user owner"
+    )
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        const hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          const selectUserInformation = resultCompanyDoc.usersInformation.findIndex(
+            (item) => item._id == userHistoryId
+          );
+          if (selectUserInformation >= 0) {
+            resultCompanyDoc.usersInformation[
+              selectUserInformation
+            ].isBlocked = isBlocked;
+          }
+          return resultCompanyDoc.save();
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then(()=>{
+      res.status(201).json({
+        message: "User blocked",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {

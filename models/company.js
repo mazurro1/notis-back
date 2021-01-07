@@ -434,31 +434,6 @@ const companySchema = new Schema(
       type: String,
       required: false,
     },
-    messages: [
-      {
-        text: {
-          type: String,
-          required: false,
-        },
-        typeOfText: {
-          type: String,
-          required: false,
-        },
-        messageCompanyRead: {
-          type: Boolean,
-          required: false,
-        },
-        userWhoRead: [
-          {
-            userId: {
-              type: Schema.Types.ObjectId,
-              ref: "Users",
-              required: false,
-            },
-          },
-        ],
-      },
-    ],
     messangerAvaible: {
       type: Boolean,
       required: true,
@@ -516,6 +491,49 @@ const companySchema = new Schema(
       type: String,
       required: false,
     },
+    usersInformation: [
+      {
+        userId: {
+          type: Schema.Types.ObjectId,
+          ref: "Users",
+          required: false,
+        },
+        isBlocked: {
+          type: Boolean,
+          required: false,
+        },
+        reserwationsCount: {
+          type: Number,
+          required: false,
+        },
+        allUserReserwations: [
+          {
+            reserwationId: {
+              type: Schema.Types.ObjectId,
+              ref: "Reserwations",
+              required: false,
+            }
+          }
+        ],
+        informations: [
+          {
+            workerWhoWritedUserId: {
+              type: Schema.Types.ObjectId,
+              ref: "Users",
+              required: false,
+            },
+            message: {
+              type: String,
+              required: false,
+            },
+            dateMessage: {
+              type: Date,
+              required: false,
+            },
+          },
+        ],
+      },
+    ],
   },
   {
     timestamps: true,

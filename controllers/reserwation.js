@@ -49,24 +49,38 @@ exports.addReserwation = (req, res, next) => {
     .then((allReserwations) => {
       return Company.findOne({ _id: companyId })
         .select(
-          "openingDays ownerData workers owner daysOff reservationMonthTime services"
+          "openingDays ownerData workers owner daysOff reservationMonthTime services usersInformation.isBlocked usersInformation.userId usersInformation.allUserReserwations usersInformation.reserwationsCount"
         )
         .then((companyDoc) => {
-          let selectedWorker = null;
-          if (companyDoc.owner == workerUserId) {
-            selectedWorker = companyDoc.ownerData;
-          } else {
-            selectedWorker = companyDoc.workers.find(
-              (item) => item._id == workerId
-            );
+          let userIsBlocked = false
+          const validUserInformation = !!companyDoc.usersInformation
+            ? companyDoc.usersInformation
+            : [];
+          const isUserInUsersInformations = validUserInformation.findIndex(
+            (infUser) => infUser.userId == userId
+          );
+          
+          if (isUserInUsersInformations >= 0){
+            userIsBlocked =
+              companyDoc.usersInformation[isUserInUsersInformations].isBlocked;
           }
-          if (!!selectedWorker) {
-            const dateToReserw = new Date(
-              `${arrayDateFull[1]}-${arrayDateFull[0]}-${arrayDateFull[2]}`
-            );
-            const selectedServices = companyDoc.services.find(
-              (serviceItem) => serviceItem._id == serviceId
-            );
+          
+          if(!!!userIsBlocked){
+            let selectedWorker = null;
+            if (companyDoc.owner == workerUserId) {
+              selectedWorker = companyDoc.ownerData;
+            } else {
+              selectedWorker = companyDoc.workers.find(
+                (item) => item._id == workerId
+              );
+            }
+            if (!!selectedWorker) {
+              const dateToReserw = new Date(
+                `${arrayDateFull[1]}-${arrayDateFull[0]}-${arrayDateFull[2]}`
+              );
+              const selectedServices = companyDoc.services.find(
+                (serviceItem) => serviceItem._id == serviceId
+              );
               if (!!selectedServices) {
                 const dayDate = dateToReserw.getDay();
                 const nameOpeningDays =
@@ -282,6 +296,36 @@ exports.addReserwation = (req, res, next) => {
                       serviceId: selectedServices._id,
                     });
 
+                    //add user to users info and add reserwation to
+
+                    if (isUserInUsersInformations >= 0) {
+                      companyDoc.usersInformation[
+                        isUserInUsersInformations
+                      ].allUserReserwations.push({
+                        reserwationId: newReserwation._id,
+                      });
+
+                      companyDoc.usersInformation[
+                        isUserInUsersInformations
+                      ].reserwationsCount =
+                        companyDoc.usersInformation[isUserInUsersInformations]
+                          .reserwationsCount + 1;
+                      companyDoc.save();
+                    } else {
+                      const newUserInfo = {
+                        userId: userId,
+                        isBlocked: false,
+                        reserwationsCount: 1,
+                        allUserReserwations: [
+                          {
+                            reserwationId: newReserwation._id,
+                          },
+                        ],
+                      };
+                      companyDoc.usersInformation.push(newUserInfo);
+                      companyDoc.save();
+                    }
+
                     return newReserwation.save();
                   } else {
                     const error = new Error("Podany termin jest zajęty.");
@@ -300,8 +344,13 @@ exports.addReserwation = (req, res, next) => {
                 error.statusCode = 422;
                 throw error;
               }
-          } else {
-            const error = new Error("Brak podanego pracownika.");
+            } else {
+              const error = new Error("Brak podanego pracownika.");
+              error.statusCode = 422;
+              throw error;
+            }
+          }else{
+            const error = new Error("Użytkownik został zablokowany do rezerwacji w tej firmie.");
             error.statusCode = 422;
             throw error;
           }
@@ -375,9 +424,7 @@ exports.addReserwation = (req, res, next) => {
             //   `,
             // });
 
-            res.status(201).json({
-              message: "Dokonano rezerwacji!",
-            });
+            
           }
           // else {
           //   const error = new Error("Brak podanej usługi.");
@@ -385,6 +432,11 @@ exports.addReserwation = (req, res, next) => {
           //   throw error;
           // }
         });
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Dokonano rezerwacji!",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
