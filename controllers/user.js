@@ -1,4 +1,5 @@
 const User = require("../models/user");
+const Company = require("../models/company");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator/check");
 const jwt = require("jsonwebtoken");
@@ -278,6 +279,74 @@ exports.getUserPhone = (req, res, next) => {
       }
       next(err);
     });
+};
+
+exports.getCustomUserPhone = (req, res, next) => {
+  const selectedUserId = req.body.selectedUserId;
+  const companyId = req.body.companyId;
+  const userId = req.userId;
+
+  Company.findOne({ _id: companyId })
+    .select("_id workers.permissions workers.user owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          User.findOne({
+            _id: selectedUserId,
+          })
+            .select("phone _id")
+            .then((user) => {
+              if (!!user) {
+                const userPhone = Buffer.from(user.phone, "base64").toString(
+                  "ascii"
+                );
+                res.status(201).json({
+                  userPhone: userPhone,
+                });
+              } else {
+                const error = new Error("Brak podanego użytkownika.");
+                error.statusCode = 401;
+                throw error;
+              }
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas wysyłania numeru użytkownika.";
+              }
+              next(err);
+            });
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message =
+          "Brak podanej firmy.";
+      }
+      next(err);
+    });
+
 };
 
 exports.veryfiedEmail = (req, res, next) => {

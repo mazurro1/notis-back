@@ -50,6 +50,11 @@ const companySchema = new Schema({
     required: true,
   },
 
+  fullDate: {
+    type: Date,
+    required: true,
+  },
+
   costReserwation: {
     type: String,
     required: true,
@@ -79,7 +84,6 @@ const companySchema = new Schema({
     type: Boolean,
     required: false,
   },
-
   visitCanceled: {
     type: Boolean,
     required: false,

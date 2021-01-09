@@ -102,6 +102,15 @@ router.post(
 );
 
 router.post(
+  "/get-more-users-informations-message",
+  isAuth,
+  [body("companyId")],
+  [body("userHistoryId")],
+  [body("page")],
+  company.getMoreCompanyUsersInformationsMessage
+);
+
+router.post(
   "/company-users-informations-block",
   isAuth,
   [body("companyId")],
@@ -110,7 +119,23 @@ router.post(
   company.companyUsersInformationsBlock
 );
 
+router.post(
+  "/company-users-informations-message",
+  isAuth,
+  [body("companyId")],
+  [body("userHistoryId")],
+  [body("workerMessage")],
+  company.companyUsersInformationsMessage
+);
 
+router.post(
+  "/company-users-informations-delete-message",
+  isAuth,
+  [body("companyId")],
+  [body("userHistoryId")],
+  [body("messageId")],
+  company.companyUsersInformationsDeleteMessage
+);
 
 router.patch(
   "/update-company-profil",

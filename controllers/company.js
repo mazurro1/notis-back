@@ -8,6 +8,7 @@ const { validationResult } = require("express-validator/check");
 const nodemailer = require("nodemailer");
 
 const sendgridTransport = require("nodemailer-sendgrid-transport");
+const { pipeline } = require("nodemailer/lib/xoauth2");
 const transporter = nodemailer.createTransport(
   sendgridTransport({
     auth: {
@@ -1328,7 +1329,7 @@ exports.allCompanysOfType = (req, res, next) => {
       next(err);
     });
 };
-
+// /*
 exports.getCompanyUsersInformations = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
@@ -1346,21 +1347,23 @@ exports.getCompanyUsersInformations = (req, res, next) => {
     .populate({
       path: "usersInformation.allUserReserwations.reserwationId",
       select:
-        "toWorkerUserId dateDay dateMonth dateYear dateStart dateEnd serviceName",
+        "toWorkerUserId dateDay dateMonth dateYear dateStart dateEnd serviceName visitNotFinished visitCanceled visitChanged workerReserwation fullDate",
       populate: {
         path: "toWorkerUserId",
         select: "name surname linkPath",
       },
+      // options: { sort: { fullDate: 1 } },
     })
     .populate(
       "usersInformation.informations.workerWhoWritedUserId",
       "name surname"
     )
+    // .sort({ "usersInformation.allUserReserwations.reserwationId.fullDate": -1 })
     .slice("usersInformation.allUserReserwations", 10)
     .slice("usersInformation.informations", 10)
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
-        const hasPermission = resultCompanyDoc.owner == userId;
+        let hasPermission = resultCompanyDoc.owner == userId;
         if (!hasPermission) {
           const selectedWorker = resultCompanyDoc.workers.find(
             (worker) => worker.user == userId
@@ -1394,7 +1397,165 @@ exports.getCompanyUsersInformations = (req, res, next) => {
       next(err);
     });
 };
+// */
+/*
+exports.getCompanyUsersInformations = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const errors = validationResult(req);
 
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  
+  Company.aggregate([
+    { $match: { _id: mongoose.Types.ObjectId(companyId) } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "owner",
+        foreignField: "_id",
+        as: "owner",
+      },
+    },
+    {
+      $unwind: {
+        path: "$owner",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "usersInformation.userId",
+        foreignField: "_id",
+        as: "usersInformation_userId",
+      },
+    },
+
+    {
+      $lookup: {
+        from: "users",
+        localField: "usersInformation.informations.workerWhoWritedUserId",
+        foreignField: "_id",
+        as: "usersInformation_informations_workerWhoWritedUserId",
+      },
+    },
+
+    // {
+    //   $group: {
+    //     "usersInformation.informations.workerWhoWritedUserId": {
+    //       $push: "$usersInformation_informations_workerWhoWritedUserId",
+    //     },
+    //   },
+    // },
+    {
+      $unwind: {
+        path: "$usersInformation_userId",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      $lookup: {
+        from: "reserwations",
+        let: { reserwationId: "$reserwationId" },
+        pipeline: [
+          {
+            $sort: { fullDate: -1 },
+          },
+          // { $skip: 0 },
+          // { $limit: 2 },
+          {
+            $lookup: {
+              from: "users",
+              localField: "toWorkerUserId",
+              foreignField: "_id",
+              as: "toWorkerUserId",
+            },
+          },
+          { $unwind: "$toWorkerUserId" },
+          {
+            $project: {
+              _id: 1,
+              toWorkerUserId: {
+                name: 1,
+                surname: 1,
+              },
+              dateDay: 1,
+              dateMonth: 1,
+              dateYear: 1,
+              dateStart: 1,
+              dateEnd: 1,
+              serviceName: 1,
+              visitNotFinished: 1,
+              visitCanceled: 1,
+              visitChanged: 1,
+              workerReserwation: 1,
+              fullDate: 1,
+            },
+          },
+        ],
+        as: "usersInformation_allUserReserwations_reserwationId",
+      },
+    },
+    {
+      $unwind: {
+        path:
+          "$usersInformation_allUserReserwations_reserwationId.toWorkerUserId",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+
+    {
+      $project: {
+        _id: 1,
+        "workers.permissions": 1,
+        "workers.user": 1,
+        "owner.name": 1,
+        "owner.surname": 1,
+        "usersInformation_informations_workerWhoWritedUserId.name": 1,
+        "usersInformation_informations_workerWhoWritedUserId.surname": 1,
+        "usersInformation_informations_workerWhoWritedUserId._id": 1,
+        usersInformation: {
+          userId: {
+            name: "$usersInformation_userId.name",
+            surname: "$usersInformation_userId.surname",
+          },
+          isBlocked: 1,
+          reserwationsCount: 1,
+          allUserReserwations:
+            "$usersInformation_allUserReserwations_reserwationId",
+          informations: 1,
+        },
+      },
+    },
+  ])
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+      const workersWhoWritedData = resultCompanyDoc[0].usersInformation_informations_workerWhoWritedUserId;
+      console.log(resultCompanyDoc[0].usersInformation);
+      console.log("workersWhoWritedData", workersWhoWritedData);
+        res.status(201).json({
+          companysClientInformations: resultCompanyDoc[0],
+        });
+      } else {
+        const error = new Error("Brak dostępu.");
+        error.statusCode = 401;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+*/
 exports.getMoreCompanyUsersInformationsHistory = (req, res, next) => {
   const userId = req.userId;
   const page = req.body.page;
@@ -1406,32 +1567,26 @@ exports.getMoreCompanyUsersInformationsHistory = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  Company.findOne(
-    {
-      _id: companyId,
-      "usersInformation._id": userHistoryId,
-    },
-    { usersInformation: 1 }
-  )
-    .slice("usersInformation.allUserReserwations", [10 * page, 10])
-    .select("_id usersInformation workers.permissions workers.user owner")
-    .populate("usersInformation.userId", "name surname")
+  Company.findOne({
+    _id: companyId,
+  })
+    .select(
+      "_id  workers.permissions workers.user owner usersInformation.allUserReserwations usersInformation._id "
+    )
     .populate({
       path: "usersInformation.allUserReserwations.reserwationId",
       select:
-        "toWorkerUserId dateDay dateMonth dateYear dateStart dateEnd serviceName",
+        "toWorkerUserId dateDay dateMonth dateYear dateStart dateEnd serviceName visitNotFinished visitCanceled visitChanged workerReserwation",
       populate: {
         path: "toWorkerUserId",
         select: "name surname linkPath",
       },
     })
-    .populate(
-      "usersInformation.informations.workerWhoWritedUserId",
-      "name surname"
-    )
+
+    .slice("usersInformation.allUserReserwations", [10 * page, 10])
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
-        const hasPermission = resultCompanyDoc.owner == userId;
+        let hasPermission = resultCompanyDoc.owner == userId;
         if (!hasPermission) {
           const selectedWorker = resultCompanyDoc.workers.find(
             (worker) => worker.user == userId
@@ -1443,10 +1598,19 @@ exports.getMoreCompanyUsersInformationsHistory = (req, res, next) => {
           }
         }
         if (hasPermission) {
-          res.status(201).json({
-            newUserReserwations:
-              resultCompanyDoc.usersInformation[0].allUserReserwations,
-          });
+          const filterUserHistory = resultCompanyDoc.usersInformation.find(
+            (itemUserHist) => itemUserHist._id == userHistoryId
+          );
+          if (!!filterUserHistory) {
+            res.status(201).json({
+              newUserReserwations: filterUserHistory.allUserReserwations,
+            });
+          } else {
+            const error = new Error("Brak wskazanego użytkownika.");
+            error.statusCode = 422;
+            throw error;
+          }
+          
         } else {
           const error = new Error("Brak dostępu.");
           error.statusCode = 401;
@@ -1467,6 +1631,74 @@ exports.getMoreCompanyUsersInformationsHistory = (req, res, next) => {
     });
 };
 
+
+exports.getMoreCompanyUsersInformationsMessage = (req, res, next) => {
+  const userId = req.userId;
+  const page = req.body.page;
+  const userHistoryId = req.body.userHistoryId;
+  const companyId = req.body.companyId;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select(
+      "_id usersInformation.informations usersInformation._id workers.permissions workers.user owner"
+    )
+    .populate(
+      "usersInformation.informations.workerWhoWritedUserId",
+      "name surname"
+    )
+    .slice("usersInformation.informations", [10 * page, 10])
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          const filterUserHistory = resultCompanyDoc.usersInformation.find(
+            (itemUserHist) => itemUserHist._id == userHistoryId
+          );
+          if (!!filterUserHistory) {
+            res.status(201).json({
+              newUserMessages: filterUserHistory.informations,
+            });
+          }else{
+            const error = new Error("Brak wskazanego użytkownika.");
+            error.statusCode = 401;
+            throw error;
+          }
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
 
 
 exports.companyUsersInformationsBlock = (req, res, next) => {
@@ -1492,7 +1724,7 @@ exports.companyUsersInformationsBlock = (req, res, next) => {
     )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
-        const hasPermission = resultCompanyDoc.owner == userId;
+        let hasPermission = resultCompanyDoc.owner == userId;
         if (!hasPermission) {
           const selectedWorker = resultCompanyDoc.workers.find(
             (worker) => worker.user == userId
@@ -1527,6 +1759,184 @@ exports.companyUsersInformationsBlock = (req, res, next) => {
     .then(()=>{
       res.status(201).json({
         message: "User blocked",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companyUsersInformationsMessage = (req, res, next) => {
+  const userId = req.userId;
+  const userHistoryId = req.body.userHistoryId;
+  const companyId = req.body.companyId;
+  const workerMessage = req.body.workerMessage;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  const newMessage = {
+    workerWhoWritedUserId: userId,
+    message: workerMessage,
+    dateMessage: new Date(),
+  };
+
+  Company.findOne(
+    {
+      _id: companyId,
+      "usersInformation._id": userHistoryId,
+    },
+    { usersInformation: 1 }
+  )
+    .select(
+      "_id usersInformation._id usersInformation.informations workers.permissions workers.user owner"
+    )
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          const selectUserInformation = resultCompanyDoc.usersInformation.findIndex(
+            (item) => item._id == userHistoryId
+          );
+          if (selectUserInformation >= 0) {
+            resultCompanyDoc.usersInformation[
+              selectUserInformation
+            ].informations.unshift(newMessage);
+          }
+          return resultCompanyDoc.save();
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultData) => {
+      User.findOne({ _id: userId })
+        .select("name surname _id")
+        .then((userData) => {
+          if(!!userData){            
+            const selectUserInformation = resultData.usersInformation.findIndex(
+              (item) => item._id == userHistoryId
+            );
+            let messageResult = {}
+            if (selectUserInformation >= 0) {
+              const resultFilterMessage = resultData.usersInformation[
+                selectUserInformation
+              ].informations.find(
+                (itemProps) => itemProps.dateMessage === newMessage.dateMessage
+              );
+              if(!!resultFilterMessage){
+                messageResult = {
+                  workerWhoWritedUserId: {
+                    name: userData.name,
+                    surname: userData.surname,
+                  },
+                  _id: resultFilterMessage._id,
+                  message: resultFilterMessage.message,
+                  dateMessage: resultFilterMessage.dateMessage,
+                };
+              }
+            }
+            res.status(201).json({
+              message: messageResult,
+            });
+          }else{
+            const error = new Error("Błąd podczas wysyłania wiadomości zwrotnej.");
+            error.statusCode = 403;
+            throw error;
+          }
+        });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companyUsersInformationsDeleteMessage = (req, res, next) => {
+  const userId = req.userId;
+  const userHistoryId = req.body.userHistoryId;
+  const companyId = req.body.companyId;
+  const messageId = req.body.messageId;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne(
+    {
+      _id: companyId,
+      "usersInformation._id": userHistoryId,
+    },
+    { usersInformation: 1 }
+  )
+    .select(
+      "_id usersInformation._id usersInformation.informations workers.permissions workers.user owner"
+    )
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          const selectUserInformation = resultCompanyDoc.usersInformation.findIndex(
+            (item) => item._id == userHistoryId
+          );
+          if (selectUserInformation >= 0) {
+            resultCompanyDoc.usersInformation[
+              selectUserInformation
+            ].informations.pull({_id: messageId});
+          }
+          return resultCompanyDoc.save();
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Usunięto wiadomość",
       });
     })
     .catch((err) => {

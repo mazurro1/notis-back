@@ -47,6 +47,14 @@ router.get("/sent-again-veryfied-email", isAuth, user.sentAgainVerifiedEmail);
 
 router.get("/get-user-phone", isAuth, user.getUserPhone);
 
+router.post(
+  "/get-custom-user-phone",
+  isAuth,
+  [body("selectedUserId")],
+  [body("companyId")],
+  user.getCustomUserPhone
+);
+
 router.patch(
   "/edit-user",
   isAuth,
