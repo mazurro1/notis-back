@@ -63,6 +63,13 @@ router.post(
   reserwation.getWorkerReserwationsAll
 );
 
+router.post(
+  "/company-reserwations",
+  isAuth,
+  [body("companyId")],
+  reserwation.getCompanyReserwations
+);
+
 
 router.patch(
   "/update-reserwation",
@@ -86,5 +93,15 @@ router.patch(
   [body("newTimeEnd")],
   reserwation.updateWorkerReserwation
 );
+
+router.post(
+  "/get-selected-users-reserwations",
+  isAuth,
+  [body("companyId")],
+  [body("userSelectedId")],
+  [body("page")],
+  reserwation.getSelectedUserReserwations
+);
+
 
 module.exports = router;

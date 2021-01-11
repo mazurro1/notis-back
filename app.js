@@ -5,6 +5,7 @@ const bodyParser = require("body-parser");
 const userRoutes = require("./routes/user");
 const companyRoutes = require("./routes/company");
 const reserwationRoutes = require("./routes/reserwation");
+const companyUsersInformationsRoutes = require("./routes/companyUsersInformations");
 
 app.use(bodyParser.json());
 app.use((req, res, next) => {
@@ -19,6 +20,7 @@ app.use((req, res, next) => {
 app.use(userRoutes);
 app.use(companyRoutes);
 app.use(reserwationRoutes);
+app.use(companyUsersInformationsRoutes);
 
 app.use((error, req, res, next) => {
   console.log(error);

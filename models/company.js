@@ -506,6 +506,7 @@ const companySchema = new Schema(
           type: Number,
           required: false,
         },
+        /*
         allUserReserwations: [
           {
             reserwationId: {
@@ -532,6 +533,7 @@ const companySchema = new Schema(
             },
           },
         ],
+        */
       },
     ],
   },

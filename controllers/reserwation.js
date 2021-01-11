@@ -1,6 +1,7 @@
 const Reserwation = require("../models/reserwation");
 const User = require("../models/user");
 const Company = require("../models/company");
+const CompanyUsersInformations = require("../models/companyUsersInformations");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator/check");
 const jwt = require("jsonwebtoken");
@@ -8,6 +9,7 @@ const io = require("../socket");
 const nodemailer = require("nodemailer");
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const company = require("../models/company");
+const mongoose = require("mongoose");
 const transporter = nodemailer.createTransport(
   sendgridTransport({
     auth: {
@@ -62,19 +64,19 @@ exports.addReserwation = (req, res, next) => {
           "openingDays ownerData workers owner daysOff reservationMonthTime services usersInformation usersInformation.isBlocked usersInformation.userId usersInformation.allUserReserwations usersInformation.reserwationsCount"
         )
         .then((companyDoc) => {
-          let userIsBlocked = false
+          let userIsBlocked = false;
           const validUserInformation = !!companyDoc.usersInformation
             ? companyDoc.usersInformation
             : [];
           const isUserInUsersInformations = validUserInformation.findIndex(
             (infUser) => infUser.userId == userId
           );
-          
-          if (isUserInUsersInformations >= 0){
+
+          if (isUserInUsersInformations >= 0) {
             userIsBlocked =
               companyDoc.usersInformation[isUserInUsersInformations].isBlocked;
           }
-          if (isGoodTimeDate){
+          if (isGoodTimeDate) {
             if (!!!userIsBlocked) {
               let selectedWorker = null;
               if (companyDoc.owner == workerUserId) {
@@ -315,28 +317,19 @@ exports.addReserwation = (req, res, next) => {
                       //add user to users info and add reserwation to
 
                       if (isUserInUsersInformations >= 0) {
-                        companyDoc.usersInformation[
-                          isUserInUsersInformations
-                        ].allUserReserwations.push({
-                          reserwationId: newReserwation._id,
-                        });
-
-                        companyDoc.usersInformation[
-                          isUserInUsersInformations
-                        ].reserwationsCount =
+                        const validReserwationCount =
                           companyDoc.usersInformation[isUserInUsersInformations]
-                            .reserwationsCount + 1;
+                            .reserwationsCount ? companyDoc.usersInformation[isUserInUsersInformations]
+                            .reserwationsCount : 0;
+                        companyDoc.usersInformation[
+                          isUserInUsersInformations
+                        ].reserwationsCount = validReserwationCount + 1;
                         companyDoc.save();
                       } else {
                         const newUserInfo = {
                           userId: userId,
                           isBlocked: false,
-                          reserwationsCount: 1,
-                          allUserReserwations: [
-                            {
-                              reserwationId: newReserwation._id,
-                            },
-                          ],
+                          reserwationsCount: 1
                         };
                         companyDoc.usersInformation.push(newUserInfo);
                         companyDoc.save();
@@ -372,7 +365,7 @@ exports.addReserwation = (req, res, next) => {
               error.statusCode = 422;
               throw error;
             }
-          }else{
+          } else {
             const error = new Error(
               "Nie można dokonywać rezerwacji w tym terminie."
             );
@@ -457,6 +450,24 @@ exports.addReserwation = (req, res, next) => {
           //   throw error;
           // }
         });
+    })
+    .then(()=>{
+      CompanyUsersInformations.findOne({
+        userId: userId,
+        companyId: companyId,
+      })
+      .then(resultCompanyUsersInformations => {
+        if(!!!resultCompanyUsersInformations){
+          const newUserCompanyInfo = new CompanyUsersInformations({
+            userId: userId,
+            companyId: companyId,
+            messages: [],
+          });
+          return newUserCompanyInfo.save();
+        }else{
+          return true
+        }
+      })
     })
     .then(() => {
       res.status(201).json({
@@ -1429,3 +1440,205 @@ exports.updateWorkerReserwation = (req, res, next) => {
       next(err);
     });
 };
+
+
+exports.getCompanyReserwations = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Reserwation.find({
+    company: companyId,
+  })
+    .populate("fromUser", "name surname")
+    .select("company fromUser")
+    .then((reserwationsDoc) => {
+      return Company.findOne({ _id: companyId })
+        .populate("workers.user", "_id name surname")
+        .select("owner workers.permission workers._id workers.user usersInformation _id")
+        .then((resultCompany) => {
+          if (!!resultCompany) {
+            let isActiveWorker = userId == resultCompany.owner;
+            if (!!!isActiveWorker) {
+              const isWorkerInWorkers = resultCompany.workers.some(
+                (worker) => worker.user._id == userId
+              );
+              isActiveWorker = isWorkerInWorkers;
+            }
+
+            if (isActiveWorker) {
+              const arrayWithUsersReserwations = [];
+              reserwationsDoc.forEach((reserwation) => {
+                if (!!reserwation.fromUser) {
+                  const findIndexInArray = arrayWithUsersReserwations.findIndex(
+                    (findUser) =>
+                      findUser.userId._id == reserwation.fromUser._id
+                  );
+                  if (findIndexInArray < 0) {
+                    const newItemResUser = {
+                      userId: reserwation.fromUser,
+                      isBlocked: false,
+                      reserwationsCount: 0,
+                      informations: null,
+                      reserwations: null,
+                    };
+                    arrayWithUsersReserwations.push(newItemResUser);
+                  }
+                }
+              });
+              resultCompany.usersInformation.forEach((companyUserInfo) => {
+                  const findIndexInReserwations = arrayWithUsersReserwations.findIndex(
+                    (findUser) => {
+                      return (
+                        companyUserInfo.userId.toString() ==
+                        findUser.userId._id.toString()
+                      );
+                    });
+                  if (findIndexInReserwations >= 0) {
+                    arrayWithUsersReserwations[
+                      findIndexInReserwations
+                    ].isBlocked = companyUserInfo.isBlocked;
+                    arrayWithUsersReserwations[
+                      findIndexInReserwations
+                    ].reserwationsCount = companyUserInfo.reserwationsCount;
+                  }
+              });
+             
+              return arrayWithUsersReserwations;
+            } else {
+              const error = new Error("Brak uprawnień.");
+              error.statusCode = 401;
+              throw error;
+            }
+          } else {
+            const error = new Error("Brak podanej firmy.");
+            error.statusCode = 422;
+            throw error;
+          }
+        });
+    })
+    .then((resultUsers) => {
+      res.status(201).json({
+        reserwations: resultUsers,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.getSelectedUserReserwations = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const userSelectedId = req.body.userSelectedId;
+  const page = req.body.page
+  
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers.permissions workers.user owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (!!hasPermission) {
+          return hasPermission;
+        } else {
+          const error = new Error("Brak uprawnień.");
+          error.statusCode = 403;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then(() => {    
+      Reserwation.aggregate([
+        {
+          $match: {
+            company: mongoose.Types.ObjectId(companyId),
+            fromUser: mongoose.Types.ObjectId(userSelectedId),
+            workerReserwation: false,
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "toWorkerUserId",
+            foreignField: "_id",
+            as: "toWorkerUserId",
+          },
+        },
+        { $unwind: "$toWorkerUserId" },
+        {
+          $sort: { fullDate: -1 },
+        },
+        { $skip: (page - 1) * 10 },
+        { $limit: 10 },
+        {
+          $project: {
+            _id: 1,
+            fromUser: 1,
+            company: 1,
+            toWorkerUserId: {
+              name: 1,
+              surname: 1,
+            },
+            dateYear: 1,
+            dateMonth: 1,
+            dateDay: 1,
+            dateStart: 1,
+            dateEnd: 1,
+            serviceName: 1,
+            visitNotFinished: 1,
+            visitCanceled: 1,
+            visitChanged: 1,
+            workerReserwation: 1,
+            fullDate: 1,
+          },
+        },
+      ])
+        .then((resultCompanyUserReserwations) => {
+          res.status(200).json({
+            reserwations: resultCompanyUserReserwations
+              ? resultCompanyUserReserwations
+              : [],
+          });
+        })
+        .catch((error) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych firmowych.";
+          }
+          next(err);
+        });
+    })
+  }

@@ -86,55 +86,12 @@ router.post(
 );
 
 router.post(
-  "/get-company-users-informations",
-  isAuth,
-  [body("companyId")],
-  company.getCompanyUsersInformations
-);
-
-router.post(
-  "/get-more-users-informations-history",
-  isAuth,
-  [body("companyId")],
-  [body("userHistoryId")],
-  [body("page")],
-  company.getMoreCompanyUsersInformationsHistory
-);
-
-router.post(
-  "/get-more-users-informations-message",
-  isAuth,
-  [body("companyId")],
-  [body("userHistoryId")],
-  [body("page")],
-  company.getMoreCompanyUsersInformationsMessage
-);
-
-router.post(
   "/company-users-informations-block",
   isAuth,
   [body("companyId")],
-  [body("userHistoryId")],
+  [body("selectedUserId")],
   [body("isBlocked")],
   company.companyUsersInformationsBlock
-);
-
-router.post(
-  "/company-users-informations-message",
-  isAuth,
-  [body("companyId")],
-  [body("userHistoryId")],
-  [body("workerMessage")],
-  company.companyUsersInformationsMessage
-);
-
-router.post(
-  "/company-users-informations-delete-message",
-  isAuth,
-  [body("companyId")],
-  [body("userHistoryId")],
-  [body("messageId")],
-  company.companyUsersInformationsDeleteMessage
 );
 
 router.patch(

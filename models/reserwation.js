@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
-const companySchema = new Schema({
+const reserwationSchema = new Schema({
   fromUser: {
     type: Schema.Types.ObjectId,
     ref: "Users",
@@ -105,4 +105,4 @@ const companySchema = new Schema({
   },
 });
 
-module.exports = mongoose.model("Reserwations", companySchema);
+module.exports = mongoose.model("Reserwations", reserwationSchema);
