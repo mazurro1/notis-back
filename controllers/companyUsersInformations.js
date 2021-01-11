@@ -22,6 +22,7 @@ exports.addCompanyUsersInformationsMessage = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
   const workerMessage = req.body.workerMessage;
+  const selectedUserId = req.body.selectedUserId;
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const error = new Error("Validation faild entered data is incorrect.");
@@ -65,14 +66,17 @@ exports.addCompanyUsersInformationsMessage = (req, res, next) => {
       }
     })
     .then((resultData) => {
-      return CompanyUsersInformations.findOne({ companyId: companyId })
+      return CompanyUsersInformations.findOne({
+        companyId: companyId,
+        userId: selectedUserId,
+      })
         .then((resultCompanyUserInformation) => {
           if (!!resultCompanyUserInformation) {
             resultCompanyUserInformation.messages.unshift(newMessage);
             return resultCompanyUserInformation.save();
           } else {
             const newuserCompanyInformation = new CompanyUsersInformations({
-              userId: userId,
+              userId: selectedUserId,
               companyId: companyId,
               messages: [],
               reserwationsCount: 0,

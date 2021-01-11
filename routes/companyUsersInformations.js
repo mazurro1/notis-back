@@ -9,6 +9,7 @@ router.post(
   isAuth,
   [body("companyId")],
   [body("workerMessage")],
+  [body("selectedUserId")],
   companyUsersInformations.addCompanyUsersInformationsMessage
 );
 
