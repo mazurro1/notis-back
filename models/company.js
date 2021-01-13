@@ -506,34 +506,74 @@ const companySchema = new Schema(
           type: Number,
           required: false,
         },
-        /*
-        allUserReserwations: [
+      },
+    ],
+    happyHoursConst: [
+      {
+        disabled: {
+          type: Boolean,
+          required: false,
+        },
+        dayWeekIndex: {
+          type: Date,
+          required: false,
+        },
+        start: {
+          type: String,
+          required: false,
+        },
+        end: {
+          type: String,
+          required: false,
+        },
+        promotionPercent: {
+          type: Number,
+          required: false,
+        },
+        servicesInPromotion: [
           {
-            reserwationId: {
-              type: Schema.Types.ObjectId,
-              ref: "Reserwations",
-              required: false,
-            }
-          }
-        ],
-        informations: [
-          {
-            workerWhoWritedUserId: {
-              type: Schema.Types.ObjectId,
-              ref: "Users",
-              required: false,
-            },
-            message: {
+            category: {
               type: String,
               required: false,
             },
-            dateMessage: {
-              type: Date,
+            serviceName: {
+              type: String,
               required: false,
             },
           },
         ],
-        */
+      },
+    ],
+    happyHoursNoConst: [
+      {
+        disabled: {
+          type: Boolean,
+          required: false,
+        },
+        start: {
+          type: Date,
+          required: false,
+        },
+        end: {
+          type: Date,
+          required: false,
+        },
+        promotionPercent: {
+          type: Number,
+          required: false,
+        },
+        servicesInPromotion: [
+          {
+            category: {
+              type: String,
+              required: false,
+            },
+            serviceName: {
+              type: String,
+              required: false,
+            },
+          },
+        ],
       },
     ],
   },

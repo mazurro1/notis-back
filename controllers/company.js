@@ -350,6 +350,8 @@ exports.getCompanyData = (req, res, next) => {
             reservationMonthTime: dataCompany.reservationMonthTime,
             services: dataCompany.services,
             companyType: dataCompany.companyType,
+            happyHoursConst: dataCompany.happyHoursConst,
+            happyHoursNoConst: dataCompany.happyHoursNoConst,
           };
 
           res.status(201).json({
@@ -1390,6 +1392,107 @@ exports.companyUsersInformationsBlock = (req, res, next) => {
       res.status(201).json({
         message: "User blocked",
       });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyServicesPatch = (req, res, next) => {
+  const userId = req.userId;
+  const services = req.body.services;
+  const companyId = req.body.companyId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id usersInformation workers.permissions workers.user owner services")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 2
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc)=>{
+      if (services.deleted.length > 0) {
+        const newArray = companyDoc.services.filter((itemFirst) => {
+          const isInArray = services.deleted.some((itemSecond) => {
+            return itemSecond == itemFirst._id;
+          });
+          return !isInArray;
+        });
+        companyDoc.services = newArray;
+      }
+
+      if (services.edited.length > 0) {
+        const newServices = companyDoc.services.map((itemFirst) => {
+          const isInArray = services.edited.some((itemSecond) => {
+            return itemSecond._id == itemFirst._id;
+          });
+          if (isInArray) {
+            const findItem = services.edited.find((itemSecond) => {
+              return itemSecond._id == itemFirst._id;
+            });
+            findItem._id = itemFirst._id;
+            return findItem;
+          } else {
+            return itemFirst;
+          }
+        });
+        companyDoc.services = newServices;
+      }
+
+      if (services.new.length > 0) {
+        services.new.forEach((item) => {
+          const newItem = {
+            serviceCategory: item.serviceCategory,
+            serviceName: item.serviceName,
+            serviceText: item.serviceText,
+            serviceCost: item.serviceCost,
+            extraCost: item.extraCost,
+            time: item.time,
+            extraTime: item.extraTime,
+            serviceColor: item.serviceColor,
+          };
+          companyDoc.services.push(newItem);
+        });
+      }
+      return companyDoc.save();
+    })
+    .then((companySave)=>{
+       res.status(201).json({
+         services: companySave.services,
+       });
     })
     .catch((err) => {
       if (!err.statusCode) {

@@ -94,6 +94,8 @@ router.post(
   company.companyUsersInformationsBlock
 );
 
+
+
 router.patch(
   "/update-company-profil",
   isAuth,
@@ -117,4 +119,14 @@ router.patch(
   [body("editedWorkersHours")],
   company.updateCompanyProfil
 );
+
+
+router.patch(
+  "/company-services-patch",
+  isAuth,
+  [body("companyId")],
+  [body("services")],
+  company.companyServicesPatch
+);
+
 module.exports = router;
