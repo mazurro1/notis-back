@@ -1416,7 +1416,7 @@ exports.companyServicesPatch = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id usersInformation workers.permissions workers.user owner services")
+    .select("_id workers.permissions workers.user owner services")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -1493,6 +1493,125 @@ exports.companyServicesPatch = (req, res, next) => {
        res.status(201).json({
          services: companySave.services,
        });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companySettingsPatch = (req, res, next) => {
+  const userId = req.userId;
+  const dataSettings = req.body.dataSettings;
+  const companyId = req.body.companyId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select(
+      "_id workers.permissions workers.user owner city district adress phone name companyType pauseCompany reservationMonthTime reservationEveryTime"
+    )
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      if (!!dataSettings.updateNompanyNameInput) {
+        return Company.findOne({
+          name: dataSettings.updateNompanyNameInput.toLowerCase(),
+        })
+          .then((resultCompanyName) => {
+            if (!!!resultCompanyName) {
+              companyDoc.name = dataSettings.updateNompanyNameInput;
+              return companyDoc.save();
+            } else {
+              const error = new Error("Nazwa firmy jest zajęta.");
+              error.statusCode = 403;
+              throw error;
+            }
+          })
+          .catch((err) => {
+            if (!err.statusCode) {
+              err.statusCode = 501;
+              err.message = "Błąd podczas pobierania danych.";
+            }
+            next(err);
+          });
+      } else {
+        return companyDoc;
+      }
+    })
+    .then((companyDoc) => {
+      if (!!dataSettings.updateCityInput) {
+        companyDoc.city = dataSettings.updateCityInput;
+      }
+
+      if (!!dataSettings.updateDiscrictInput) {
+        companyDoc.district = dataSettings.updateDiscrictInput;
+      }
+
+      if (!!dataSettings.updateAdressInput) {
+        const hashedAdress = Buffer.from(
+          dataSettings.updateAdressInput,
+          "utf-8"
+        ).toString("base64");
+        companyDoc.adress = hashedAdress;
+      }
+
+      if (!!dataSettings.updatePhoneInput) {
+        const hashedPhoneNumber = Buffer.from(
+          dataSettings.updatePhoneInput,
+          "utf-8"
+        ).toString("base64");
+        companyDoc.phone = hashedPhoneNumber;
+      }
+
+      if (!!dataSettings.industriesComponent) {
+        if (dataSettings.industriesComponent != companyDoc.companyType) {
+          companyDoc.companyType = dataSettings.industriesComponent;
+        }
+      }
+
+      if (dataSettings.pauseCompanyToServer !== null) {
+        companyDoc.pauseCompany = dataSettings.pauseCompanyToServer;
+      }
+
+      if (!!dataSettings.reserwationMonthToServer) {
+        companyDoc.reservationMonthTime = dataSettings.reserwationMonthToServer;
+      }
+
+      if (!!dataSettings.reserwationEverToServer) {
+        companyDoc.reservationEveryTime = dataSettings.reserwationEverToServer;
+      }
+
+      return companyDoc.save();
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Zaktualizowano ustawienia firmy",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {

@@ -129,4 +129,13 @@ router.patch(
   company.companyServicesPatch
 );
 
+router.patch(
+  "/company-settings-patch",
+  isAuth,
+  [body("companyId")],
+  [body("dataSettings")],
+  company.companySettingsPatch
+);
+
+
 module.exports = router;
