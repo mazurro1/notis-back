@@ -137,5 +137,51 @@ router.patch(
   company.companySettingsPatch
 );
 
+router.patch(
+  "/company-workers-save-props",
+  isAuth,
+  [body("companyId")],
+  [body("dateProps")],
+  [body("constTime")],
+  company.companyWorkersSaveProps
+);
+
+router.patch(
+  "/company-workers-no-const-data",
+  isAuth,
+  [body("companyId")],
+  [body("workerId")],
+  [body("year")],
+  [body("month")],
+  company.companyWorkersNoConstData
+);
+
+router.patch(
+  "/company-owner-no-const-data",
+  isAuth,
+  [body("companyId")],
+  [body("year")],
+  [body("month")],
+  company.companyOwnerNoConstData
+);
+
+
+router.patch(
+  "/company-workers-add-no-const-data",
+  isAuth,
+  [body("companyId")],
+  [body("workerId")],
+  [body("newDate")],
+  company.companyWorkersAddNoConstData
+);
+
+router.patch(
+  "/company-workers-delete-no-const-data",
+  isAuth,
+  [body("companyId")],
+  [body("workerId")],
+  [body("noConstDateId")],
+  company.companyWorkersDeleteNoConstData
+);
 
 module.exports = router;

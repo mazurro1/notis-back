@@ -102,6 +102,14 @@ const companySchema = new Schema(
             type: Boolean,
             required: false,
           },
+          month: {
+            type: Number,
+            required: false,
+          },
+          year: {
+            type: Number,
+            required: false,
+          },
         },
       ],
       constantWorkingHours: [
@@ -293,6 +301,14 @@ const companySchema = new Schema(
             },
             holidays: {
               type: Boolean,
+              required: false,
+            },
+            month: {
+              type: Number,
+              required: false,
+            },
+            year: {
+              type: Number,
               required: false,
             },
           },

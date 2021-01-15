@@ -240,26 +240,28 @@ exports.getCompanyData = (req, res, next) => {
     _id: companyId,
     accountVerified: true,
   })
-    .select("-codeToVerified -raports -codeToActive")
+    .select(
+      "-codeToVerified -raports -codeToActive -workers.noConstantWorkingHours"
+    )
     .populate("owner", "name surname")
     .populate("workers.user", "name surname email")
     .then((companyDoc) => {
-      if (companyDoc) {        
+      if (companyDoc) {
         let userHasPermission = userId == companyDoc.owner._id;
         if (!!!userHasPermission) {
           const workerSelected = companyDoc.workers.find(
             (worker) => worker.user._id == userId
           );
-          if(!!workerSelected){
+          if (!!workerSelected) {
             const workerHasAccess = workerSelected.permissions.some(
               (perm) => perm === 2 || perm === 3 || perm === 4
             );
-            if(workerHasAccess){
+            if (workerHasAccess) {
               userHasPermission = true;
             }
           }
         }
-        if (!!userHasPermission){
+        if (!!userHasPermission) {
           const dataCompany = companyDoc;
 
           const unhashedOwnerName = Buffer.from(
@@ -307,9 +309,7 @@ exports.getCompanyData = (req, res, next) => {
               constantWorkingHours: item.constantWorkingHours
                 ? item.constantWorkingHours
                 : [],
-              noConstantWorkingHours: item.noConstantWorkingHours
-                ? item.noConstantWorkingHours
-                : [],
+              noConstantWorkingHours: [],
 
               servicesCategory: item.servicesCategory
                 ? item.servicesCategory
@@ -357,7 +357,7 @@ exports.getCompanyData = (req, res, next) => {
           res.status(201).json({
             companyProfil: dataToSent,
           });
-        }else{
+        } else {
           const error = new Error("Brak uprawnień.");
           error.statusCode = 401;
           throw error;
@@ -1611,6 +1611,495 @@ exports.companySettingsPatch = (req, res, next) => {
     .then(() => {
       res.status(201).json({
         message: "Zaktualizowano ustawienia firmy",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companyWorkersSaveProps = (req, res, next) => {
+  const userId = req.userId;
+  const dateProps = req.body.dateProps;
+  const companyId = req.body.companyId;
+  const constTime = req.body.constTime;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select(
+      "_id workers owner"
+    )
+    .then((resultCompanyDoc) => {
+       if (!!resultCompanyDoc) {
+         let hasPermission = resultCompanyDoc.owner == userId;
+         if (!hasPermission) {
+           const selectedWorker = resultCompanyDoc.workers.find(
+             (worker) => worker.user == userId
+           );
+           if (!!selectedWorker) {
+             hasPermission = selectedWorker.permissions.some(
+               (perm) => perm === 4
+             );
+           }
+         }
+         if (hasPermission) {
+           return resultCompanyDoc;
+         } else {
+           const error = new Error("Brak dostępu.");
+           error.statusCode = 401;
+           throw error;
+         }
+       } else {
+         const error = new Error("Brak wybranej firmy.");
+         error.statusCode = 403;
+         throw error;
+       }
+    })
+    .then((companyDoc) => {
+      if (!!dateProps) {
+        const selectedWorkerIndex = companyDoc.workers.findIndex(
+          (item) => item._id == dateProps.workerId
+        );
+        if (selectedWorkerIndex >= 0) {
+          companyDoc.workers[selectedWorkerIndex].specialization =
+            dateProps.inputSpecializationValue;
+          companyDoc.workers[selectedWorkerIndex].permissions =
+            dateProps.mapWorkerPermissionsIds;
+          companyDoc.workers[selectedWorkerIndex].servicesCategory =
+            dateProps.workerServicesCategoryValue;
+        }
+      }
+      if(!!constTime){
+        const selectedWorkerIndex = companyDoc.workers.findIndex(
+          (item) => item._id == constTime.indexWorker
+        );
+        if(selectedWorkerIndex >= 0){
+          if (constTime.constantWorkingHours.length > 0) {
+            constTime.constantWorkingHours.forEach((constDate) => {
+              const dateIsInBackend = companyDoc.workers[
+                selectedWorkerIndex
+              ].constantWorkingHours.findIndex(
+                (item) => item.dayOfTheWeek === constDate.dayOfTheWeek
+              );
+              if (dateIsInBackend >= 0) {
+                companyDoc.workers[selectedWorkerIndex].constantWorkingHours[dateIsInBackend].dayOfTheWeek = constDate.dayOfTheWeek;
+                companyDoc.workers[selectedWorkerIndex].constantWorkingHours[dateIsInBackend].startWorking = constDate.startWorking;
+                companyDoc.workers[selectedWorkerIndex].constantWorkingHours[dateIsInBackend].endWorking = constDate.endWorking;
+                companyDoc.workers[selectedWorkerIndex].constantWorkingHours[dateIsInBackend].disabled = constDate.disabled;
+              } else {
+                companyDoc.workers[selectedWorkerIndex].constantWorkingHours.push(constDate);
+              }
+            });
+          }
+        }
+      }
+      return companyDoc.save()
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Zaktualizowano ustawienia pracownika",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyWorkersNoConstData = (req, res, next) => {
+  const userId = req.userId;
+  const workerId = req.body.workerId;
+  const companyId = req.body.companyId;
+  const year = req.body.year;
+  const month = req.body.month;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(companyId),
+        "workers._id": mongoose.Types.ObjectId(workerId),
+      },
+    },
+    { $unwind: "$workers" },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        workers: {
+          permissions: 1,
+          user: 1,
+          _id: 1,
+          noConstantWorkingHours: {
+            $filter: {
+              input: "$workers.noConstantWorkingHours",
+              as: "item",
+              cond: {
+                $and: [
+                  { $eq: ["$$item.month", month] },
+                  { $eq: ["$$item.year", year] },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  ])
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc[0].owner == userId;
+        if (!hasPermission) {
+          hasPermission = resultCompanyDoc[0].workers.permissions.some(
+            (perm) => perm === 4
+          );
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      res.status(201).json({
+        noConstWorkingHours: resultCompanyDoc[0].workers.noConstantWorkingHours,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyOwnerNoConstData = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const year = req.body.year;
+  const month = req.body.month;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(companyId),
+        owner: mongoose.Types.ObjectId(userId),
+      },
+    },
+    { $unwind: "$ownerData" },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        ownerData: {
+          permissions: 1,
+          noConstantWorkingHours: {
+            $filter: {
+              input: "$ownerData.noConstantWorkingHours",
+              as: "itemOwner",
+              cond: {
+                $and: [
+                  { $eq: ["$$itemOwner.month", month] },
+                  { $eq: ["$$itemOwner.year", year] },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  ])
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc[0].owner == userId;
+        if (!hasPermission) {
+          hasPermission = resultCompanyDoc[0].workers.permissions.some(
+            (perm) => perm === 4
+          );
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      res.status(201).json({
+        noConstWorkingHours:
+          resultCompanyDoc[0].ownerData.noConstantWorkingHours,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyWorkersAddNoConstData = (req, res, next) => {
+  const userId = req.userId;
+  const workerId = req.body.workerId;
+  const companyId = req.body.companyId;
+  const newDate = req.body.newDate;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers owner ownerData")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 4
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      if (workerId === "owner") {
+        const selectedOtherDays = companyDoc.ownerData.noConstantWorkingHours.filter(
+          (item) => item.fullDate !== newDate.fullDate
+        );
+        companyDoc.ownerData.noConstantWorkingHours = selectedOtherDays;
+      } else {
+        const selectedWorkerIndex = companyDoc.workers.findIndex(
+          (item) => item._id == workerId
+        );
+        if (selectedWorkerIndex >= 0) {
+          const selectedOtherDays = companyDoc.workers[
+            selectedWorkerIndex
+          ].noConstantWorkingHours.filter(
+            (item) => item.fullDate !== newDate.fullDate
+          );
+          companyDoc.workers[
+            selectedWorkerIndex
+          ].noConstantWorkingHours = selectedOtherDays;
+          return companyDoc.save();
+        }
+      }
+
+      return companyDoc;
+    })
+    .then((companyDoc) => {
+      if (workerId === "owner") {
+        companyDoc.ownerData.noConstantWorkingHours.push(newDate);
+        return companyDoc.save();
+      } else {
+        const selectedWorkerIndex = companyDoc.workers.findIndex(
+          (item) => item._id == workerId
+        );
+
+        if (selectedWorkerIndex >= 0) {
+          companyDoc.workers[selectedWorkerIndex].noConstantWorkingHours.push(
+            newDate
+          );
+          return companyDoc.save();
+        } else {
+          const error = new Error("Brak podanego pracownika");
+          error.statusCode = 422;
+          throw error;
+        }
+      }
+    })
+    .then((companySaved) => {
+      if (workerId === "owner") {
+        const newItemOwner = companySaved.ownerData.noConstantWorkingHours.find(
+          (item) => {
+            return (
+              new Date(item.start).getTime() ===
+              new Date(newDate.start).getTime()
+            );
+          }
+        );
+        if (!!newItemOwner) {
+          res.status(201).json({
+            noConstantDay: newItemOwner,
+          });
+        } else {
+          const error = new Error(
+            "Błąd podczas pobierania zapisanego dnia pracownika"
+          );
+          error.statusCode = 422;
+          throw error;
+        }
+      } else {
+        const selectedWorkerIndex = companySaved.workers.findIndex(
+          (item) => item._id == workerId
+        );
+        if (selectedWorkerIndex >= 0) {
+          const newItem = companySaved.workers[
+            selectedWorkerIndex
+          ].noConstantWorkingHours.find((item) => {
+            return (
+              new Date(item.start).getTime() ===
+              new Date(newDate.start).getTime()
+            );
+          });
+          if (!!newItem) {
+            res.status(201).json({
+              noConstantDay: newItem,
+            });
+          } else {
+            const error = new Error(
+              "Błąd podczas pobierania zapisanego dnia pracownika"
+            );
+            error.statusCode = 422;
+            throw error;
+          }
+        } else {
+          const error = new Error(
+            "Błąd podczas pobierania zapisanego dnia pracownika"
+          );
+          error.statusCode = 422;
+          throw error;
+        }
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyWorkersDeleteNoConstData = (req, res, next) => {
+  const userId = req.userId;
+  const workerId = req.body.workerId;
+  const companyId = req.body.companyId;
+  const noConstDateId = req.body.noConstDateId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers owner ownerData.noConstantWorkingHours")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 4
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      if (workerId === "owner") {
+        const selectedOtherDays = companyDoc.ownerData.noConstantWorkingHours.filter(
+          (item) => item._id != noConstDateId
+        );
+        companyDoc.ownerData.noConstantWorkingHours = selectedOtherDays;
+        return companyDoc.save();
+      } else {
+        const selectedWorkerIndex = companyDoc.workers.findIndex(
+          (item) => item._id == workerId
+        );
+        if (selectedWorkerIndex >= 0) {
+          const selectedOtherDays = companyDoc.workers[
+            selectedWorkerIndex
+          ].noConstantWorkingHours.filter((item) => item._id != noConstDateId);
+          companyDoc.workers[
+            selectedWorkerIndex
+          ].noConstantWorkingHours = selectedOtherDays;
+          return companyDoc.save();
+        } else {
+          return companyDoc;
+        }
+      }
+    })
+
+    .then(() => {
+      res.status(201).json({
+        message: "Pomyślnie usunięto dzień pracy pracownika",
       });
     })
     .catch((err) => {
