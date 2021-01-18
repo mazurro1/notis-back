@@ -241,7 +241,7 @@ exports.getCompanyData = (req, res, next) => {
     accountVerified: true,
   })
     .select(
-      "-codeToVerified -raports -codeToActive -workers.noConstantWorkingHours"
+      "-codeToVerified -raports -codeToActive -workers.noConstantWorkingHours -ownerData.noConstantWorkingHours"
     )
     .populate("owner", "name surname")
     .populate("workers.user", "name surname email")
@@ -318,7 +318,13 @@ exports.getCompanyData = (req, res, next) => {
           });
 
           const dataToSent = {
-            ownerData: dataCompany.ownerData,
+            ownerData: {
+              permissions: dataCompany.ownerData.permissions,
+              constantWorkingHours: dataCompany.ownerData.constantWorkingHours,
+              noConstantWorkingHours: [],
+              specialization: dataCompany.ownerData.specialization,
+              servicesCategory: dataCompany.ownerData.servicesCategory,
+            },
             openingDays: dataCompany.openingDays,
             _id: dataCompany._id,
             email: dataCompany.email,
@@ -1638,74 +1644,108 @@ exports.companyWorkersSaveProps = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select(
-      "_id workers owner"
-    )
+    .select("_id workers owner ownerData")
     .then((resultCompanyDoc) => {
-       if (!!resultCompanyDoc) {
-         let hasPermission = resultCompanyDoc.owner == userId;
-         if (!hasPermission) {
-           const selectedWorker = resultCompanyDoc.workers.find(
-             (worker) => worker.user == userId
-           );
-           if (!!selectedWorker) {
-             hasPermission = selectedWorker.permissions.some(
-               (perm) => perm === 4
-             );
-           }
-         }
-         if (hasPermission) {
-           return resultCompanyDoc;
-         } else {
-           const error = new Error("Brak dostępu.");
-           error.statusCode = 401;
-           throw error;
-         }
-       } else {
-         const error = new Error("Brak wybranej firmy.");
-         error.statusCode = 403;
-         throw error;
-       }
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 4
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
     })
     .then((companyDoc) => {
       if (!!dateProps) {
-        const selectedWorkerIndex = companyDoc.workers.findIndex(
-          (item) => item._id == dateProps.workerId
-        );
-        if (selectedWorkerIndex >= 0) {
-          companyDoc.workers[selectedWorkerIndex].specialization =
+        if (dateProps.workerId === "owner") {
+          companyDoc.ownerData.specialization =
             dateProps.inputSpecializationValue;
-          companyDoc.workers[selectedWorkerIndex].permissions =
-            dateProps.mapWorkerPermissionsIds;
-          companyDoc.workers[selectedWorkerIndex].servicesCategory =
+          companyDoc.ownerData.permissions = dateProps.mapWorkerPermissionsIds;
+          companyDoc.ownerData.servicesCategory =
             dateProps.workerServicesCategoryValue;
-        }
-      }
-      if(!!constTime){
-        const selectedWorkerIndex = companyDoc.workers.findIndex(
-          (item) => item._id == constTime.indexWorker
-        );
-        if(selectedWorkerIndex >= 0){
-          if (constTime.constantWorkingHours.length > 0) {
-            constTime.constantWorkingHours.forEach((constDate) => {
-              const dateIsInBackend = companyDoc.workers[
-                selectedWorkerIndex
-              ].constantWorkingHours.findIndex(
-                (item) => item.dayOfTheWeek === constDate.dayOfTheWeek
-              );
-              if (dateIsInBackend >= 0) {
-                companyDoc.workers[selectedWorkerIndex].constantWorkingHours[dateIsInBackend].dayOfTheWeek = constDate.dayOfTheWeek;
-                companyDoc.workers[selectedWorkerIndex].constantWorkingHours[dateIsInBackend].startWorking = constDate.startWorking;
-                companyDoc.workers[selectedWorkerIndex].constantWorkingHours[dateIsInBackend].endWorking = constDate.endWorking;
-                companyDoc.workers[selectedWorkerIndex].constantWorkingHours[dateIsInBackend].disabled = constDate.disabled;
-              } else {
-                companyDoc.workers[selectedWorkerIndex].constantWorkingHours.push(constDate);
-              }
-            });
+        } else {
+          const selectedWorkerIndex = companyDoc.workers.findIndex(
+            (item) => item._id == dateProps.workerId
+          );
+          if (selectedWorkerIndex >= 0) {
+            companyDoc.workers[selectedWorkerIndex].specialization =
+              dateProps.inputSpecializationValue;
+            companyDoc.workers[selectedWorkerIndex].permissions =
+              dateProps.mapWorkerPermissionsIds;
+            companyDoc.workers[selectedWorkerIndex].servicesCategory =
+              dateProps.workerServicesCategoryValue;
           }
         }
       }
-      return companyDoc.save()
+      if (!!constTime) {
+        if (constTime.indexWorker === "owner"){
+          if (constTime.constantWorkingHours.length > 0) {
+            constTime.constantWorkingHours.forEach((constDate) => {
+              const dateIsInBackend = companyDoc.ownerData.constantWorkingHours.findIndex(
+                (item) => item.dayOfTheWeek === constDate.dayOfTheWeek
+              );
+              if (dateIsInBackend >= 0) {
+                companyDoc.ownerData.constantWorkingHours[dateIsInBackend].dayOfTheWeek = constDate.dayOfTheWeek;
+                companyDoc.ownerData.constantWorkingHours[dateIsInBackend].startWorking = constDate.startWorking;
+                companyDoc.ownerData.constantWorkingHours[dateIsInBackend].endWorking = constDate.endWorking;
+                companyDoc.ownerData.constantWorkingHours[dateIsInBackend].disabled = constDate.disabled;
+              } else {
+                companyDoc.ownerData.constantWorkingHours.push(constDate);
+              }
+            });
+          }
+        }else{
+          const selectedWorkerIndex = companyDoc.workers.findIndex(
+            (item) => item._id == constTime.indexWorker
+          );
+          if (selectedWorkerIndex >= 0) {
+            if (constTime.constantWorkingHours.length > 0) {
+              constTime.constantWorkingHours.forEach((constDate) => {
+                const dateIsInBackend = companyDoc.workers[
+                  selectedWorkerIndex
+                ].constantWorkingHours.findIndex(
+                  (item) => item.dayOfTheWeek === constDate.dayOfTheWeek
+                );
+                if (dateIsInBackend >= 0) {
+                  companyDoc.workers[selectedWorkerIndex].constantWorkingHours[
+                    dateIsInBackend
+                  ].dayOfTheWeek = constDate.dayOfTheWeek;
+                  companyDoc.workers[selectedWorkerIndex].constantWorkingHours[
+                    dateIsInBackend
+                  ].startWorking = constDate.startWorking;
+                  companyDoc.workers[selectedWorkerIndex].constantWorkingHours[
+                    dateIsInBackend
+                  ].endWorking = constDate.endWorking;
+                  companyDoc.workers[selectedWorkerIndex].constantWorkingHours[
+                    dateIsInBackend
+                  ].disabled = constDate.disabled;
+                } else {
+                  companyDoc.workers[
+                    selectedWorkerIndex
+                  ].constantWorkingHours.push(constDate);
+                }
+              });
+            }
+          }
+        }
+      }
+      return companyDoc.save();
     })
     .then(() => {
       res.status(201).json({
