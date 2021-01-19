@@ -1422,7 +1422,9 @@ exports.companyServicesPatch = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions workers.user owner services")
+    .select(
+      "_id workers.permissions workers.user workers.servicesCategory ownerData.servicesCategory owner services"
+    )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -1449,7 +1451,7 @@ exports.companyServicesPatch = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyDoc)=>{
+    .then((companyDoc) => {
       if (services.deleted.length > 0) {
         const newArray = companyDoc.services.filter((itemFirst) => {
           const isInArray = services.deleted.some((itemSecond) => {
@@ -1458,6 +1460,36 @@ exports.companyServicesPatch = (req, res, next) => {
           return !isInArray;
         });
         companyDoc.services = newArray;
+
+        //delete serwice from worker
+        companyDoc.workers.forEach((worker, index) => {
+          const filterWorkerServiceCategory = worker.servicesCategory.filter(
+            (service) => {
+              const isServiceInDeleted = services.deleted.some(
+                (itemDeleted) => {
+                  return itemDeleted === service;
+                }
+              );
+              return !isServiceInDeleted;
+            }
+          );
+          companyDoc.workers[
+            index
+          ].servicesCategory = filterWorkerServiceCategory;
+        });
+
+        //delete from owner
+        const filterOwnerServiceCategory = companyDoc.ownerData.servicesCategory.filter(
+          (service) => {
+            const isServiceInDeleted = services.deleted.some(
+              (itemDeletedOwner) => {
+                return itemDeletedOwner === service;
+              }
+            );
+            return !isServiceInDeleted;
+          }
+        );
+        companyDoc.ownerData.servicesCategory = filterOwnerServiceCategory;
       }
 
       if (services.edited.length > 0) {
@@ -1495,10 +1527,12 @@ exports.companyServicesPatch = (req, res, next) => {
       }
       return companyDoc.save();
     })
-    .then((companySave)=>{
-       res.status(201).json({
-         services: companySave.services,
-       });
+    .then((companySave) => {
+      res.status(201).json({
+        services: companySave.services,
+        ownerDataServices: companySave.ownerData.servicesCategory,
+        workers: companySave.workers,
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
