@@ -2184,3 +2184,73 @@ exports.companyWorkersDeleteNoConstData = (req, res, next) => {
       next(err);
     });
 };
+
+exports.companyTekstsUpdate = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const allTextsCompany = req.body.allTextsCompany;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner title reserationText")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      if (!!allTextsCompany.textAboutUs) {
+        companyDoc.title = allTextsCompany.textAboutUs;
+      }
+      if (!!allTextsCompany.textReserwation) {
+        companyDoc.reserationText = allTextsCompany.textReserwation;
+      }
+
+      if (!!allTextsCompany.links) {
+        if (!!allTextsCompany.links.facebook) {
+          companyDoc.linkFacebook = allTextsCompany.links.facebook;
+        }
+
+        if (!!allTextsCompany.links.instagram) {
+          companyDoc.linkInstagram = allTextsCompany.links.instagram;
+        }
+
+        if (!!allTextsCompany.links.website) {
+          companyDoc.linkiWebsite = allTextsCompany.links.website;
+        }
+      }
+
+      return companyDoc.save();
+    })
+
+    .then(() => {
+      res.status(201).json({
+        message: "Pomyślnie zaktualizowano tekst",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};

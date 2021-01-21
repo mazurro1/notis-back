@@ -184,4 +184,13 @@ router.patch(
   company.companyWorkersDeleteNoConstData
 );
 
+router.patch(
+  "/company-teksts-update",
+  isAuth,
+  [body("companyId")],
+  [body("allTextsCompany")],
+  company.companyTekstsUpdate
+);
+
+
 module.exports = router;
