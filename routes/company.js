@@ -192,5 +192,12 @@ router.patch(
   company.companyTekstsUpdate
 );
 
+router.patch(
+  "/company-opening-hours-update",
+  isAuth,
+  [body("companyId")],
+  [body("openingHoursCompany")],
+  company.companyOpeningHoursUpdate
+);
 
 module.exports = router;

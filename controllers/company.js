@@ -2254,3 +2254,83 @@ exports.companyTekstsUpdate = (req, res, next) => {
       next(err);
     });
 };
+
+exports.companyOpeningHoursUpdate = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const openingHoursCompany = req.body.openingHoursCompany;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner openingDays daysOff")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      if (!!openingHoursCompany.openingHours) {
+        openingHoursCompany.openingHours.forEach((item) => {
+          companyDoc.openingDays[item.dayMonth].disabled = item.disabled;
+          companyDoc.openingDays[item.dayMonth].start = item.start;
+          companyDoc.openingDays[item.dayMonth].end = item.end;
+        });
+      }
+      if (!!openingHoursCompany.daysOff) {
+        if (!!openingHoursCompany.daysOff.deletedDayOff) {
+          const filterDAysOff = companyDoc.daysOff.filter((item) => {
+            const isInDeleted = openingHoursCompany.daysOff.deletedDayOff.some(
+              (itemDayOff) => {
+                return itemDayOff == item._id;
+              }
+            );
+            return !isInDeleted;
+          });
+          companyDoc.daysOff = filterDAysOff;
+        }
+
+        if (!!openingHoursCompany.daysOff.createdDayOff) {
+          openingHoursCompany.daysOff.createdDayOff.forEach((itemCreated) => {
+            const newDayOff = {
+              day: itemCreated.day,
+              month: itemCreated.month,
+              year: itemCreated.year,
+            };
+            companyDoc.daysOff.push(newDayOff);
+          });
+        }
+      }
+      return companyDoc.save();
+    })
+
+    .then(() => {
+      res.status(201).json({
+        message: "Pomyślnie zaktualizowano godziny otwarcia",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
