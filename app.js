@@ -33,7 +33,8 @@ app.use((error, req, res, next) => {
 
 mongoose
   .connect(
-    "mongodb+srv://admin:Radom1910@nootis-cluster.rajb9.mongodb.net/nootis-database?retryWrites=true&w=majority"
+    "mongodb+srv://admin:Radom1910@nootis-cluster.rajb9.mongodb.net/nootis-database?retryWrites=true&w=majority",
+    { useNewUrlParser: true, useUnifiedTopology: true }
   )
   .then((result) => {
     const server = app.listen(3000);
@@ -43,7 +44,6 @@ mongoose
       io.removeAllListeners();
       console.log("user connected");
     });
-      
   })
   .catch((err) => {
     console.log(err);

@@ -96,29 +96,29 @@ router.post(
 
 
 
-router.patch(
-  "/update-company-profil",
-  isAuth,
-  [body("companyId").trim().isLength({ min: 5 })],
-  [body("textAboutUs")],
-  [body("textRezerwation")],
-  [body("ownerSpecialization")],
-  [body("editedWorkers")],
-  [body("editedAdress")],
-  [body("editedLinks")],
-  [body("openingHours")],
-  [body("services")],
-  [body("companyPaused")],
-  [body("reservationEveryTime")],
-  [body("reservationMonthTime")],
-  [body("ownerSerwiceCategory")],
-  [body("deletedDayOff")],
-  [body("createdDayOff")],
-  [body("newIndustries")],
-  [body("deletedIndustries")],
-  [body("editedWorkersHours")],
-  company.updateCompanyProfil
-);
+// router.patch(
+//   "/update-company-profil",
+//   isAuth,
+//   [body("companyId").trim().isLength({ min: 5 })],
+//   [body("textAboutUs")],
+//   [body("textRezerwation")],
+//   [body("ownerSpecialization")],
+//   [body("editedWorkers")],
+//   [body("editedAdress")],
+//   [body("editedLinks")],
+//   [body("openingHours")],
+//   [body("services")],
+//   [body("companyPaused")],
+//   [body("reservationEveryTime")],
+//   [body("reservationMonthTime")],
+//   [body("ownerSerwiceCategory")],
+//   [body("deletedDayOff")],
+//   [body("createdDayOff")],
+//   [body("newIndustries")],
+//   [body("deletedIndustries")],
+//   [body("editedWorkersHours")],
+//   company.updateCompanyProfil
+// );
 
 
 router.patch(
@@ -199,5 +199,14 @@ router.patch(
   [body("openingHoursCompany")],
   company.companyOpeningHoursUpdate
 );
+
+router.patch(
+  "/company-map-update",
+  isAuth,
+  [body("companyId")],
+  [body("maps")],
+  company.companyMapsUpdate
+);
+
 
 module.exports = router;

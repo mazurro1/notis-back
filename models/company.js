@@ -54,6 +54,16 @@ const companySchema = new Schema(
       ref: "Users",
       required: true,
     },
+    maps: {
+      lat: {
+        type: String,
+        required: false,
+      },
+      long: {
+        type: String,
+        required: false,
+      }
+    },
     daysOff: [
       {
         day: {
