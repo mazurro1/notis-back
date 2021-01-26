@@ -2388,3 +2388,196 @@ exports.companyMapsUpdate = (req, res, next) => {
       next(err);
     });
 };
+
+exports.companyAddConstDateHappyHour = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const constDate = req.body.constDate;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers.permissions owner happyHoursConst")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 3
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      companyDoc.happyHoursConst.push({
+        disabled: constDate.disabled,
+        dayWeekIndex: constDate.dayWeekIndex,
+        start: constDate.start,
+        end: constDate.end,
+        promotionPercent: constDate.promotionPercent,
+        servicesInPromotion: constDate.servicesInPromotion,
+      });
+      return companyDoc.save();
+    })
+    .then((saveItems) => {
+      res.status(201).json({
+        happyHoursConst: saveItems.happyHoursConst,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyDeleteConstDateHappyHour = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const happyHourId = req.body.happyHourId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers.permissions owner happyHoursConst")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 3
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      const filterHappyHours  = companyDoc.happyHoursConst.filter((item) => item._id != happyHourId);
+      companyDoc.happyHoursConst = filterHappyHours;
+      return companyDoc.save();
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Usunięto happy hour"
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyUpdateConstDateHappyHour = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const constDate = req.body.constDate;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers.permissions owner happyHoursConst")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 3
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      const findIndexHappyHour = companyDoc.happyHoursConst.findIndex(item => item._id == constDate._id);
+      if(findIndexHappyHour >= 0){
+        companyDoc.happyHoursConst[findIndexHappyHour].disabled = constDate.disabled;
+        companyDoc.happyHoursConst[findIndexHappyHour].dayWeekIndex = constDate.dayWeekIndex;
+        companyDoc.happyHoursConst[findIndexHappyHour].start = constDate.start;
+        companyDoc.happyHoursConst[findIndexHappyHour].end = constDate.end;
+        companyDoc.happyHoursConst[findIndexHappyHour].promotionPercent = constDate.promotionPercent;
+        companyDoc.happyHoursConst[findIndexHappyHour].servicesInPromotion = constDate.servicesInPromotion;
+      }
+      return companyDoc.save();
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Zaktualizowano happy hour",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};

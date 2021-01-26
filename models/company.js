@@ -62,7 +62,7 @@ const companySchema = new Schema(
       long: {
         type: String,
         required: false,
-      }
+      },
     },
     daysOff: [
       {
@@ -541,7 +541,7 @@ const companySchema = new Schema(
           required: false,
         },
         dayWeekIndex: {
-          type: Date,
+          type: Number,
           required: false,
         },
         start: {
@@ -558,14 +558,8 @@ const companySchema = new Schema(
         },
         servicesInPromotion: [
           {
-            category: {
-              type: String,
-              required: false,
-            },
-            serviceName: {
-              type: String,
-              required: false,
-            },
+            type: String,
+            required: false,
           },
         ],
       },
@@ -576,12 +570,16 @@ const companySchema = new Schema(
           type: Boolean,
           required: false,
         },
+        fullDate: {
+          type: String,
+          required: false,
+        },
         start: {
-          type: Date,
+          type: String,
           required: false,
         },
         end: {
-          type: Date,
+          type: String,
           required: false,
         },
         promotionPercent: {
@@ -590,11 +588,7 @@ const companySchema = new Schema(
         },
         servicesInPromotion: [
           {
-            category: {
-              type: String,
-              required: false,
-            },
-            serviceName: {
+            serviceId: {
               type: String,
               required: false,
             },

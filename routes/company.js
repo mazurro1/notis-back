@@ -208,5 +208,29 @@ router.patch(
   company.companyMapsUpdate
 );
 
+router.patch(
+  "/add-const-date-happy-hour",
+  isAuth,
+  [body("companyId")],
+  [body("constDate")],
+  company.companyAddConstDateHappyHour
+);
+
+router.patch(
+  "/delete-const-date-happy-hour",
+  isAuth,
+  [body("companyId")],
+  [body("happyHourId")],
+  company.companyDeleteConstDateHappyHour
+);
+
+router.patch(
+  "/update-const-date-happy-hour",
+  isAuth,
+  [body("companyId")],
+  [body("constDate")],
+  company.companyUpdateConstDateHappyHour
+);
+
 
 module.exports = router;
