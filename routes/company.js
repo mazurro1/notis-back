@@ -217,6 +217,14 @@ router.patch(
 );
 
 router.patch(
+  "/add-no-const-date-happy-hour",
+  isAuth,
+  [body("companyId")],
+  [body("constDate")],
+  company.companyAddNoConstDateHappyHour
+);
+
+router.patch(
   "/delete-const-date-happy-hour",
   isAuth,
   [body("companyId")],

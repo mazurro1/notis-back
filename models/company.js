@@ -588,10 +588,8 @@ const companySchema = new Schema(
         },
         servicesInPromotion: [
           {
-            serviceId: {
-              type: String,
-              required: false,
-            },
+            type: String,
+            required: false,
           },
         ],
       },

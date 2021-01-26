@@ -2581,3 +2581,70 @@ exports.companyUpdateConstDateHappyHour = (req, res, next) => {
       next(err);
     });
 };
+
+
+exports.companyAddNoConstDateHappyHour = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const constDate = req.body.constDate;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers.permissions owner happyHoursNoConst")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 3
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      companyDoc.happyHoursNoConst.push({
+        disabled: constDate.disabled,
+        fullDate: constDate.dateFull,
+        start: constDate.start,
+        end: constDate.end,
+        promotionPercent: constDate.promotionPercent,
+        servicesInPromotion: constDate.servicesInPromotion,
+      });
+      return companyDoc.save();
+    })
+    .then((saveItems) => {
+      res.status(201).json({
+        happyHoursNoConst: saveItems.happyHoursNoConst,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
