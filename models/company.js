@@ -540,10 +540,12 @@ const companySchema = new Schema(
           type: Boolean,
           required: false,
         },
-        dayWeekIndex: {
-          type: Number,
-          required: false,
-        },
+        dayWeekIndex: [
+          {
+            type: Number,
+            required: false,
+          },
+        ],
         start: {
           type: String,
           required: false,
@@ -564,14 +566,10 @@ const companySchema = new Schema(
         ],
       },
     ],
-    happyHoursNoConst: [
+    promotions: [
       {
         disabled: {
           type: Boolean,
-          required: false,
-        },
-        fullDate: {
-          type: String,
           required: false,
         },
         start: {

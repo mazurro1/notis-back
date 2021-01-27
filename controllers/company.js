@@ -357,8 +357,8 @@ exports.getCompanyData = (req, res, next) => {
             services: dataCompany.services,
             companyType: dataCompany.companyType,
             happyHoursConst: dataCompany.happyHoursConst,
-            happyHoursNoConst: dataCompany.happyHoursNoConst,
-            maps: dataCompany.maps
+            promotions: dataCompany.promotions,
+            maps: dataCompany.maps,
           };
 
           res.status(201).json({
@@ -2583,10 +2583,10 @@ exports.companyUpdateConstDateHappyHour = (req, res, next) => {
 };
 
 
-exports.companyAddNoConstDateHappyHour = (req, res, next) => {
+exports.companyAddPromotion = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
-  const constDate = req.body.constDate;
+  const promotionDate = req.body.promotionDate;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -2597,7 +2597,7 @@ exports.companyAddNoConstDateHappyHour = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions owner happyHoursNoConst")
+    .select("_id workers.permissions owner promotions")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2625,19 +2625,154 @@ exports.companyAddNoConstDateHappyHour = (req, res, next) => {
       }
     })
     .then((companyDoc) => {
-      companyDoc.happyHoursNoConst.push({
-        disabled: constDate.disabled,
-        fullDate: constDate.dateFull,
-        start: constDate.start,
-        end: constDate.end,
-        promotionPercent: constDate.promotionPercent,
-        servicesInPromotion: constDate.servicesInPromotion,
+      companyDoc.promotions.push({
+        disabled: promotionDate.disabled,
+        start: promotionDate.start,
+        end: promotionDate.end,
+        promotionPercent: promotionDate.promotionPercent,
+        servicesInPromotion: promotionDate.servicesInPromotion,
       });
       return companyDoc.save();
     })
     .then((saveItems) => {
       res.status(201).json({
-        happyHoursNoConst: saveItems.happyHoursNoConst,
+        promotions: saveItems.promotions,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyDeletePromotion = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const promotionId = req.body.promotionId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers.permissions owner promotions")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 3
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      const filterPromotions = companyDoc.promotions.filter(
+        (item) => item._id != promotionId
+      );
+      companyDoc.promotions = filterPromotions;
+      return companyDoc.save();
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Usunięto promocję",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companyUpdatePromotion = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const promotionDate = req.body.promotionDate;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers.permissions owner promotions")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 3
+            );
+          }
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      const findIndexHappyHour = companyDoc.promotions.findIndex(
+        (item) => item._id == promotionDate._id
+      );
+      if (findIndexHappyHour >= 0) {
+        companyDoc.promotions[findIndexHappyHour].disabled =
+          promotionDate.disabled;
+        companyDoc.promotions[findIndexHappyHour].dayWeekIndex =
+          promotionDate.dayWeekIndex;
+        companyDoc.promotions[findIndexHappyHour].start = promotionDate.start;
+        companyDoc.promotions[findIndexHappyHour].end = promotionDate.end;
+        companyDoc.promotions[findIndexHappyHour].promotionPercent =
+          promotionDate.promotionPercent;
+        companyDoc.promotions[findIndexHappyHour].servicesInPromotion =
+          promotionDate.servicesInPromotion;
+      }
+      return companyDoc.save();
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Zaktualizowano promocję",
       });
     })
     .catch((err) => {

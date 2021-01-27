@@ -217,11 +217,11 @@ router.patch(
 );
 
 router.patch(
-  "/add-no-const-date-happy-hour",
+  "/add-promotion",
   isAuth,
   [body("companyId")],
-  [body("constDate")],
-  company.companyAddNoConstDateHappyHour
+  [body("promotionDate")],
+  company.companyAddPromotion
 );
 
 router.patch(
@@ -240,5 +240,20 @@ router.patch(
   company.companyUpdateConstDateHappyHour
 );
 
+router.patch(
+  "/delete-promotion",
+  isAuth,
+  [body("companyId")],
+  [body("promotionId")],
+  company.companyDeletePromotion
+);
+
+router.patch(
+  "/update-promotion",
+  isAuth,
+  [body("companyId")],
+  [body("promotionDate")],
+  company.companyUpdatePromotion
+);
 
 module.exports = router;
