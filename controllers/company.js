@@ -1425,7 +1425,7 @@ exports.companyServicesPatch = (req, res, next) => {
     _id: companyId,
   })
     .select(
-      "_id workers.permissions workers.user workers.servicesCategory ownerData.servicesCategory owner services"
+      "_id workers.permissions workers.user workers.servicesCategory ownerData.servicesCategory owner services promotions happyHoursConst"
     )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
@@ -1491,8 +1491,89 @@ exports.companyServicesPatch = (req, res, next) => {
             return !isServiceInDeleted;
           }
         );
+
         companyDoc.ownerData.servicesCategory = filterOwnerServiceCategory;
+
+        //delete from happy hours
+        const newHappyHours = []
+        companyDoc.happyHoursConst.forEach(happyHour => {
+          const isServiceInHappyHour = happyHour.servicesInPromotion.some(happyHourService => {
+          const isInDeleted = services.deleted.some(
+                (serviceDeleted) => serviceDeleted == happyHourService
+              );
+              return isInDeleted;
+          });
+          if (isServiceInHappyHour) {
+            const filterServiceInHappyHour = happyHour.servicesInPromotion.filter(
+              (happyHourService) => {
+                const isInDeleted = services.deleted.some(
+                  (serviceDeleted) => {
+                    return serviceDeleted == happyHourService;
+                  }
+                );
+                return !isInDeleted;
+              }
+            );
+            if (filterServiceInHappyHour.length > 0) {
+              const newHappyHoursItemService = {
+                dayWeekIndex: happyHour.dayWeekIndex,
+                servicesInPromotion: filterServiceInHappyHour,
+                _id: happyHour._id,
+                disabled: happyHour.disabled,
+                start: happyHour.start,
+                end: happyHour.end,
+                promotionPercent: happyHour.promotionPercent,
+              };
+              
+              newHappyHours.push(newHappyHoursItemService);
+            }
+          } else {
+            newHappyHours.push(happyHour);
+          }
+        })
+        companyDoc.happyHoursConst = newHappyHours;
+
+        //delete from promotions
+        const newPromotions = [];
+        companyDoc.promotions.forEach((promotion) => {
+          const isServiceInPromotion = promotion.servicesInPromotion.some(
+            (promotionService) => {
+              const isInDeleted = services.deleted.some(
+                (serviceDeleted) => serviceDeleted == promotionService
+              );
+              return isInDeleted;
+            }
+          );
+          if (isServiceInPromotion) {
+            const filterServiceInPromotion = promotion.servicesInPromotion.filter(
+              (promotionService) => {
+                const isInDeleted = services.deleted.some((serviceDeleted) => {
+                  return serviceDeleted == promotionService;
+                });
+                return !isInDeleted;
+              }
+            );
+            if (filterServiceInPromotion.length > 0) {
+              const newPromotionItemService = {
+                dayWeekIndex: promotion.dayWeekIndex,
+                servicesInPromotion: filterServiceInPromotion,
+                _id: promotion._id,
+                disabled: promotion.disabled,
+                start: promotion.start,
+                end: promotion.end,
+                promotionPercent: promotion.promotionPercent,
+              };
+
+              newPromotions.push(newPromotionItemService);
+            }
+          } else {
+            newPromotions.push(promotion);
+          }
+        });
+        
+        companyDoc.promotions = newPromotions;
       }
+      //end deleted in promotions
 
       if (services.edited.length > 0) {
         const newServices = companyDoc.services.map((itemFirst) => {
@@ -1534,6 +1615,8 @@ exports.companyServicesPatch = (req, res, next) => {
         services: companySave.services,
         ownerDataServices: companySave.ownerData.servicesCategory,
         workers: companySave.workers,
+        promotions: companySave.promotions,
+        happyHoursConst: companySave.happyHoursConst,
       });
     })
     .catch((err) => {
