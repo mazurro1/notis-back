@@ -426,9 +426,7 @@ exports.resetAllerts = (req, res, next) => {
         user.alertActiveCount = 0;
         return user.save();
       } else {
-         const error = new Error("Brak uzytkownika");
-         error.statusCode = 422;
-         throw error;
+         return true;
       }
     })
     .then(() => {

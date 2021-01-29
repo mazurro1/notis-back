@@ -40,6 +40,7 @@ router.post(
   [body("selectedMonth")],
   [body("selectedYear")],
   [body("timeReserwation")],
+  [body("serviceId")],
   reserwation.getWorkerDisabledHours
 );
 

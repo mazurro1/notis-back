@@ -427,37 +427,12 @@ const companySchema = new Schema(
         },
       },
     ],
-    opinions: [
-      {
-        userIdWhoWrite: {
-          type: Schema.Types.ObjectId,
-          ref: "Users",
-          required: false,
-        },
-        opinionText: {
-          type: String,
-          required: false,
-        },
-        opinionValue: {
-          type: Number,
-          required: false,
-        },
-        opinionDate: {
-          type: String,
-          required: false,
-        },
-        replyText: {
-          type: String,
-          required: false,
-        },
-      },
-    ],
     opinionsCount: {
       type: Number,
       required: false,
     },
     opinionsValue: {
-      type: String,
+      type: Number,
       required: false,
     },
     messangerAvaible: {

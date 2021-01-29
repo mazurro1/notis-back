@@ -93,14 +93,25 @@ const reserwationSchema = new Schema({
     type: Boolean,
     required: false,
   },
-
   reserwationMessage: {
     type: String,
     required: false,
   },
-
   serviceId: {
     type: String,
+    required: false,
+  },
+  activePromotion: {
+    type: Boolean,
+    required: false,
+  },
+  basicPrice: {
+    type: String,
+    required: true,
+  },
+  opinionId: {
+    type: Schema.Types.ObjectId,
+    ref: "Opinions",
     required: false,
   },
 });

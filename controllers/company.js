@@ -1,4 +1,5 @@
 const Company = require("../models/company");
+const Opinion = require("../models/opinion");
 const mongoose = require("mongoose");
 const User = require("../models/user");
 // const bcrypt = require("bcryptjs");
@@ -247,128 +248,141 @@ exports.getCompanyData = (req, res, next) => {
     .populate("workers.user", "name surname email")
     .then((companyDoc) => {
       if (companyDoc) {
-        let userHasPermission = userId == companyDoc.owner._id;
-        if (!!!userHasPermission) {
-          const workerSelected = companyDoc.workers.find(
-            (worker) => worker.user._id == userId
-          );
-          if (!!workerSelected) {
-            const workerHasAccess = workerSelected.permissions.some(
-              (perm) => perm === 2 || perm === 3 || perm === 4
-            );
-            if (workerHasAccess) {
-              userHasPermission = true;
-            }
-          }
-        }
-        if (!!userHasPermission) {
-          const dataCompany = companyDoc;
+         Opinion.find({
+           company: companyDoc._id,
+         })
+           .populate("user", "name")
+           .limit(10)
+           .then((resultOpinions) => {
+             const companyOpinions = !!resultOpinions ? resultOpinions : []; 
+             let userHasPermission = userId == companyDoc.owner._id;
+             if (!!!userHasPermission) {
+               const workerSelected = companyDoc.workers.find(
+                 (worker) => worker.user._id == userId
+               );
+               if (!!workerSelected) {
+                 const workerHasAccess = workerSelected.permissions.some(
+                   (perm) => perm === 2 || perm === 3 || perm === 4
+                 );
+                 if (workerHasAccess) {
+                   userHasPermission = true;
+                 }
+               }
+             }
+             if (!!userHasPermission) {
+               const dataCompany = companyDoc;
 
-          const unhashedOwnerName = Buffer.from(
-            companyDoc.owner.name,
-            "base64"
-          ).toString("ascii");
+               const unhashedOwnerName = Buffer.from(
+                 companyDoc.owner.name,
+                 "base64"
+               ).toString("ascii");
 
-          const unhashedOwnerSurname = Buffer.from(
-            companyDoc.owner.surname,
-            "base64"
-          ).toString("ascii");
+               const unhashedOwnerSurname = Buffer.from(
+                 companyDoc.owner.surname,
+                 "base64"
+               ).toString("ascii");
 
-          const unhashedPhone = Buffer.from(
-            companyDoc.phone,
-            "base64"
-          ).toString("ascii");
+               const unhashedPhone = Buffer.from(
+                 companyDoc.phone,
+                 "base64"
+               ).toString("ascii");
 
-          const unhashedAdress = Buffer.from(
-            companyDoc.adress,
-            "base64"
-          ).toString("ascii");
+               const unhashedAdress = Buffer.from(
+                 companyDoc.adress,
+                 "base64"
+               ).toString("ascii");
 
-          const mapedWorkers = [];
-          dataCompany.workers.forEach((item) => {
-            const unhashedName = Buffer.from(item.user.name, "base64").toString(
-              "ascii"
-            );
-            const unhashedSurname = Buffer.from(
-              item.user.surname,
-              "base64"
-            ).toString("ascii");
-            const unhashedUserProps = {
-              email: item.email,
-              name: unhashedName,
-              surname: unhashedSurname,
-              _id: item.user._id,
-            };
+               const mapedWorkers = [];
+               dataCompany.workers.forEach((item) => {
+                 const unhashedName = Buffer.from(
+                   item.user.name,
+                   "base64"
+                 ).toString("ascii");
+                 const unhashedSurname = Buffer.from(
+                   item.user.surname,
+                   "base64"
+                 ).toString("ascii");
+                 const unhashedUserProps = {
+                   email: item.email,
+                   name: unhashedName,
+                   surname: unhashedSurname,
+                   _id: item.user._id,
+                 };
 
-            mapedWorkers.push({
-              _id: item._id,
-              user: unhashedUserProps,
-              active: item.active,
-              permissions: item.permissions,
-              specialization: item.specialization,
-              constantWorkingHours: item.constantWorkingHours
-                ? item.constantWorkingHours
-                : [],
-              noConstantWorkingHours: [],
+                 mapedWorkers.push({
+                   _id: item._id,
+                   user: unhashedUserProps,
+                   active: item.active,
+                   permissions: item.permissions,
+                   specialization: item.specialization,
+                   constantWorkingHours: item.constantWorkingHours
+                     ? item.constantWorkingHours
+                     : [],
+                   noConstantWorkingHours: [],
 
-              servicesCategory: item.servicesCategory
-                ? item.servicesCategory
-                : [],
-            });
-          });
+                   servicesCategory: item.servicesCategory
+                     ? item.servicesCategory
+                     : [],
+                 });
+               });
 
-          const dataToSent = {
-            ownerData: {
-              permissions: dataCompany.ownerData.permissions,
-              constantWorkingHours: dataCompany.ownerData.constantWorkingHours,
-              noConstantWorkingHours: [],
-              specialization: dataCompany.ownerData.specialization,
-              servicesCategory: dataCompany.ownerData.servicesCategory,
-            },
-            openingDays: dataCompany.openingDays,
-            _id: dataCompany._id,
-            email: dataCompany.email,
-            linkPath: dataCompany.linkPath,
-            name: dataCompany.name,
-            phone: unhashedPhone,
-            city: dataCompany.city,
-            district: dataCompany.district,
-            adress: unhashedAdress,
-            accountVerified: dataCompany.accountVerified,
-            owner: {
-              name: unhashedOwnerName,
-              surname: unhashedOwnerSurname,
-              _id: dataCompany.owner._id,
-            },
-            pauseCompany: dataCompany.pauseCompany,
-            messangerAvaible: dataCompany.messangerAvaible,
-            title: dataCompany.title,
-            reservationEveryTime: dataCompany.reservationEveryTime,
-            workers: mapedWorkers,
-            opinions: dataCompany.opinions,
-            messages: dataCompany.messages,
-            reports: dataCompany.reports,
-            linkFacebook: dataCompany.linkFacebook,
-            linkInstagram: dataCompany.linkInstagram,
-            linkiWebsite: dataCompany.linkiWebsite,
-            reserationText: dataCompany.reserationText,
-            daysOff: dataCompany.daysOff,
-            reservationMonthTime: dataCompany.reservationMonthTime,
-            services: dataCompany.services,
-            companyType: dataCompany.companyType,
-            happyHoursConst: dataCompany.happyHoursConst,
-            promotions: dataCompany.promotions,
-            maps: dataCompany.maps,
-          };
+               const dataToSent = {
+                 ownerData: {
+                   permissions: dataCompany.ownerData.permissions,
+                   constantWorkingHours:
+                     dataCompany.ownerData.constantWorkingHours,
+                   noConstantWorkingHours: [],
+                   specialization: dataCompany.ownerData.specialization,
+                   servicesCategory: dataCompany.ownerData.servicesCategory,
+                 },
+                 openingDays: dataCompany.openingDays,
+                 _id: dataCompany._id,
+                 email: dataCompany.email,
+                 linkPath: dataCompany.linkPath,
+                 name: dataCompany.name,
+                 phone: unhashedPhone,
+                 city: dataCompany.city,
+                 district: dataCompany.district,
+                 adress: unhashedAdress,
+                 accountVerified: dataCompany.accountVerified,
+                 owner: {
+                   name: unhashedOwnerName,
+                   surname: unhashedOwnerSurname,
+                   _id: dataCompany.owner._id,
+                 },
+                 pauseCompany: dataCompany.pauseCompany,
+                 messangerAvaible: dataCompany.messangerAvaible,
+                 title: dataCompany.title,
+                 reservationEveryTime: dataCompany.reservationEveryTime,
+                 workers: mapedWorkers,
+                 opinions: dataCompany.opinions,
+                 messages: dataCompany.messages,
+                 reports: dataCompany.reports,
+                 linkFacebook: dataCompany.linkFacebook,
+                 linkInstagram: dataCompany.linkInstagram,
+                 linkiWebsite: dataCompany.linkiWebsite,
+                 reserationText: dataCompany.reserationText,
+                 daysOff: dataCompany.daysOff,
+                 reservationMonthTime: dataCompany.reservationMonthTime,
+                 services: dataCompany.services,
+                 companyType: dataCompany.companyType,
+                 happyHoursConst: dataCompany.happyHoursConst,
+                 promotions: dataCompany.promotions,
+                 maps: dataCompany.maps,
+                 opinions: companyOpinions,
+                 opinionsCount: !!dataCompany.opinionsCount ? dataCompany.opinionsCount : 0,
+                 opinionsValue: !!dataCompany.opinionsValue ? dataCompany.opinionsValue : 0,
+               };
 
-          res.status(201).json({
-            companyProfil: dataToSent,
-          });
-        } else {
-          const error = new Error("Brak uprawnień.");
-          error.statusCode = 401;
-          throw error;
-        }
+               res.status(201).json({
+                 companyProfil: dataToSent,
+               });
+             } else {
+               const error = new Error("Brak uprawnień.");
+               error.statusCode = 401;
+               throw error;
+             }
+           });
       } else {
         const error = new Error("Brak konta firmowego.");
         error.statusCode = 422;
@@ -1105,100 +1119,121 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "workers.specialization workers.name adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title workers reservationMonthTime usersInformation.isBlocked usersInformation.userId maps"
+      "workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
     )
     .populate("owner", "name surname")
     .populate("workers.user", "name surname email")
     .then((resultCompanyDoc) => {
-      const dataCompany = resultCompanyDoc;
+      if (!!resultCompanyDoc) {
+        Opinion.find({
+          company: resultCompanyDoc._id,
+        })
+          .populate("user", "name")
+          .limit(10)
+          .then((resultOpinions) => {
+            const companyOpinions = !!resultOpinions ? resultOpinions : []; 
+            const dataCompany = resultCompanyDoc;
 
-      const unhashedOwnerName = Buffer.from(
-        resultCompanyDoc.owner.name,
-        "base64"
-      ).toString("ascii");
+            const unhashedOwnerName = Buffer.from(
+              resultCompanyDoc.owner.name,
+              "base64"
+            ).toString("ascii");
 
-      const unhashedOwnerSurname = Buffer.from(
-        resultCompanyDoc.owner.surname,
-        "base64"
-      ).toString("ascii");
+            const unhashedOwnerSurname = Buffer.from(
+              resultCompanyDoc.owner.surname,
+              "base64"
+            ).toString("ascii");
 
-      const unhashedPhone = Buffer.from(
-        resultCompanyDoc.phone,
-        "base64"
-      ).toString("ascii");
+            const unhashedPhone = Buffer.from(
+              resultCompanyDoc.phone,
+              "base64"
+            ).toString("ascii");
 
-      const unhashedAdress = Buffer.from(
-        resultCompanyDoc.adress,
-        "base64"
-      ).toString("ascii");
+            const unhashedAdress = Buffer.from(
+              resultCompanyDoc.adress,
+              "base64"
+            ).toString("ascii");
 
-      const mapedWorkers = dataCompany.workers.map((item) => {
-        const unhashedName = Buffer.from(item.user.name, "base64").toString(
-          "ascii"
-        );
-        const unhashedSurname = Buffer.from(
-          item.user.surname,
-          "base64"
-        ).toString("ascii");
-        const unhashedUserProps = {
-          email: item.email,
-          name: unhashedName,
-          surname: unhashedSurname,
-          _id: item.user._id,
-        };
+            const mapedWorkers = dataCompany.workers.map((item) => {
+              const unhashedName = Buffer.from(
+                item.user.name,
+                "base64"
+              ).toString("ascii");
+              const unhashedSurname = Buffer.from(
+                item.user.surname,
+                "base64"
+              ).toString("ascii");
+              const unhashedUserProps = {
+                email: item.email,
+                name: unhashedName,
+                surname: unhashedSurname,
+                _id: item.user._id,
+              };
 
-        return {
-          user: unhashedUserProps,
-          active: item.active,
-          specialization: item.specialization,
-          servicesCategory: item.servicesCategory ? item.servicesCategory : [],
-          _id: item._id,
-        };
-      });
+              return {
+                user: unhashedUserProps,
+                active: item.active,
+                specialization: item.specialization,
+                servicesCategory: item.servicesCategory
+                  ? item.servicesCategory
+                  : [],
+                _id: item._id,
+              };
+            });
 
-      const dataToSent = {
-        adress: unhashedAdress,
-        city: resultCompanyDoc.city,
-        district: resultCompanyDoc.district,
-        email: resultCompanyDoc.email,
-        linkFacebook: resultCompanyDoc.linkFacebook,
-        linkInstagram: resultCompanyDoc.linkInstagram,
-        linkPath: resultCompanyDoc.linkPath,
-        linkiWebsite: resultCompanyDoc.linkWebsite,
-        name: resultCompanyDoc.name,
-        openingDays: resultCompanyDoc.openingDays,
-        owner: {
-          name: unhashedOwnerName,
-          surname: unhashedOwnerSurname,
-          _id: resultCompanyDoc.owner._id,
-        },
-        ownerData: {
-          active: resultCompanyDoc.ownerData.active,
-          servicesCategory: resultCompanyDoc.ownerData.servicesCategory,
-          specialization: resultCompanyDoc.ownerData.specialization,
-          user: resultCompanyDoc.ownerData.user,
-        },
-        pauseCompany: resultCompanyDoc.pauseCompany,
-        phone: unhashedPhone,
-        reserationText: resultCompanyDoc.reserationText,
-        services: resultCompanyDoc.services,
-        title: resultCompanyDoc.title,
-        workers: mapedWorkers,
-        _id: resultCompanyDoc._id,
-        reservationMonthTime: resultCompanyDoc.reservationMonthTime,
-        usersInformation: resultCompanyDoc.usersInformation,
-        maps: resultCompanyDoc.maps,
-      };
+            const dataToSent = {
+              adress: unhashedAdress,
+              city: resultCompanyDoc.city,
+              district: resultCompanyDoc.district,
+              email: resultCompanyDoc.email,
+              linkFacebook: resultCompanyDoc.linkFacebook,
+              linkInstagram: resultCompanyDoc.linkInstagram,
+              linkPath: resultCompanyDoc.linkPath,
+              linkiWebsite: resultCompanyDoc.linkWebsite,
+              name: resultCompanyDoc.name,
+              openingDays: resultCompanyDoc.openingDays,
+              owner: {
+                name: unhashedOwnerName,
+                surname: unhashedOwnerSurname,
+                _id: resultCompanyDoc.owner._id,
+              },
+              ownerData: {
+                active: resultCompanyDoc.ownerData.active,
+                servicesCategory: resultCompanyDoc.ownerData.servicesCategory,
+                specialization: resultCompanyDoc.ownerData.specialization,
+                user: resultCompanyDoc.ownerData.user,
+              },
+              pauseCompany: resultCompanyDoc.pauseCompany,
+              phone: unhashedPhone,
+              reserationText: resultCompanyDoc.reserationText,
+              services: resultCompanyDoc.services,
+              title: resultCompanyDoc.title,
+              workers: mapedWorkers,
+              _id: resultCompanyDoc._id,
+              reservationMonthTime: resultCompanyDoc.reservationMonthTime,
+              usersInformation: resultCompanyDoc.usersInformation,
+              maps: resultCompanyDoc.maps,
+              opinionsCount: !!resultCompanyDoc.opinionsCount ? resultCompanyDoc.opinionsCount : 0,
+              opinionsValue: !!resultCompanyDoc.opinionsValue ? resultCompanyDoc.opinionsValue : 0,
+              opinions: companyOpinions,
+            };
 
-      // dataCompany.workers = mapedWorkers;
-      // dataCompany.adress = unhashedAdress;
-      // dataCompany.phone = unhashedPhone;
-      // dataCompany.owner.name = unhashedOwnerName;
-      // dataCompany.owner.surname = unhashedOwnerSurname;
-
-      res.status(201).json({
-        companyDoc: dataToSent,
-      });
+            res.status(201).json({
+              companyDoc: dataToSent,
+            });
+          })
+          .catch((err) => {
+            if (!err.statusCode) {
+              err.statusCode = 501;
+              err.message = "Błąd podczas pobierania danych.";
+            }
+            next(err);
+          });
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -1206,7 +1241,7 @@ exports.companyPath = (req, res, next) => {
         err.message = "Błąd podczas pobierania danych.";
       }
       next(err);
-    });
+    });;
 };
 
 exports.allCompanys = (req, res, next) => {
@@ -1219,47 +1254,42 @@ exports.allCompanys = (req, res, next) => {
     throw error;
   }
 
-  Company.find()
+  Company.find({
+    // pauseCompany: false,
+  })
     .select(
-      "workers.specialization workers.name adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title workers"
+      "adress city district linkPath name pauseCompany reserationText services title opinionsCount opinionsValue"
     )
-    .populate("owner", "name surname")
-    .populate("workers.user", "name surname email")
     .skip((page - 1) * 10)
     .limit(10)
     .then((resultCompanyDoc) => {
-      if(resultCompanyDoc.length > 0){
-      const allCompanysToSent = [];
-      resultCompanyDoc.forEach((itemCompany) => {
-        const unhashedPhone = Buffer.from(itemCompany.phone, "base64").toString(
-          "ascii"
-        );
+      if (resultCompanyDoc.length > 0) {
+        const allCompanysToSent = [];
+        resultCompanyDoc.forEach((itemCompany) => {
+          const unhashedAdress = Buffer.from(
+            itemCompany.adress,
+            "base64"
+          ).toString("ascii");
 
-        const unhashedAdress = Buffer.from(
-          itemCompany.adress,
-          "base64"
-        ).toString("ascii");
-
-        const dataToSent = {
-          adress: unhashedAdress,
-          city: itemCompany.city,
-          district: itemCompany.district,
-          linkPath: itemCompany.linkPath,
-          name: itemCompany.name,
-          phone: unhashedPhone,
-          services: itemCompany.services,
-          title: itemCompany.title,
-          _id: itemCompany._id,
-        };
-        allCompanysToSent.push(dataToSent);
-      });
-      res.status(201).json({
-        companysDoc: allCompanysToSent,
-      });
-    }else {
-        const error = new Error(
-          "Brak dancyh do pobrania."
-        );
+          const dataToSent = {
+            adress: unhashedAdress,
+            city: itemCompany.city,
+            district: itemCompany.district,
+            linkPath: itemCompany.linkPath,
+            name: itemCompany.name,
+            services: itemCompany.services,
+            title: itemCompany.title,
+            _id: itemCompany._id,
+            opinionsCount: !!itemCompany.opinionsCount ? itemCompany.opinionsCount : 0,
+            opinionsValue: !!itemCompany.opinionsValue ? itemCompany.opinionsValue : 0,
+          };
+          allCompanysToSent.push(dataToSent);
+        });
+        res.status(201).json({
+          companysDoc: allCompanysToSent,
+        });
+      } else {
+        const error = new Error("Brak dancyh do pobrania.");
         error.statusCode = 403;
         throw error;
       }
@@ -1287,21 +1317,14 @@ exports.allCompanysOfType = (req, res, next) => {
 
   Company.find({ companyType: type })
     .select(
-      "workers.specialization workers.name adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title workers"
+      "adress city district linkPath name services title opinionsCount opinionsValue"
     )
-    .populate("owner", "name surname")
-    .populate("workers.user", "name surname email")
     .skip((page - 1) * 10)
     .limit(10)
     .then((resultCompanyDoc) => {
       if(resultCompanyDoc.length > 0){
         const allCompanysToSent = [];
         resultCompanyDoc.forEach((itemCompany) => {
-          const unhashedPhone = Buffer.from(
-            itemCompany.phone,
-            "base64"
-          ).toString("ascii");
-
           const unhashedAdress = Buffer.from(
             itemCompany.adress,
             "base64"
@@ -1313,10 +1336,11 @@ exports.allCompanysOfType = (req, res, next) => {
             district: itemCompany.district,
             linkPath: itemCompany.linkPath,
             name: itemCompany.name,
-            phone: unhashedPhone,
             services: itemCompany.services,
             title: itemCompany.title,
             _id: itemCompany._id,
+            opinionsCount: !!itemCompany.opinionsCount ? itemCompany.opinionsCount : 0,
+            opinionsValue: !!itemCompany.opinionsValue ? itemCompany.opinionsValue : 0,
           };
           allCompanysToSent.push(dataToSent);
         });
