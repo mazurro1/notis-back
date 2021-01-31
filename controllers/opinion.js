@@ -81,8 +81,133 @@ exports.addOpinion = (req, res, next) => {
       }
     })
     .then(resultSave => {
+      resultSave
+        .populate("user", "name")
+        .populate({
+          path: "reserwationId",
+          select: "serviceName toWorkerUserId",
+          populate: {
+            path: "toWorkerUserId",
+            select: "name surname",
+          },
+        })
+        .execPopulate()
+        .then((resultPopulatedSave) => {
+          res.status(201).json({
+            opinion: resultPopulatedSave,
+          });
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych.";
+          }
+          next(err);
+        });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.loadMoreOpinions = (req, res, next) => {
+  const page = req.body.page;
+  const companyId = req.body.companyId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Opinion.find({
+    company: companyId,
+  })
+    .populate("user", "name")
+    .populate({
+      path: "reserwationId",
+      select: "serviceName toWorkerUserId",
+      populate: {
+        path: "toWorkerUserId",
+        select: "name surname",
+      },
+    })
+    .skip(page * 10)
+    .limit(10)
+    .sort({ createdAt: -1 })
+    .then((opinionDoc) => {
+      const resultOpinions = !!opinionDoc ? opinionDoc : [];
       res.status(201).json({
-        opinion: resultSave,
+        opinions: resultOpinions,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.addReplayOpinion = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const replay = req.body.replay;
+  const opinionId = req.body.opinionId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+
+Company.findOne({
+  _id: companyId,
+})
+  .select("_id owner")
+  .then((resultCompanyDoc) => {
+    if (!!resultCompanyDoc) {
+      let hasPermission = resultCompanyDoc.owner == userId;
+      if (hasPermission) {
+        return hasPermission;
+      } else {
+        const error = new Error("Brak dostępu.");
+        error.statusCode = 401;
+        throw error;
+      }
+    } else {
+      const error = new Error("Brak wybranej firmy.");
+      error.statusCode = 403;
+      throw error;
+    }
+  })
+  .then(()=>{
+    return Opinion.findOne({
+      _id: opinionId
+    })
+    .then(resultOpinion => {
+      if (!!resultOpinion) {
+        resultOpinion.replayOpinionMessage = replay;
+        return resultOpinion.save();
+      }else{
+        const error = new Error("Nie znaleziono opinii.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+  })
+    .then(() => {
+      res.status(201).json({
+        message: "Dodano odpowiedz do opinii",
       });
     })
     .catch((err) => {

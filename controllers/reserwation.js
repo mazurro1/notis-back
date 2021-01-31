@@ -1084,6 +1084,7 @@ exports.getWorkerDisabledHours = (req, res, next) => {
 
 exports.getUserReserwations = (req, res, next) => {
   const userId = req.userId;
+  const onlyToOpinion = req.body.onlyToOpinion;
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -1205,6 +1206,8 @@ exports.getUserReserwationsAll = (req, res, next) => {
   const userId = req.userId;
   const selectedYear = req.body.yearPicker;
   const selectedMonth = req.body.monthPicker;
+  const onlyToOpinion = req.body.onlyToOpinion;
+
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -1213,12 +1216,22 @@ exports.getUserReserwationsAll = (req, res, next) => {
     throw error;
   }
 
-  Reserwation.find({
-    fromUser: userId,
-    dateYear: selectedYear,
-    dateMonth: selectedMonth,
-    workerReserwation: false,
-  })
+  const queryToReserwation = onlyToOpinion
+    ? {
+        fromUser: userId,
+        dateYear: selectedYear,
+        dateMonth: selectedMonth,
+        workerReserwation: false,
+        opinionId: null,
+      }
+    : {
+        fromUser: userId,
+        dateYear: selectedYear,
+        dateMonth: selectedMonth,
+        workerReserwation: false,
+      };
+
+  Reserwation.find(queryToReserwation)
     .populate("toWorkerUserId", "name surname")
     .populate("company", "name linkPath")
     .populate("opinionId", "")

@@ -6,4 +6,21 @@ const isAuth = require("../middleware/is-auth");
 
 router.post("/add-opinion", isAuth, [body("opinionData")], opinion.addOpinion);
 
+router.post(
+  "/load-more-opinions",
+  [body("page")],
+  [body("companyId")],
+  opinion.loadMoreOpinions
+);
+
+
+router.post(
+  "/add-replay-opinion",
+  isAuth,
+  [body("companyId")],
+  [body("opinionId")],
+  [body("replay").isLength({ min: 2 })],
+  opinion.addReplayOpinion
+);
+
 module.exports = router;

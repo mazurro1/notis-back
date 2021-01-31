@@ -44,13 +44,18 @@ router.post(
   reserwation.getWorkerDisabledHours
 );
 
-router.get("/user-reserwations", isAuth, reserwation.getUserReserwations);
+router.get(
+  "/user-reserwations",
+  isAuth,
+  reserwation.getUserReserwations
+);
 
 router.post(
   "/user-reserwations-all",
   isAuth,
   [body("yearPicker")],
   [body("monthPicker")],
+  [body("onlyToOpinion")],
   reserwation.getUserReserwationsAll
 );
 

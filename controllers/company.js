@@ -252,9 +252,18 @@ exports.getCompanyData = (req, res, next) => {
            company: companyDoc._id,
          })
            .populate("user", "name")
+           .populate({
+             path: "reserwationId",
+             select: "serviceName toWorkerUserId",
+             populate: {
+               path: "toWorkerUserId",
+               select: "name surname",
+             },
+           })
            .limit(10)
+           .sort({ createdAt: -1 })
            .then((resultOpinions) => {
-             const companyOpinions = !!resultOpinions ? resultOpinions : []; 
+             const companyOpinions = !!resultOpinions ? resultOpinions : [];
              let userHasPermission = userId == companyDoc.owner._id;
              if (!!!userHasPermission) {
                const workerSelected = companyDoc.workers.find(
@@ -370,8 +379,12 @@ exports.getCompanyData = (req, res, next) => {
                  promotions: dataCompany.promotions,
                  maps: dataCompany.maps,
                  opinions: companyOpinions,
-                 opinionsCount: !!dataCompany.opinionsCount ? dataCompany.opinionsCount : 0,
-                 opinionsValue: !!dataCompany.opinionsValue ? dataCompany.opinionsValue : 0,
+                 opinionsCount: !!dataCompany.opinionsCount
+                   ? dataCompany.opinionsCount
+                   : 0,
+                 opinionsValue: !!dataCompany.opinionsValue
+                   ? dataCompany.opinionsValue
+                   : 0,
                };
 
                res.status(201).json({
@@ -1129,9 +1142,18 @@ exports.companyPath = (req, res, next) => {
           company: resultCompanyDoc._id,
         })
           .populate("user", "name")
+          .populate({
+            path: "reserwationId",
+            select: "serviceName toWorkerUserId",
+            populate: {
+              path: "toWorkerUserId",
+              select: "name surname",
+            },
+          })
           .limit(10)
+          .sort({ createdAt: -1 })
           .then((resultOpinions) => {
-            const companyOpinions = !!resultOpinions ? resultOpinions : []; 
+            const companyOpinions = !!resultOpinions ? resultOpinions : [];
             const dataCompany = resultCompanyDoc;
 
             const unhashedOwnerName = Buffer.from(
@@ -1213,8 +1235,12 @@ exports.companyPath = (req, res, next) => {
               reservationMonthTime: resultCompanyDoc.reservationMonthTime,
               usersInformation: resultCompanyDoc.usersInformation,
               maps: resultCompanyDoc.maps,
-              opinionsCount: !!resultCompanyDoc.opinionsCount ? resultCompanyDoc.opinionsCount : 0,
-              opinionsValue: !!resultCompanyDoc.opinionsValue ? resultCompanyDoc.opinionsValue : 0,
+              opinionsCount: !!resultCompanyDoc.opinionsCount
+                ? resultCompanyDoc.opinionsCount
+                : 0,
+              opinionsValue: !!resultCompanyDoc.opinionsValue
+                ? resultCompanyDoc.opinionsValue
+                : 0,
               opinions: companyOpinions,
             };
 
