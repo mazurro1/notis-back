@@ -1084,7 +1084,6 @@ exports.getWorkerDisabledHours = (req, res, next) => {
 
 exports.getUserReserwations = (req, res, next) => {
   const userId = req.userId;
-  const onlyToOpinion = req.body.onlyToOpinion;
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {

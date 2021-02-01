@@ -8,6 +8,7 @@ const reserwationRoutes = require("./routes/reserwation");
 const opinionRoutes = require("./routes/opinion");
 const companyUsersInformationsRoutes = require("./routes/companyUsersInformations");
 
+app.use(express.json({ limit: "2mb" }));
 app.use(bodyParser.json());
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -18,6 +19,7 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   next();
 });
+
 app.use(userRoutes);
 app.use(companyRoutes);
 app.use(reserwationRoutes);

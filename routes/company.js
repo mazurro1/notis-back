@@ -3,6 +3,8 @@ const router = express.Router();
 const { body } = require("express-validator");
 const company = require("../controllers/company");
 const isAuth = require("../middleware/is-auth");
+const getImgBuffer = require("../getImgBuffer");
+const fileUpload = require("../middleware/file-uploads");
 
 router.post(
   "/company-registration",
@@ -254,6 +256,30 @@ router.patch(
   [body("companyId")],
   [body("promotionDate")],
   company.companyUpdatePromotion
+);
+
+router.post(
+  "/company-upload-image",
+  isAuth,
+  fileUpload.single("image"),
+  [body("companyId")],
+  company.companyUploadImage
+);
+
+router.post(
+  "/company-delete-image",
+  isAuth,
+  [body("companyId")],
+  [body("imagePath")],
+  company.companyDeleteImage
+);
+
+router.post(
+  "/company-main-image",
+  isAuth,
+  [body("companyId")],
+  [body("imagePath")],
+  company.companyMainImage
 );
 
 module.exports = router;

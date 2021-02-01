@@ -2,11 +2,57 @@ const Company = require("../models/company");
 const Opinion = require("../models/opinion");
 const mongoose = require("mongoose");
 const User = require("../models/user");
-// const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
-// const jwt = require("jsonwebtoken");
-// const io = require("../socket");
 const nodemailer = require("nodemailer");
+const AWS = require("aws-sdk");
+const getImgBuffer = require('../getImgBuffer');
+require("dotenv").config();
+
+const {
+  AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY,
+  AWS_REGION,
+  AWS_BUCKET,
+  AWS_PATH_URL,
+} = process.env;
+
+AWS.config.update({
+  accessKeyId: AWS_ACCESS_KEY_ID,
+  secretAccessKey: AWS_SECRET_ACCESS_KEY,
+  region: AWS_REGION,
+});
+
+const s3Bucket = new AWS.S3({
+  params: {
+    Bucket: AWS_BUCKET,
+  },
+});
+
+const imageUpload = (path, buffer) => {
+  const data = {
+    Key: path,
+    Body: buffer,
+    ContentEncoding: "base64",
+    ContentType: "image/jpeg",
+    ACL: "public-read",
+  };
+  return new Promise((resolve, reject) => {
+    s3Bucket.putObject(data, (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(AWS_PATH_URL + path);
+      }
+    });
+  });
+};
+
+const getImageUrl = async (type, base64Image) => {
+  const buffer = getImgBuffer(base64Image);
+  const currentTime = new Date().getTime();
+  return imageUpload(`${type}/${currentTime}.jpeg`, buffer);
+};
+
 
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const { pipeline } = require("nodemailer/lib/xoauth2");
@@ -385,6 +431,8 @@ exports.getCompanyData = (req, res, next) => {
                  opinionsValue: !!dataCompany.opinionsValue
                    ? dataCompany.opinionsValue
                    : 0,
+                 imagesUrl: dataCompany.imagesUrl,
+                 mainImageUrl: dataCompany.mainImageUrl,
                };
 
                res.status(201).json({
@@ -1132,7 +1180,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
+      "mainImageUrl imagesUrl workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
     )
     .populate("owner", "name surname")
     .populate("workers.user", "name surname email")
@@ -1242,6 +1290,9 @@ exports.companyPath = (req, res, next) => {
                 ? resultCompanyDoc.opinionsValue
                 : 0,
               opinions: companyOpinions,
+
+              imagesUrl: resultCompanyDoc.imagesUrl,
+              mainImageUrl: resultCompanyDoc.mainImageUrl,
             };
 
             res.status(201).json({
@@ -1284,7 +1335,7 @@ exports.allCompanys = (req, res, next) => {
     // pauseCompany: false,
   })
     .select(
-      "adress city district linkPath name pauseCompany reserationText services title opinionsCount opinionsValue"
+      "adress city district linkPath name pauseCompany reserationText services title opinionsCount opinionsValue mainImageUrl imagesUrl"
     )
     .skip((page - 1) * 10)
     .limit(10)
@@ -1306,8 +1357,14 @@ exports.allCompanys = (req, res, next) => {
             services: itemCompany.services,
             title: itemCompany.title,
             _id: itemCompany._id,
-            opinionsCount: !!itemCompany.opinionsCount ? itemCompany.opinionsCount : 0,
-            opinionsValue: !!itemCompany.opinionsValue ? itemCompany.opinionsValue : 0,
+            mainImageUrl: itemCompany.mainImageUrl,
+            imagesUrl: itemCompany.imagesUrl,
+            opinionsCount: !!itemCompany.opinionsCount
+              ? itemCompany.opinionsCount
+              : 0,
+            opinionsValue: !!itemCompany.opinionsValue
+              ? itemCompany.opinionsValue
+              : 0,
           };
           allCompanysToSent.push(dataToSent);
         });
@@ -1343,12 +1400,12 @@ exports.allCompanysOfType = (req, res, next) => {
 
   Company.find({ companyType: type })
     .select(
-      "adress city district linkPath name services title opinionsCount opinionsValue"
+      "adress city district linkPath name services title opinionsCount opinionsValue mainImageUrl imagesUrl"
     )
     .skip((page - 1) * 10)
     .limit(10)
     .then((resultCompanyDoc) => {
-      if(resultCompanyDoc.length > 0){
+      if (resultCompanyDoc.length > 0) {
         const allCompanysToSent = [];
         resultCompanyDoc.forEach((itemCompany) => {
           const unhashedAdress = Buffer.from(
@@ -1365,18 +1422,22 @@ exports.allCompanysOfType = (req, res, next) => {
             services: itemCompany.services,
             title: itemCompany.title,
             _id: itemCompany._id,
-            opinionsCount: !!itemCompany.opinionsCount ? itemCompany.opinionsCount : 0,
-            opinionsValue: !!itemCompany.opinionsValue ? itemCompany.opinionsValue : 0,
+            mainImageUrl: itemCompany.mainImageUrl,
+            imagesUrl: itemCompany.imagesUrl,
+            opinionsCount: !!itemCompany.opinionsCount
+              ? itemCompany.opinionsCount
+              : 0,
+            opinionsValue: !!itemCompany.opinionsValue
+              ? itemCompany.opinionsValue
+              : 0,
           };
           allCompanysToSent.push(dataToSent);
         });
         res.status(201).json({
           companysDoc: allCompanysToSent,
         });
-      }else {
-        const error = new Error(
-          "Brak dancyh do pobrania."
-        );
+      } else {
+        const error = new Error("Brak dancyh do pobrania.");
         error.statusCode = 403;
         throw error;
       }
@@ -2906,6 +2967,215 @@ exports.companyUpdatePromotion = (req, res, next) => {
     .then(() => {
       res.status(201).json({
         message: "Zaktualizowano promocję",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companyUploadImage = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const image = req.body.image;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      return getImageUrl("companyImages", image).then((result) => {
+        return result
+      });
+    })
+    .then((imageUrl) => {
+      return Company.findOne({
+        _id: companyId,
+      })
+        .select("_id imagesUrl")
+        .then((resultCompany) => {
+          if(!!resultCompany.imagesUrl){
+            if(resultCompany.imagesUrl.length === 0){
+              resultCompany.mainImageUrl = imageUrl;
+            }
+          }
+          resultCompany.imagesUrl.push(imageUrl);
+          resultCompany.save();
+          return imageUrl;
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych.";
+          }
+          next(err);
+        });
+    })
+    .then((imageUrl) => {
+      res.status(201).json({
+        imageUrl: imageUrl,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companyDeleteImage = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const imagePath = req.body.imagePath;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then(() => {
+      return s3Bucket.deleteObject(
+        {
+          Bucket: AWS_BUCKET,
+          Key: imagePath,
+        },
+        function (err, data) {
+          if (err) {
+            res.status(500).send(error);
+          } else {
+            return true;
+          }
+        }
+      );
+    })
+    .then(() => {
+      return Company.findOne({
+        _id: companyId,
+      })
+        .select("_id imagesUrl mainImageUrl")
+        .then((resultCompany) => {
+          const filterImages = resultCompany.imagesUrl.filter(
+            (item) => item !== imagePath
+          );
+          const isMainImage = resultCompany.mainImageUrl === imagePath;
+          if(isMainImage){
+            resultCompany.mainImageUrl = "";
+          }
+          resultCompany.imagesUrl = filterImages;
+          return resultCompany.save();
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych.";
+          }
+          next(err);
+        });
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Usunięto zdjęcie",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companyMainImage = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const imagePath = req.body.imagePath;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner mainImageUrl")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      resultCompanyDoc.mainImageUrl = imagePath;
+      return resultCompanyDoc.save();
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Ustawiono nowe główne zdjęcie",
       });
     })
     .catch((err) => {

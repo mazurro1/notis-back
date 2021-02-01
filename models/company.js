@@ -280,6 +280,7 @@ const companySchema = new Schema(
       type: Number,
       required: false,
     },
+
     workers: [
       {
         email: {
@@ -484,14 +485,10 @@ const companySchema = new Schema(
       type: String,
       required: false,
     },
-    imagesUrl: {
+    imagesUrl: [{
       type: String,
       required: false,
-    },
-    logoUrl: {
-      type: String,
-      required: false,
-    },
+    }],
     usersInformation: [
       {
         userId: {
