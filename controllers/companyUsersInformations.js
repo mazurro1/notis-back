@@ -6,6 +6,7 @@ const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
 const io = require("../socket");
 const nodemailer = require("nodemailer");
+require("dotenv").config();
 const {
   MAIL_API_KEY,
 } = process.env;

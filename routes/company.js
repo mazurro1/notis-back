@@ -159,6 +159,16 @@ router.patch(
 );
 
 router.patch(
+  "/company-workers-working-hours",
+  isAuth,
+  [body("companyId")],
+  [body("workerId")],
+  [body("year")],
+  [body("month")],
+  company.companyWorkersWorkingHours
+);
+
+router.patch(
   "/company-owner-no-const-data",
   isAuth,
   [body("companyId")],
@@ -166,6 +176,16 @@ router.patch(
   [body("month")],
   company.companyOwnerNoConstData
 );
+
+router.patch(
+  "/company-owner-working-hours",
+  isAuth,
+  [body("companyId")],
+  [body("year")],
+  [body("month")],
+  company.companyOwnerWorkingHours
+);
+
 
 
 router.patch(

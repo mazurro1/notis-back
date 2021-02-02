@@ -2110,6 +2110,10 @@ exports.companyOwnerNoConstData = (req, res, next) => {
             },
           },
         },
+        workers: {
+          _id: 1,
+          permissions: 1,
+        }
       },
     },
   ])
@@ -3176,6 +3180,173 @@ exports.companyMainImage = (req, res, next) => {
     .then(() => {
       res.status(201).json({
         message: "Ustawiono nowe główne zdjęcie",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyOwnerWorkingHours = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const year = req.body.year;
+  const month = req.body.month;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(companyId),
+        owner: mongoose.Types.ObjectId(userId),
+      },
+    },
+    { $unwind: "$ownerData" },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        daysOff: 1,
+        openingDays: 1,
+        reservationEveryTime: 1,
+        ownerData: {
+          permissions: 1,
+          constantWorkingHours: 1,
+          noConstantWorkingHours: {
+            $filter: {
+              input: "$ownerData.noConstantWorkingHours",
+              as: "itemOwner",
+              cond: {
+                $and: [
+                  { $eq: ["$$itemOwner.month", month] },
+                  { $eq: ["$$itemOwner.year", year] },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  ])
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc[0].owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      res.status(201).json({
+        noConstWorkingHours:
+          resultCompanyDoc[0].ownerData.noConstantWorkingHours,
+        constWorkingHours: resultCompanyDoc[0].ownerData.constantWorkingHours,
+        daysOff: resultCompanyDoc[0].daysOff,
+        openingDays: resultCompanyDoc[0].openingDays,
+        reservationEveryTime: resultCompanyDoc[0].reservationEveryTime,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.companyWorkersWorkingHours = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const year = req.body.year;
+  const month = req.body.month;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(companyId),
+        "workers.user": mongoose.Types.ObjectId(userId),
+      },
+    },
+    { $unwind: "$workers" },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        daysOff: 1,
+        openingDays: 1,
+        reservationEveryTime: 1,
+        workers: {
+          permissions: 1,
+          user: 1,
+          _id: 1,
+          constantWorkingHours: 1,
+          noConstantWorkingHours: {
+            $filter: {
+              input: "$workers.noConstantWorkingHours",
+              as: "item",
+              cond: {
+                $and: [
+                  { $eq: ["$$item.month", month] },
+                  { $eq: ["$$item.year", year] },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+  ])
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc[0].owner == userId;
+        if (!hasPermission) {
+          hasPermission = resultCompanyDoc[0].workers.user == userId;
+        }
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      res.status(201).json({
+        noConstWorkingHours: resultCompanyDoc[0].workers.noConstantWorkingHours,
+        constWorkingHours: resultCompanyDoc[0].workers.constantWorkingHours,
+        daysOff: resultCompanyDoc[0].daysOff,
+        openingDays: resultCompanyDoc[0].openingDays,
+        reservationEveryTime: resultCompanyDoc[0].reservationEveryTime,
       });
     })
     .catch((err) => {

@@ -9,6 +9,7 @@ const jwt = require("jsonwebtoken");
 const io = require("../socket");
 const nodemailer = require("nodemailer");
 const sendgridTransport = require("nodemailer-sendgrid-transport");
+require("dotenv").config();
 const { MAIL_API_KEY } = process.env;
 const transporter = nodemailer.createTransport(
   sendgridTransport({

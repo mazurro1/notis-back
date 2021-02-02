@@ -10,6 +10,7 @@ const nodemailer = require("nodemailer");
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const company = require("../models/company");
 const mongoose = require("mongoose");
+require("dotenv").config();
 const { MAIL_API_KEY } = process.env;
 const transporter = nodemailer.createTransport(
   sendgridTransport({
