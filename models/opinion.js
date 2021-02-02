@@ -17,17 +17,18 @@ const opinionSchema = new Schema(
       type: String,
       required: false,
     },
-
     opinionStars: {
       type: Number,
       required: false,
     },
-
+    editedOpinionMessage: {
+      type: String,
+      required: false,
+    },
     replayOpinionMessage: {
       type: String,
       required: false,
     },
-
     reserwationId: {
       type: Schema.Types.ObjectId,
       ref: "Reserwations",

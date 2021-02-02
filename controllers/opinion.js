@@ -113,6 +113,50 @@ exports.addOpinion = (req, res, next) => {
     });
 };
 
+exports.updateEditedOpinion = (req, res, next) => {
+  const userId = req.userId;
+  const opinionData = req.body.opinionData;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Opinion.findOne({
+    company: opinionData.company,
+    _id: opinionData.opinionId,
+  })
+    .then((opinionDoc) => {
+      if (!!opinionDoc) {
+        if(!!!opinionDoc.editedOpinionMessage){
+          opinionDoc.editedOpinionMessage = opinionData.opinionEditedMessage;
+          return opinionDoc.save();
+        }else{
+          const error = new Error("Edytowana opinia została już dodana.");
+          error.statusCode = 412;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak opinii.");
+        error.statusCode = 412;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Dodano edytowaną opinie",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
 
 exports.loadMoreOpinions = (req, res, next) => {
   const page = req.body.page;

@@ -1100,6 +1100,7 @@ exports.getUserReserwations = (req, res, next) => {
   })
     .populate("toWorkerUserId", "name surname")
     .populate("company", "name linkPath")
+    .populate("opinionId", "")
     .then((reserwationsDoc) => {
       //?
       const otherPropsToReserwation = [];
