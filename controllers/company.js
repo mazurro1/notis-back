@@ -14,6 +14,7 @@ const {
   AWS_REGION,
   AWS_BUCKET,
   AWS_PATH_URL,
+  MAIL_API_KEY,
 } = process.env;
 
 AWS.config.update({
@@ -59,8 +60,7 @@ const { pipeline } = require("nodemailer/lib/xoauth2");
 const transporter = nodemailer.createTransport(
   sendgridTransport({
     auth: {
-      api_key:
-        "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",
+      api_key: MAIL_API_KEY,
     },
   })
 );

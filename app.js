@@ -7,6 +7,12 @@ const companyRoutes = require("./routes/company");
 const reserwationRoutes = require("./routes/reserwation");
 const opinionRoutes = require("./routes/opinion");
 const companyUsersInformationsRoutes = require("./routes/companyUsersInformations");
+const {
+  MONGODB_PASSWORD,
+  MONGODB_CLUSTER,
+  MONGODB_DATABASE,
+  MONGODB_USER,
+} = process.env;
 
 app.use(express.json({ limit: "2mb" }));
 app.use(bodyParser.json());
@@ -37,7 +43,7 @@ app.use((error, req, res, next) => {
 
 mongoose
   .connect(
-    "mongodb+srv://admin:Radom1910@nootis-cluster.rajb9.mongodb.net/nootis-database?retryWrites=true&w=majority",
+    `mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_CLUSTER}.rajb9.mongodb.net/${MONGODB_DATABASE}?retryWrites=true&w=majority`,
     { useNewUrlParser: true, useUnifiedTopology: true }
   )
   .then((result) => {

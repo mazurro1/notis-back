@@ -6,13 +6,14 @@ const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
 const io = require("../socket");
 const nodemailer = require("nodemailer");
-
+const {
+  MAIL_API_KEY,
+} = process.env;
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const transporter = nodemailer.createTransport(
   sendgridTransport({
     auth: {
-      api_key:
-        "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",
+      api_key: MAIL_API_KEY,
     },
   })
 );

@@ -5,13 +5,17 @@ const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
 const io = require("../socket");
 const nodemailer = require("nodemailer");
-
+const {
+  TOKEN_PASSWORD,
+  BCRIPT_SECURITY_VALUE,
+  BCRIPT_EXPIRES_IN,
+  MAIL_API_KEY,
+} = process.env;
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const transporter = nodemailer.createTransport(
   sendgridTransport({
     auth: {
-      api_key:
-        "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",
+      api_key: MAIL_API_KEY,
     },
   })
 );
@@ -36,56 +40,58 @@ exports.registration = (req, res, next) => {
     .select("-phone -password")
     .then((userDoc) => {
       if (!userDoc) {
-        return bcrypt.hash(password, 11).then((hashedPassword) => {
-          if (hashedPassword) {
-            const codeToVerified = Math.floor(
-              10000 + Math.random() * 90000
-            ).toString();
+        return bcrypt
+          .hash(password, BCRIPT_SECURITY_VALUE)
+          .then((hashedPassword) => {
+            if (hashedPassword) {
+              const codeToVerified = Math.floor(
+                10000 + Math.random() * 90000
+              ).toString();
 
-            const hashedCodeToVerified = Buffer.from(
-              codeToVerified,
-              "utf-8"
-            ).toString("base64");
+              const hashedCodeToVerified = Buffer.from(
+                codeToVerified,
+                "utf-8"
+              ).toString("base64");
 
-            const hashedUserName = Buffer.from(userName, "utf-8").toString(
-              "base64"
-            );
+              const hashedUserName = Buffer.from(userName, "utf-8").toString(
+                "base64"
+              );
 
-            const hashedUserSurname = Buffer.from(
-              userSurname,
-              "utf-8"
-            ).toString("base64");
+              const hashedUserSurname = Buffer.from(
+                userSurname,
+                "utf-8"
+              ).toString("base64");
 
-            const hashedPhoneNumber = Buffer.from(
-              phoneNumber,
-              "utf-8"
-            ).toString("base64");
+              const hashedPhoneNumber = Buffer.from(
+                phoneNumber,
+                "utf-8"
+              ).toString("base64");
 
-            const user = new User({
-              email: email,
-              name: hashedUserName,
-              surname: hashedUserSurname,
-              password: hashedPassword,
-              phone: hashedPhoneNumber,
-              accountVerified: false,
-              codeToVerified: hashedCodeToVerified,
-              dateBirth: dateBirth,
-              monthBirth: monthBirth,
-            });
-            const token = jwt.sign(
-              {
-                email: user.email,
-                userId: user._id.toString(),
-              },
-              "nootisadmintoken12",
-              {
-                expiresIn: "7d",
-              }
-            );
-            user.loginToken = token;
-            return user.save();
-          }
-        });
+              const user = new User({
+                email: email,
+                name: hashedUserName,
+                surname: hashedUserSurname,
+                password: hashedPassword,
+                phone: hashedPhoneNumber,
+                accountVerified: false,
+                codeToVerified: hashedCodeToVerified,
+                dateBirth: dateBirth,
+                monthBirth: monthBirth,
+              });
+              const token = jwt.sign(
+                {
+                  email: user.email,
+                  userId: user._id.toString(),
+                },
+                TOKEN_PASSWORD,
+                {
+                  expiresIn: BCRIPT_EXPIRES_IN,
+                }
+              );
+              user.loginToken = token;
+              return user.save();
+            }
+          });
       } else {
         const error = new Error("Użytkownik zajęty.");
         error.statusCode = 500;
@@ -169,9 +175,9 @@ exports.login = (req, res, next) => {
                   email: user.email,
                   userId: user._id.toString(),
                 },
-                "nootisadmintoken12",
+                TOKEN_PASSWORD,
                 {
-                  expiresIn: "7d",
+                  expiresIn: BCRIPT_EXPIRES_IN,
                 }
               );
               user.loginToken = token;
@@ -597,9 +603,9 @@ exports.edit = (req, res, next) => {
                     email: user.email,
                     userId: user._id.toString(),
                   },
-                  "nootisadmintoken12",
+                  TOKEN_PASSWORD,
                   {
-                    expiresIn: "7d",
+                    expiresIn: BCRIPT_EXPIRES_IN,
                   }
                 );
                 user.loginToken = token;
@@ -611,12 +617,14 @@ exports.edit = (req, res, next) => {
                   user.phone = hashedPhoneNumber;
                 }
                 if (newPassword) {
-                  return bcrypt.hash(newPassword, 11).then((hashedPassword) => {
-                    if (hashedPassword) {
-                      user.password = hashedPassword;
-                      return user;
-                    }
-                  });
+                  return bcrypt
+                    .hash(newPassword, BCRIPT_SECURITY_VALUE)
+                    .then((hashedPassword) => {
+                      if (hashedPassword) {
+                        user.password = hashedPassword;
+                        return user;
+                      }
+                    });
                 }
                 return user;
               } else {
@@ -748,24 +756,26 @@ exports.resetPassword = (req, res, next) => {
     .select("-phone -codeToVerified")
     .then((user) => {
       if (user) {
-        return bcrypt.hash(password, 11).then((hashedPassword) => {
-          if (hashedPassword) {
-            const token = jwt.sign(
-              {
-                email: user.email,
-                userId: user._id.toString(),
-              },
-              "nootisadmintoken12",
-              {
-                expiresIn: "7d",
-              }
-            );
-            user.loginToken = token;
-            user.codeToResetPassword = null;
-            user.password = hashedPassword;
-            return user.save();
-          }
-        });
+        return bcrypt
+          .hash(password, BCRIPT_SECURITY_VALUE)
+          .then((hashedPassword) => {
+            if (hashedPassword) {
+              const token = jwt.sign(
+                {
+                  email: user.email,
+                  userId: user._id.toString(),
+                },
+                TOKEN_PASSWORD,
+                {
+                  expiresIn: BCRIPT_EXPIRES_IN,
+                }
+              );
+              user.loginToken = token;
+              user.codeToResetPassword = null;
+              user.password = hashedPassword;
+              return user.save();
+            }
+          });
       } else {
         const error = new Error(
           "Brak użytkownika, lub kod resetujący jest błędny."

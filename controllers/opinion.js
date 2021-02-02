@@ -9,12 +9,11 @@ const jwt = require("jsonwebtoken");
 const io = require("../socket");
 const nodemailer = require("nodemailer");
 const sendgridTransport = require("nodemailer-sendgrid-transport");
-
+const { MAIL_API_KEY } = process.env;
 const transporter = nodemailer.createTransport(
   sendgridTransport({
     auth: {
-      api_key:
-        "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",
+      api_key: MAIL_API_KEY,
     },
   })
 );
