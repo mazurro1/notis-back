@@ -290,160 +290,162 @@ exports.getCompanyData = (req, res, next) => {
     .select(
       "-codeToVerified -raports -codeToActive -workers.noConstantWorkingHours -ownerData.noConstantWorkingHours"
     )
-    .populate("owner", "name surname")
-    .populate("workers.user", "name surname email")
+    .populate("owner", "name surname imageUrl")
+    .populate("workers.user", "name surname email imageUrl")
     .then((companyDoc) => {
       if (companyDoc) {
-         Opinion.find({
-           company: companyDoc._id,
-         })
-           .populate("user", "name")
-           .populate({
-             path: "reserwationId",
-             select: "serviceName toWorkerUserId",
-             populate: {
-               path: "toWorkerUserId",
-               select: "name surname",
-             },
-           })
-           .limit(10)
-           .sort({ createdAt: -1 })
-           .then((resultOpinions) => {
-             const companyOpinions = !!resultOpinions ? resultOpinions : [];
-             let userHasPermission = userId == companyDoc.owner._id;
-             if (!!!userHasPermission) {
-               const workerSelected = companyDoc.workers.find(
-                 (worker) => worker.user._id == userId
-               );
-               if (!!workerSelected) {
-                 const workerHasAccess = workerSelected.permissions.some(
-                   (perm) => perm === 2 || perm === 3 || perm === 4
-                 );
-                 if (workerHasAccess) {
-                   userHasPermission = true;
-                 }
-               }
-             }
-             if (!!userHasPermission) {
-               const dataCompany = companyDoc;
+        Opinion.find({
+          company: companyDoc._id,
+        })
+          .populate("user", "name")
+          .populate({
+            path: "reserwationId",
+            select: "serviceName toWorkerUserId",
+            populate: {
+              path: "toWorkerUserId",
+              select: "name surname",
+            },
+          })
+          .limit(10)
+          .sort({ createdAt: -1 })
+          .then((resultOpinions) => {
+            const companyOpinions = !!resultOpinions ? resultOpinions : [];
+            let userHasPermission = userId == companyDoc.owner._id;
+            if (!!!userHasPermission) {
+              const workerSelected = companyDoc.workers.find(
+                (worker) => worker.user._id == userId
+              );
+              if (!!workerSelected) {
+                const workerHasAccess = workerSelected.permissions.some(
+                  (perm) => perm === 2 || perm === 3 || perm === 4
+                );
+                if (workerHasAccess) {
+                  userHasPermission = true;
+                }
+              }
+            }
+            if (!!userHasPermission) {
+              const dataCompany = companyDoc;
 
-               const unhashedOwnerName = Buffer.from(
-                 companyDoc.owner.name,
-                 "base64"
-               ).toString("ascii");
+              const unhashedOwnerName = Buffer.from(
+                companyDoc.owner.name,
+                "base64"
+              ).toString("ascii");
 
-               const unhashedOwnerSurname = Buffer.from(
-                 companyDoc.owner.surname,
-                 "base64"
-               ).toString("ascii");
+              const unhashedOwnerSurname = Buffer.from(
+                companyDoc.owner.surname,
+                "base64"
+              ).toString("ascii");
 
-               const unhashedPhone = Buffer.from(
-                 companyDoc.phone,
-                 "base64"
-               ).toString("ascii");
+              const unhashedPhone = Buffer.from(
+                companyDoc.phone,
+                "base64"
+              ).toString("ascii");
 
-               const unhashedAdress = Buffer.from(
-                 companyDoc.adress,
-                 "base64"
-               ).toString("ascii");
+              const unhashedAdress = Buffer.from(
+                companyDoc.adress,
+                "base64"
+              ).toString("ascii");
 
-               const mapedWorkers = [];
-               dataCompany.workers.forEach((item) => {
-                 const unhashedName = Buffer.from(
-                   item.user.name,
-                   "base64"
-                 ).toString("ascii");
-                 const unhashedSurname = Buffer.from(
-                   item.user.surname,
-                   "base64"
-                 ).toString("ascii");
-                 const unhashedUserProps = {
-                   email: item.email,
-                   name: unhashedName,
-                   surname: unhashedSurname,
-                   _id: item.user._id,
-                 };
+              const mapedWorkers = [];
+              dataCompany.workers.forEach((item) => {
+                const unhashedName = Buffer.from(
+                  item.user.name,
+                  "base64"
+                ).toString("ascii");
+                const unhashedSurname = Buffer.from(
+                  item.user.surname,
+                  "base64"
+                ).toString("ascii");
+                const unhashedUserProps = {
+                  email: item.email,
+                  name: unhashedName,
+                  surname: unhashedSurname,
+                  _id: item.user._id,
+                  imageUrl: item.user.imageUrl,
+                };
 
-                 mapedWorkers.push({
-                   _id: item._id,
-                   user: unhashedUserProps,
-                   active: item.active,
-                   permissions: item.permissions,
-                   specialization: item.specialization,
-                   constantWorkingHours: item.constantWorkingHours
-                     ? item.constantWorkingHours
-                     : [],
-                   noConstantWorkingHours: [],
+                mapedWorkers.push({
+                  _id: item._id,
+                  user: unhashedUserProps,
+                  active: item.active,
+                  permissions: item.permissions,
+                  specialization: item.specialization,
+                  constantWorkingHours: item.constantWorkingHours
+                    ? item.constantWorkingHours
+                    : [],
+                  noConstantWorkingHours: [],
 
-                   servicesCategory: item.servicesCategory
-                     ? item.servicesCategory
-                     : [],
-                 });
-               });
+                  servicesCategory: item.servicesCategory
+                    ? item.servicesCategory
+                    : [],
+                });
+              });
 
-               const dataToSent = {
-                 ownerData: {
-                   permissions: dataCompany.ownerData.permissions,
-                   constantWorkingHours:
-                     dataCompany.ownerData.constantWorkingHours,
-                   noConstantWorkingHours: [],
-                   specialization: dataCompany.ownerData.specialization,
-                   servicesCategory: dataCompany.ownerData.servicesCategory,
-                 },
-                 openingDays: dataCompany.openingDays,
-                 _id: dataCompany._id,
-                 email: dataCompany.email,
-                 linkPath: dataCompany.linkPath,
-                 name: dataCompany.name,
-                 phone: unhashedPhone,
-                 city: dataCompany.city,
-                 district: dataCompany.district,
-                 adress: unhashedAdress,
-                 accountVerified: dataCompany.accountVerified,
-                 owner: {
-                   name: unhashedOwnerName,
-                   surname: unhashedOwnerSurname,
-                   _id: dataCompany.owner._id,
-                 },
-                 pauseCompany: dataCompany.pauseCompany,
-                 messangerAvaible: dataCompany.messangerAvaible,
-                 title: dataCompany.title,
-                 reservationEveryTime: dataCompany.reservationEveryTime,
-                 workers: mapedWorkers,
-                 opinions: dataCompany.opinions,
-                 messages: dataCompany.messages,
-                 reports: dataCompany.reports,
-                 linkFacebook: dataCompany.linkFacebook,
-                 linkInstagram: dataCompany.linkInstagram,
-                 linkiWebsite: dataCompany.linkiWebsite,
-                 reserationText: dataCompany.reserationText,
-                 daysOff: dataCompany.daysOff,
-                 reservationMonthTime: dataCompany.reservationMonthTime,
-                 services: dataCompany.services,
-                 companyType: dataCompany.companyType,
-                 happyHoursConst: dataCompany.happyHoursConst,
-                 promotions: dataCompany.promotions,
-                 maps: dataCompany.maps,
-                 opinions: companyOpinions,
-                 opinionsCount: !!dataCompany.opinionsCount
-                   ? dataCompany.opinionsCount
-                   : 0,
-                 opinionsValue: !!dataCompany.opinionsValue
-                   ? dataCompany.opinionsValue
-                   : 0,
-                 imagesUrl: dataCompany.imagesUrl,
-                 mainImageUrl: dataCompany.mainImageUrl,
-               };
+              const dataToSent = {
+                ownerData: {
+                  permissions: dataCompany.ownerData.permissions,
+                  constantWorkingHours:
+                    dataCompany.ownerData.constantWorkingHours,
+                  noConstantWorkingHours: [],
+                  specialization: dataCompany.ownerData.specialization,
+                  servicesCategory: dataCompany.ownerData.servicesCategory,
+                },
+                openingDays: dataCompany.openingDays,
+                _id: dataCompany._id,
+                email: dataCompany.email,
+                linkPath: dataCompany.linkPath,
+                name: dataCompany.name,
+                phone: unhashedPhone,
+                city: dataCompany.city,
+                district: dataCompany.district,
+                adress: unhashedAdress,
+                accountVerified: dataCompany.accountVerified,
+                owner: {
+                  name: unhashedOwnerName,
+                  surname: unhashedOwnerSurname,
+                  _id: dataCompany.owner._id,
+                  imageUrl: dataCompany.owner.imageUrl,
+                },
+                pauseCompany: dataCompany.pauseCompany,
+                messangerAvaible: dataCompany.messangerAvaible,
+                title: dataCompany.title,
+                reservationEveryTime: dataCompany.reservationEveryTime,
+                workers: mapedWorkers,
+                opinions: dataCompany.opinions,
+                messages: dataCompany.messages,
+                reports: dataCompany.reports,
+                linkFacebook: dataCompany.linkFacebook,
+                linkInstagram: dataCompany.linkInstagram,
+                linkiWebsite: dataCompany.linkiWebsite,
+                reserationText: dataCompany.reserationText,
+                daysOff: dataCompany.daysOff,
+                reservationMonthTime: dataCompany.reservationMonthTime,
+                services: dataCompany.services,
+                companyType: dataCompany.companyType,
+                happyHoursConst: dataCompany.happyHoursConst,
+                promotions: dataCompany.promotions,
+                maps: dataCompany.maps,
+                opinions: companyOpinions,
+                opinionsCount: !!dataCompany.opinionsCount
+                  ? dataCompany.opinionsCount
+                  : 0,
+                opinionsValue: !!dataCompany.opinionsValue
+                  ? dataCompany.opinionsValue
+                  : 0,
+                imagesUrl: dataCompany.imagesUrl,
+                mainImageUrl: dataCompany.mainImageUrl,
+              };
 
-               res.status(201).json({
-                 companyProfil: dataToSent,
-               });
-             } else {
-               const error = new Error("Brak uprawnień.");
-               error.statusCode = 401;
-               throw error;
-             }
-           });
+              res.status(201).json({
+                companyProfil: dataToSent,
+              });
+            } else {
+              const error = new Error("Brak uprawnień.");
+              error.statusCode = 401;
+              throw error;
+            }
+          });
       } else {
         const error = new Error("Brak konta firmowego.");
         error.statusCode = 422;
@@ -1182,8 +1184,8 @@ exports.companyPath = (req, res, next) => {
     .select(
       "mainImageUrl imagesUrl workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
     )
-    .populate("owner", "name surname")
-    .populate("workers.user", "name surname email")
+    .populate("owner", "name surname imageUrl")
+    .populate("workers.user", "name surname email imageUrl")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         Opinion.find({
@@ -1238,6 +1240,7 @@ exports.companyPath = (req, res, next) => {
                 name: unhashedName,
                 surname: unhashedSurname,
                 _id: item.user._id,
+                imageUrl: item.user.imageUrl,
               };
 
               return {
@@ -1266,6 +1269,7 @@ exports.companyPath = (req, res, next) => {
                 name: unhashedOwnerName,
                 surname: unhashedOwnerSurname,
                 _id: resultCompanyDoc.owner._id,
+                imageUrl: resultCompanyDoc.owner.imageUrl,
               },
               ownerData: {
                 active: resultCompanyDoc.ownerData.active,

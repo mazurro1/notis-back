@@ -3,6 +3,7 @@ const router = express.Router();
 const { body } = require("express-validator");
 const user = require("../controllers/user");
 const isAuth = require("../middleware/is-auth");
+const fileUpload = require("../middleware/file-uploads");
 
 router.post(
   "/registration",
@@ -95,6 +96,20 @@ router.post(
   isAuth,
   [body("page")],
   user.getMoreAlerts
+);
+
+router.post(
+  "/user-upload-image",
+  isAuth,
+  fileUpload.single("image"),
+  user.userUploadImage
+);
+
+router.post(
+  "/user-delete-image",
+  isAuth,
+  [body("imagePath")],
+  user.userDeleteImage
 );
 
 module.exports = router;

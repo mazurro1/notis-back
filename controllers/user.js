@@ -5,13 +5,21 @@ const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
 const io = require("../socket");
 const nodemailer = require("nodemailer");
+const AWS = require("aws-sdk");
+const getImgBuffer = require("../getImgBuffer");
 require("dotenv").config();
 const {
   TOKEN_PASSWORD,
   BCRIPT_SECURITY_VALUE,
   BCRIPT_EXPIRES_IN,
+  AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY,
+  AWS_REGION,
+  AWS_BUCKET,
+  AWS_PATH_URL,
   MAIL_API_KEY,
 } = process.env;
+
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const transporter = nodemailer.createTransport(
   sendgridTransport({
@@ -20,6 +28,43 @@ const transporter = nodemailer.createTransport(
     },
   })
 );
+
+AWS.config.update({
+  accessKeyId: AWS_ACCESS_KEY_ID,
+  secretAccessKey: AWS_SECRET_ACCESS_KEY,
+  region: AWS_REGION,
+});
+
+const s3Bucket = new AWS.S3({
+  params: {
+    Bucket: AWS_BUCKET,
+  },
+});
+
+const imageUpload = (path, buffer) => {
+  const data = {
+    Key: path,
+    Body: buffer,
+    ContentEncoding: "base64",
+    ContentType: "image/jpeg",
+    ACL: "public-read",
+  };
+  return new Promise((resolve, reject) => {
+    s3Bucket.putObject(data, (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(AWS_PATH_URL + path);
+      }
+    });
+  });
+};
+
+const getImageUrl = async (type, base64Image) => {
+  const buffer = getImgBuffer(base64Image);
+  const currentTime = new Date().getTime();
+  return imageUpload(`${type}/${currentTime}.jpeg`, buffer);
+};
 
 exports.registration = (req, res, next) => {
   const email = req.body.email;
@@ -211,6 +256,7 @@ exports.login = (req, res, next) => {
               alertActiveCount: !!userWithToken.alertActiveCount
                 ? userWithToken.alertActiveCount
                 : 0,
+              imageUrl: user.imageUrl,
             });
           })
           .catch((err) => {
@@ -553,6 +599,7 @@ exports.autoLogin = (req, res, next) => {
           company: user.company,
           alerts: user.alerts,
           alertActiveCount: validUserActiveCount,
+          imageUrl: user.imageUrl,
         });
       } else {
         res.status(422).json({
@@ -831,6 +878,93 @@ exports.addCompanyId = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd podczas dodawania firmy.";
+      }
+      next(err);
+    });
+};
+
+
+exports.userUploadImage = (req, res, next) => {
+  const userId = req.userId;
+  const image = req.body.image;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id imageUrl")
+    .then((userDoc) => {
+      if (!!userDoc) {
+        return getImageUrl("avatars", image).then((result) => {
+          userDoc.imageUrl = result;
+          userDoc.save();
+          return result;
+        });
+      }else{
+         const error = new Error("Brak użytkownika.");
+         error.statusCode = 422;
+         throw error;
+      }
+    })
+    .then((imageUrl) => {
+      res.status(201).json({
+        imageUrl: imageUrl,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+
+exports.userDeleteImage = (req, res, next) => {
+  const userId = req.userId;
+  const imagePath = req.body.imagePath;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id imageUrl")
+    .then((userDoc) => {
+      return s3Bucket.deleteObject(
+        {
+          Bucket: AWS_BUCKET,
+          Key: imagePath,
+        },
+        function (err, data) {
+          if (err) {
+            res.status(500).send(error);
+          } else {
+            userDoc.imageUrl = "";
+            return userDoc.save();
+          }
+        }
+      );
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Usunięto zdjęcie",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
       }
       next(err);
     });
