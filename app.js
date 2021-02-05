@@ -6,6 +6,7 @@ const userRoutes = require("./routes/user");
 const companyRoutes = require("./routes/company");
 const reserwationRoutes = require("./routes/reserwation");
 const opinionRoutes = require("./routes/opinion");
+const cors = require("cors");
 const companyUsersInformationsRoutes = require("./routes/companyUsersInformations");
 const {
   MONGODB_PASSWORD,
@@ -14,6 +15,16 @@ const {
   MONGODB_USER,
 } = process.env;
 
+const passport = require("passport");
+app.use(passport.initialize());
+app.use(passport.session());
+passport.serializeUser(function (user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function (user, done) {
+  done(null, user);
+});
 app.use(express.json({ limit: "2mb" }));
 app.use(bodyParser.json());
 app.use((req, res, next) => {
@@ -23,9 +34,10 @@ app.use((req, res, next) => {
     "OPTIONS, GET, POST, PUT, PATCH, DELETE"
   );
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", true);
   next();
 });
-
+app.use(cors({ origin: "http://localhost:8000" }));
 app.use(userRoutes);
 app.use(companyRoutes);
 app.use(reserwationRoutes);

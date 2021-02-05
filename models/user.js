@@ -17,20 +17,20 @@ const userSchema = new Schema(
     },
     phone: {
       type: String,
-      required: true,
+      required: false,
     },
     password: {
       type: String,
       required: true,
     },
-    dateBirth: {
-      type: Number,
-      required: false,
-    },
-    monthBirth: {
-      type: Number,
-      required: false,
-    },
+    // dateBirth: {
+    //   type: Number,
+    //   required: false,
+    // },
+    // monthBirth: {
+    //   type: Number,
+    //   required: false,
+    // },
     imageUrl: {
       type: String,
       required: false,

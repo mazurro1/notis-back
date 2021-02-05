@@ -7,6 +7,8 @@ const io = require("../socket");
 const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const getImgBuffer = require("../getImgBuffer");
+var request = require("request");
+var querystring = require("querystring");
 require("dotenv").config();
 const {
   TOKEN_PASSWORD,
@@ -18,7 +20,12 @@ const {
   AWS_BUCKET,
   AWS_PATH_URL,
   MAIL_API_KEY,
+  FACEBOOK_APP_ID,
+  FACEBOOK_APP_SECRET,
 } = process.env;
+
+const passport = require("passport");
+const FacebookStrategy = require("passport-facebook").Strategy;
 
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const transporter = nodemailer.createTransport(
@@ -40,6 +47,17 @@ const s3Bucket = new AWS.S3({
     Bucket: AWS_BUCKET,
   },
 });
+
+function makeid(length) {
+  var result = "";
+  var characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  var charactersLength = characters.length;
+  for (var i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return result;
+}
 
 const imageUpload = (path, buffer) => {
   const data = {
@@ -87,7 +105,7 @@ exports.registration = (req, res, next) => {
     .then((userDoc) => {
       if (!userDoc) {
         return bcrypt
-          .hash(password, BCRIPT_SECURITY_VALUE)
+          .hash(password, Number(BCRIPT_EXPIRES_IN))
           .then((hashedPassword) => {
             if (hashedPassword) {
               const codeToVerified = Math.floor(
@@ -176,9 +194,6 @@ exports.registration = (req, res, next) => {
       next(err);
     });
 };
-
-
-    
 
 exports.login = (req, res, next) => {
   const email = req.body.email;
@@ -320,10 +335,16 @@ exports.getUserPhone = (req, res, next) => {
   })
     .select("-name -surname -password -loginToken -password -email")
     .then((user) => {
-      const userPhone = Buffer.from(user.phone, "base64").toString("ascii");
-      res.status(201).json({
-        userPhone: userPhone,
-      });
+      if (!!user.phone) {
+        const userPhone = Buffer.from(user.phone, "base64").toString("ascii");
+        res.status(201).json({
+          userPhone: userPhone,
+        });
+      } else {
+        const error = new Error("Brak numeru telefonu.");
+        error.statusCode = 401;
+        throw error;
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -394,12 +415,10 @@ exports.getCustomUserPhone = (req, res, next) => {
     .catch((err) => {
       if (!err.statusCode) {
         err.statusCode = 501;
-        err.message =
-          "Brak podanej firmy.";
+        err.message = "Brak podanej firmy.";
       }
       next(err);
     });
-
 };
 
 exports.veryfiedEmail = (req, res, next) => {
@@ -479,7 +498,7 @@ exports.resetAllerts = (req, res, next) => {
         user.alertActiveCount = 0;
         return user.save();
       } else {
-         return true;
+        return true;
       }
     })
     .then(() => {
@@ -883,7 +902,6 @@ exports.addCompanyId = (req, res, next) => {
     });
 };
 
-
 exports.userUploadImage = (req, res, next) => {
   const userId = req.userId;
   const image = req.body.image;
@@ -905,10 +923,10 @@ exports.userUploadImage = (req, res, next) => {
           userDoc.save();
           return result;
         });
-      }else{
-         const error = new Error("Brak użytkownika.");
-         error.statusCode = 422;
-         throw error;
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
       }
     })
     .then((imageUrl) => {
@@ -924,7 +942,6 @@ exports.userUploadImage = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.userDeleteImage = (req, res, next) => {
   const userId = req.userId;
@@ -960,6 +977,88 @@ exports.userDeleteImage = (req, res, next) => {
       res.status(201).json({
         message: "Usunięto zdjęcie",
       });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.loginFacebook = (req, res, next) => {
+  // console.log(req.user);
+  User.findOne({
+    email: req.user.emails[0].value,
+  })
+    .select("email _id loginToken")
+    .then((userDoc) => {
+      if (!!userDoc) {
+        res.redirect(
+          303,
+          `http://localhost:8000/login-facebook/${userDoc.loginToken}/${userDoc._id}`
+        );
+      } else {
+        const splitUserName = req.user.displayName.split(" ");
+        const randomPassword = makeid(15);
+        if (req.user.emails[0].value) {
+          return bcrypt
+            .hash(randomPassword, Number(BCRIPT_EXPIRES_IN))
+            .then((hashedPassword) => {
+              if (!!hashedPassword) {
+                const hashedUserName = Buffer.from(
+                  splitUserName[0],
+                  "utf-8"
+                ).toString("base64");
+
+                const hashedUserSurname = Buffer.from(
+                  splitUserName[1],
+                  "utf-8"
+                ).toString("base64");
+
+                const user = new User({
+                  email: req.user.emails[0].value,
+                  name: hashedUserName,
+                  surname: hashedUserSurname,
+                  password: hashedPassword,
+                  phone: null,
+                  accountVerified: true,
+                  codeToVerified: null,
+                });
+                const token = jwt.sign(
+                  {
+                    email: req.user.emails[0].value,
+                    userId: user._id.toString(),
+                  },
+                  TOKEN_PASSWORD,
+                  {
+                    expiresIn: BCRIPT_EXPIRES_IN,
+                  }
+                );
+                user.loginToken = token;
+                user.save((err, userSaved) => {
+                  if (!!!err) {
+                    res.redirect(
+                      303,
+                      `http://localhost:8000/login-facebook/${userSaved.loginToken}/${userSaved._id}`
+                    );
+                  } else {
+                    const error = new Error(
+                      "Błąd podczas logowania użytkownika"
+                    );
+                    error.statusCode = 422;
+                    throw error;
+                  }
+                });
+              }
+            });
+        } else {
+          const error = new Error("Coś poszło nie tak.");
+          error.statusCode = 422;
+          throw error;
+        }
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {

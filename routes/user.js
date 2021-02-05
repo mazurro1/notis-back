@@ -5,10 +5,12 @@ const user = require("../controllers/user");
 const isAuth = require("../middleware/is-auth");
 const fileUpload = require("../middleware/file-uploads");
 
+const { FACEBOOK_APP_ID, FACEBOOK_APP_SECRET } = process.env;
+
 router.post(
   "/registration",
   [
-    body("email").isEmail().normalizeEmail(),
+    body("email").isEmail(),
     body("password").trim().isLength({ min: 5 }),
     body("phoneNumber").trim().isLength({ min: 9 }),
     body("userName").trim().isLength({ min: 3 }),
@@ -21,10 +23,7 @@ router.post(
 
 router.post(
   "/login",
-  [
-    body("email").isEmail().normalizeEmail(),
-    body("password").trim().isLength({ min: 5 }),
-  ],
+  [body("email").isEmail(), body("password").trim().isLength({ min: 5 })],
   user.login
 );
 
@@ -84,19 +83,9 @@ router.post(
   user.resetPassword
 );
 
-router.post(
-  "/update-user-alert",
-  isAuth,
-  user.resetAllerts
-);
+router.post("/update-user-alert", isAuth, user.resetAllerts);
 
-
-router.post(
-  "/get-more-alerts",
-  isAuth,
-  [body("page")],
-  user.getMoreAlerts
-);
+router.post("/get-more-alerts", isAuth, [body("page")], user.getMoreAlerts);
 
 router.post(
   "/user-upload-image",
@@ -111,5 +100,40 @@ router.post(
   [body("imagePath")],
   user.userDeleteImage
 );
+
+const passport = require("passport");
+const FacebookStrategy = require("passport-facebook").Strategy;
+
+passport.use(
+  new FacebookStrategy(
+    {
+      clientID: FACEBOOK_APP_ID,
+      clientSecret: FACEBOOK_APP_SECRET,
+      callbackURL: "/auth/facebook",
+      profileFields: ["emails", "displayName"], // email should be in the scope.
+    },
+    function (accessToken, refreshToken, profile, done) {
+      return done(null, profile);
+    }
+  )
+);
+
+router.get(
+  "/auth/facebook",
+  passport.authenticate("facebook", {
+    scope: "email",
+  }),
+  user.loginFacebook
+);
+
+// router.get(
+//   "/auth/facebook/callback",
+//   passport.authenticate("facebook", {
+//     successRedirect: "/",
+//     failureRedirect: "/login",
+//   })
+// );
+
+// router.get("/auth/facebook/callback", user.loginFacebook);
 
 module.exports = router;
