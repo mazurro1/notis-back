@@ -72,11 +72,7 @@ router.post(
   company.deleteWorkerFromCompany
 );
 
-router.post(
-  "/company-path",
-  [body("companyPath").trim()],
-  company.companyPath
-);
+router.post("/company-path", [body("companyPath").trim()], company.companyPath);
 
 router.post("/all-companys", [body("page").trim()], company.allCompanys);
 
@@ -95,8 +91,6 @@ router.post(
   [body("isBlocked")],
   company.companyUsersInformationsBlock
 );
-
-
 
 // router.patch(
 //   "/update-company-profil",
@@ -121,7 +115,6 @@ router.post(
 //   [body("editedWorkersHours")],
 //   company.updateCompanyProfil
 // );
-
 
 router.patch(
   "/company-services-patch",
@@ -185,8 +178,6 @@ router.patch(
   [body("month")],
   company.companyOwnerWorkingHours
 );
-
-
 
 router.patch(
   "/company-workers-add-no-const-data",

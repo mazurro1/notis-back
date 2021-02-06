@@ -5,7 +5,7 @@ const User = require("../models/user");
 const { validationResult } = require("express-validator");
 const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
-const getImgBuffer = require('../getImgBuffer');
+const getImgBuffer = require("../getImgBuffer");
 require("dotenv").config();
 
 const {
@@ -53,7 +53,6 @@ const getImageUrl = async (type, base64Image) => {
   const currentTime = new Date().getTime();
   return imageUpload(`${type}/${currentTime}.jpeg`, buffer);
 };
-
 
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const { pipeline } = require("nodemailer/lib/xoauth2");
@@ -435,6 +434,7 @@ exports.getCompanyData = (req, res, next) => {
                   : 0,
                 imagesUrl: dataCompany.imagesUrl,
                 mainImageUrl: dataCompany.mainImageUrl,
+                companyStamps: dataCompany.companyStamps,
               };
 
               res.status(201).json({
@@ -582,7 +582,9 @@ exports.sentAgainEmailToActiveCompanyWorker = (req, res, next) => {
           const hashedEmail = Buffer.from(emailWorker, "utf-8").toString(
             "base64"
           );
-            console.log(`http://www.localhost:8000/confirm-added-worker-to-company/${companyData._id}/${hashedEmail}/${thisWorker.codeToActive}`)
+          console.log(
+            `http://www.localhost:8000/confirm-added-worker-to-company/${companyData._id}/${hashedEmail}/${thisWorker.codeToActive}`
+          );
           transporter.sendMail({
             to: emailWorker,
             from: "nootis.help@gmail.com",
@@ -1182,7 +1184,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "mainImageUrl imagesUrl workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
+      "companyStamps mainImageUrl imagesUrl workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
     )
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
@@ -1297,6 +1299,7 @@ exports.companyPath = (req, res, next) => {
 
               imagesUrl: resultCompanyDoc.imagesUrl,
               mainImageUrl: resultCompanyDoc.mainImageUrl,
+              companyStamps: resultCompanyDoc.companyStamps,
             };
 
             res.status(201).json({
@@ -1322,7 +1325,7 @@ exports.companyPath = (req, res, next) => {
         err.message = "Błąd podczas pobierania danych.";
       }
       next(err);
-    });;
+    });
 };
 
 exports.allCompanys = (req, res, next) => {
@@ -1389,7 +1392,6 @@ exports.allCompanys = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.allCompanysOfType = (req, res, next) => {
   const page = req.body.page;
@@ -1459,7 +1461,7 @@ exports.companyUsersInformationsBlock = (req, res, next) => {
   const userId = req.userId;
   const selectedUserId = req.body.selectedUserId;
   const companyId = req.body.companyId;
-  const isBlocked = req.body.isBlocked
+  const isBlocked = req.body.isBlocked;
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const error = new Error("Validation faild entered data is incorrect.");
@@ -1469,9 +1471,7 @@ exports.companyUsersInformationsBlock = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select(
-      "_id usersInformation workers.permissions workers.user owner"
-    )
+    .select("_id usersInformation workers.permissions workers.user owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -1493,7 +1493,7 @@ exports.companyUsersInformationsBlock = (req, res, next) => {
             resultCompanyDoc.usersInformation[
               selectUserInformation
             ].isBlocked = isBlocked;
-          }else{
+          } else {
             resultCompanyDoc.usersInformation.push({
               userId: selectedUserId,
               isBlocked: true,
@@ -1610,22 +1610,22 @@ exports.companyServicesPatch = (req, res, next) => {
         companyDoc.ownerData.servicesCategory = filterOwnerServiceCategory;
 
         //delete from happy hours
-        const newHappyHours = []
-        companyDoc.happyHoursConst.forEach(happyHour => {
-          const isServiceInHappyHour = happyHour.servicesInPromotion.some(happyHourService => {
-          const isInDeleted = services.deleted.some(
+        const newHappyHours = [];
+        companyDoc.happyHoursConst.forEach((happyHour) => {
+          const isServiceInHappyHour = happyHour.servicesInPromotion.some(
+            (happyHourService) => {
+              const isInDeleted = services.deleted.some(
                 (serviceDeleted) => serviceDeleted == happyHourService
               );
               return isInDeleted;
-          });
+            }
+          );
           if (isServiceInHappyHour) {
             const filterServiceInHappyHour = happyHour.servicesInPromotion.filter(
               (happyHourService) => {
-                const isInDeleted = services.deleted.some(
-                  (serviceDeleted) => {
-                    return serviceDeleted == happyHourService;
-                  }
-                );
+                const isInDeleted = services.deleted.some((serviceDeleted) => {
+                  return serviceDeleted == happyHourService;
+                });
                 return !isInDeleted;
               }
             );
@@ -1639,13 +1639,13 @@ exports.companyServicesPatch = (req, res, next) => {
                 end: happyHour.end,
                 promotionPercent: happyHour.promotionPercent,
               };
-              
+
               newHappyHours.push(newHappyHoursItemService);
             }
           } else {
             newHappyHours.push(happyHour);
           }
-        })
+        });
         companyDoc.happyHoursConst = newHappyHours;
 
         //delete from promotions
@@ -1685,7 +1685,7 @@ exports.companyServicesPatch = (req, res, next) => {
             newPromotions.push(promotion);
           }
         });
-        
+
         companyDoc.promotions = newPromotions;
       }
       //end deleted in promotions
@@ -1742,7 +1742,6 @@ exports.companyServicesPatch = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.companySettingsPatch = (req, res, next) => {
   const userId = req.userId;
@@ -1862,7 +1861,6 @@ exports.companySettingsPatch = (req, res, next) => {
     });
 };
 
-
 exports.companyWorkersSaveProps = (req, res, next) => {
   const userId = req.userId;
   const dateProps = req.body.dateProps;
@@ -1928,23 +1926,31 @@ exports.companyWorkersSaveProps = (req, res, next) => {
         }
       }
       if (!!constTime) {
-        if (constTime.indexWorker === "owner"){
+        if (constTime.indexWorker === "owner") {
           if (constTime.constantWorkingHours.length > 0) {
             constTime.constantWorkingHours.forEach((constDate) => {
               const dateIsInBackend = companyDoc.ownerData.constantWorkingHours.findIndex(
                 (item) => item.dayOfTheWeek === constDate.dayOfTheWeek
               );
               if (dateIsInBackend >= 0) {
-                companyDoc.ownerData.constantWorkingHours[dateIsInBackend].dayOfTheWeek = constDate.dayOfTheWeek;
-                companyDoc.ownerData.constantWorkingHours[dateIsInBackend].startWorking = constDate.startWorking;
-                companyDoc.ownerData.constantWorkingHours[dateIsInBackend].endWorking = constDate.endWorking;
-                companyDoc.ownerData.constantWorkingHours[dateIsInBackend].disabled = constDate.disabled;
+                companyDoc.ownerData.constantWorkingHours[
+                  dateIsInBackend
+                ].dayOfTheWeek = constDate.dayOfTheWeek;
+                companyDoc.ownerData.constantWorkingHours[
+                  dateIsInBackend
+                ].startWorking = constDate.startWorking;
+                companyDoc.ownerData.constantWorkingHours[
+                  dateIsInBackend
+                ].endWorking = constDate.endWorking;
+                companyDoc.ownerData.constantWorkingHours[
+                  dateIsInBackend
+                ].disabled = constDate.disabled;
               } else {
                 companyDoc.ownerData.constantWorkingHours.push(constDate);
               }
             });
           }
-        }else{
+        } else {
           const selectedWorkerIndex = companyDoc.workers.findIndex(
             (item) => item._id == constTime.indexWorker
           );
@@ -2117,7 +2123,7 @@ exports.companyOwnerNoConstData = (req, res, next) => {
         workers: {
           _id: 1,
           permissions: 1,
-        }
+        },
       },
     },
   ])
@@ -2539,7 +2545,6 @@ exports.companyOpeningHoursUpdate = (req, res, next) => {
     });
 };
 
-
 exports.companyMapsUpdate = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
@@ -2699,13 +2704,15 @@ exports.companyDeleteConstDateHappyHour = (req, res, next) => {
       }
     })
     .then((companyDoc) => {
-      const filterHappyHours  = companyDoc.happyHoursConst.filter((item) => item._id != happyHourId);
+      const filterHappyHours = companyDoc.happyHoursConst.filter(
+        (item) => item._id != happyHourId
+      );
       companyDoc.happyHoursConst = filterHappyHours;
       return companyDoc.save();
     })
     .then(() => {
       res.status(201).json({
-        message: "Usunięto happy hour"
+        message: "Usunięto happy hour",
       });
     })
     .catch((err) => {
@@ -2759,14 +2766,20 @@ exports.companyUpdateConstDateHappyHour = (req, res, next) => {
       }
     })
     .then((companyDoc) => {
-      const findIndexHappyHour = companyDoc.happyHoursConst.findIndex(item => item._id == constDate._id);
-      if(findIndexHappyHour >= 0){
-        companyDoc.happyHoursConst[findIndexHappyHour].disabled = constDate.disabled;
-        companyDoc.happyHoursConst[findIndexHappyHour].dayWeekIndex = constDate.dayWeekIndex;
+      const findIndexHappyHour = companyDoc.happyHoursConst.findIndex(
+        (item) => item._id == constDate._id
+      );
+      if (findIndexHappyHour >= 0) {
+        companyDoc.happyHoursConst[findIndexHappyHour].disabled =
+          constDate.disabled;
+        companyDoc.happyHoursConst[findIndexHappyHour].dayWeekIndex =
+          constDate.dayWeekIndex;
         companyDoc.happyHoursConst[findIndexHappyHour].start = constDate.start;
         companyDoc.happyHoursConst[findIndexHappyHour].end = constDate.end;
-        companyDoc.happyHoursConst[findIndexHappyHour].promotionPercent = constDate.promotionPercent;
-        companyDoc.happyHoursConst[findIndexHappyHour].servicesInPromotion = constDate.servicesInPromotion;
+        companyDoc.happyHoursConst[findIndexHappyHour].promotionPercent =
+          constDate.promotionPercent;
+        companyDoc.happyHoursConst[findIndexHappyHour].servicesInPromotion =
+          constDate.servicesInPromotion;
       }
       return companyDoc.save();
     })
@@ -2783,7 +2796,6 @@ exports.companyUpdateConstDateHappyHour = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.companyAddPromotion = (req, res, next) => {
   const userId = req.userId;
@@ -2912,7 +2924,6 @@ exports.companyDeletePromotion = (req, res, next) => {
     });
 };
 
-
 exports.companyUpdatePromotion = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
@@ -2986,7 +2997,6 @@ exports.companyUpdatePromotion = (req, res, next) => {
     });
 };
 
-
 exports.companyUploadImage = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
@@ -3020,7 +3030,7 @@ exports.companyUploadImage = (req, res, next) => {
     })
     .then((companyDoc) => {
       return getImageUrl("companyImages", image).then((result) => {
-        return result
+        return result;
       });
     })
     .then((imageUrl) => {
@@ -3029,8 +3039,8 @@ exports.companyUploadImage = (req, res, next) => {
       })
         .select("_id imagesUrl")
         .then((resultCompany) => {
-          if(!!resultCompany.imagesUrl){
-            if(resultCompany.imagesUrl.length === 0){
+          if (!!resultCompany.imagesUrl) {
+            if (resultCompany.imagesUrl.length === 0) {
               resultCompany.mainImageUrl = imageUrl;
             }
           }
@@ -3059,7 +3069,6 @@ exports.companyUploadImage = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.companyDeleteImage = (req, res, next) => {
   const userId = req.userId;
@@ -3117,7 +3126,7 @@ exports.companyDeleteImage = (req, res, next) => {
             (item) => item !== imagePath
           );
           const isMainImage = resultCompany.mainImageUrl === imagePath;
-          if(isMainImage){
+          if (isMainImage) {
             resultCompany.mainImageUrl = "";
           }
           resultCompany.imagesUrl = filterImages;
@@ -3144,7 +3153,6 @@ exports.companyDeleteImage = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.companyMainImage = (req, res, next) => {
   const userId = req.userId;
@@ -3275,7 +3283,6 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.companyWorkersWorkingHours = (req, res, next) => {
   const userId = req.userId;

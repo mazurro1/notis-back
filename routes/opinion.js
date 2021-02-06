@@ -20,7 +20,6 @@ router.post(
   opinion.loadMoreOpinions
 );
 
-
 router.post(
   "/add-replay-opinion",
   isAuth,

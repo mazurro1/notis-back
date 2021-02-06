@@ -485,10 +485,12 @@ const companySchema = new Schema(
       type: String,
       required: false,
     },
-    imagesUrl: [{
-      type: String,
-      required: false,
-    }],
+    imagesUrl: [
+      {
+        type: String,
+        required: false,
+      },
+    ],
     usersInformation: [
       {
         userId: {
@@ -557,6 +559,28 @@ const companySchema = new Schema(
           required: false,
         },
         servicesInPromotion: [
+          {
+            type: String,
+            required: false,
+          },
+        ],
+      },
+    ],
+    companyStamps: [
+      {
+        disabled: {
+          type: Boolean,
+          required: false,
+        },
+        promotionPercent: {
+          type: Number,
+          required: false,
+        },
+        countStampsToActive: {
+          type: Number,
+          required: false,
+        },
+        servicesId: [
           {
             type: String,
             required: false,

@@ -7,9 +7,7 @@ const jwt = require("jsonwebtoken");
 const io = require("../socket");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
-const {
-  MAIL_API_KEY,
-} = process.env;
+const { MAIL_API_KEY } = process.env;
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const transporter = nodemailer.createTransport(
   sendgridTransport({
@@ -18,7 +16,6 @@ const transporter = nodemailer.createTransport(
     },
   })
 );
-
 
 exports.addCompanyUsersInformationsMessage = (req, res, next) => {
   const userId = req.userId;
@@ -96,7 +93,6 @@ exports.addCompanyUsersInformationsMessage = (req, res, next) => {
         });
     })
     .then((userInformations) => {
-     
       userInformations.populate(
         {
           path: "messages.workerWhoWritedUserId",
@@ -111,7 +107,6 @@ exports.addCompanyUsersInformationsMessage = (req, res, next) => {
           });
         }
       );
-    
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -121,7 +116,6 @@ exports.addCompanyUsersInformationsMessage = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.getSelectedUsersInformationsMessage = (req, res, next) => {
   const userId = req.userId;
@@ -133,7 +127,7 @@ exports.getSelectedUsersInformationsMessage = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
- 
+
   Company.findOne({
     _id: companyId,
   })
@@ -165,28 +159,28 @@ exports.getSelectedUsersInformationsMessage = (req, res, next) => {
       }
     })
     .then(() => {
-        CompanyUsersInformations.findOne({
-          companyId: companyId,
-          userId: userSelectedId,
-        })
-          .populate("messages.workerWhoWritedUserId", "name surname _id")
-          .slice("messages", 10)
-          .then((resultCompanyUserInformation) => {
-            res.status(200).json({
-              message: resultCompanyUserInformation
-                ? resultCompanyUserInformation.messages
-                : [],
-            });
-          })
-          .catch((error) => {
-            if (!err.statusCode) {
-              err.statusCode = 501;
-              err.message = "Błąd podczas pobierania danych firmowych.";
-            }
-            next(err);
+      CompanyUsersInformations.findOne({
+        companyId: companyId,
+        userId: userSelectedId,
+      })
+        .populate("messages.workerWhoWritedUserId", "name surname _id")
+        .slice("messages", 10)
+        .then((resultCompanyUserInformation) => {
+          res.status(200).json({
+            message: resultCompanyUserInformation
+              ? resultCompanyUserInformation.messages
+              : [],
           });
+        })
+        .catch((error) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych firmowych.";
+          }
+          next(err);
+        });
     })
- 
+
     .catch((err) => {
       if (!err.statusCode) {
         err.statusCode = 501;
@@ -195,7 +189,6 @@ exports.getSelectedUsersInformationsMessage = (req, res, next) => {
       next(err);
     });
 };
-
 
 exports.getMoreCompanyUserInformationsMessages = (req, res, next) => {
   const userId = req.userId;
@@ -270,7 +263,6 @@ exports.getMoreCompanyUserInformationsMessages = (req, res, next) => {
     });
 };
 
-
 exports.deleteSelectedUsersInformationsMessage = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
@@ -322,18 +314,18 @@ exports.deleteSelectedUsersInformationsMessage = (req, res, next) => {
           resultCompanyUserInformation.messages.pull({ _id: messageId });
           return resultCompanyUserInformation.save();
         })
-        .then(()=>{
-           res.status(200).json({
-             message: "Wiadomość usunięta",
-           });
+        .then(() => {
+          res.status(200).json({
+            message: "Wiadomość usunięta",
+          });
         })
-        .catch((err => {
+        .catch((err) => {
           if (!err.statusCode) {
             err.statusCode = 501;
             err.message = "Błąd podczas pobierania danych firmowych.";
           }
           next(err);
-        }))
+        })
         .catch((err) => {
           if (!err.statusCode) {
             err.statusCode = 501;

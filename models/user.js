@@ -19,6 +19,10 @@ const userSchema = new Schema(
       type: String,
       required: false,
     },
+    hasPhone: {
+      type: Boolean,
+      required: false,
+    },
     password: {
       type: String,
       required: true,
@@ -60,6 +64,22 @@ const userSchema = new Schema(
       type: Boolean,
       required: false,
     },
+    stamps: [
+      {
+        companyId: {
+          type: Schema.Types.ObjectId,
+          ref: "Companys",
+          required: false,
+        },
+        reserwations: [
+          {
+            type: Schema.Types.ObjectId,
+            ref: "Reserwations",
+            required: false,
+          },
+        ],
+      },
+    ],
     favouritesCompanys: [
       {
         companyId: {

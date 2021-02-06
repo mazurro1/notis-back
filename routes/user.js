@@ -15,8 +15,6 @@ router.post(
     body("phoneNumber").trim().isLength({ min: 9 }),
     body("userName").trim().isLength({ min: 3 }),
     body("userSurname").trim().isLength({ min: 3 }),
-    body("monthBirth"),
-    body("dateBirth"),
   ],
   user.registration
 );
@@ -125,15 +123,5 @@ router.get(
   }),
   user.loginFacebook
 );
-
-// router.get(
-//   "/auth/facebook/callback",
-//   passport.authenticate("facebook", {
-//     successRedirect: "/",
-//     failureRedirect: "/login",
-//   })
-// );
-
-// router.get("/auth/facebook/callback", user.loginFacebook);
 
 module.exports = router;

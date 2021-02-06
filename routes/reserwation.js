@@ -15,6 +15,7 @@ router.post(
   [body("dateFull")],
   [body("reserwationMessage")],
   [body("serviceId")],
+  [body("numberPhone")],
   reserwation.addReserwation
 );
 
@@ -44,11 +45,7 @@ router.post(
   reserwation.getWorkerDisabledHours
 );
 
-router.get(
-  "/user-reserwations",
-  isAuth,
-  reserwation.getUserReserwations
-);
+router.get("/user-reserwations", isAuth, reserwation.getUserReserwations);
 
 router.post(
   "/user-reserwations-all",
@@ -75,7 +72,6 @@ router.post(
   [body("companyId")],
   reserwation.getCompanyReserwations
 );
-
 
 router.patch(
   "/update-reserwation",
@@ -108,6 +104,5 @@ router.post(
   [body("page")],
   reserwation.getSelectedUserReserwations
 );
-
 
 module.exports = router;

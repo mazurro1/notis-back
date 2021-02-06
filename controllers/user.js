@@ -7,8 +7,6 @@ const io = require("../socket");
 const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const getImgBuffer = require("../getImgBuffer");
-var request = require("request");
-var querystring = require("querystring");
 require("dotenv").config();
 const {
   TOKEN_PASSWORD,
@@ -20,12 +18,8 @@ const {
   AWS_BUCKET,
   AWS_PATH_URL,
   MAIL_API_KEY,
-  FACEBOOK_APP_ID,
-  FACEBOOK_APP_SECRET,
+  SITE_FRONT,
 } = process.env;
-
-const passport = require("passport");
-const FacebookStrategy = require("passport-facebook").Strategy;
 
 const sendgridTransport = require("nodemailer-sendgrid-transport");
 const transporter = nodemailer.createTransport(
@@ -90,8 +84,6 @@ exports.registration = (req, res, next) => {
   const phoneNumber = req.body.phoneNumber;
   const userName = req.body.userName;
   const userSurname = req.body.userSurname;
-  const dateBirth = req.body.dateBirth;
-  const monthBirth = req.body.monthBirth;
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -139,8 +131,7 @@ exports.registration = (req, res, next) => {
                 phone: hashedPhoneNumber,
                 accountVerified: false,
                 codeToVerified: hashedCodeToVerified,
-                dateBirth: dateBirth,
-                monthBirth: monthBirth,
+                hasPhone: true,
               });
               const token = jwt.sign(
                 {
@@ -216,6 +207,10 @@ exports.login = (req, res, next) => {
       "company",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions"
     )
+    .populate(
+      "stamps.reserwations",
+      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled"
+    )
     .populate({
       path: "alerts.reserwationId",
       select:
@@ -272,6 +267,8 @@ exports.login = (req, res, next) => {
                 ? userWithToken.alertActiveCount
                 : 0,
               imageUrl: user.imageUrl,
+              hasPhone: user.hasPhone,
+              stamps: user.stamps,
             });
           })
           .catch((err) => {
@@ -583,6 +580,10 @@ exports.autoLogin = (req, res, next) => {
     .select("-password -phone -codeToVerified")
     .slice("alerts", 10)
     .populate(
+      "stamps.reserwations",
+      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled"
+    )
+    .populate(
       "company",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions"
     )
@@ -619,6 +620,8 @@ exports.autoLogin = (req, res, next) => {
           alerts: user.alerts,
           alertActiveCount: validUserActiveCount,
           imageUrl: user.imageUrl,
+          hasPhone: user.hasPhone,
+          stamps: user.stamps,
         });
       } else {
         res.status(422).json({
@@ -997,7 +1000,7 @@ exports.loginFacebook = (req, res, next) => {
       if (!!userDoc) {
         res.redirect(
           303,
-          `http://localhost:8000/login-facebook/${userDoc.loginToken}/${userDoc._id}`
+          `${SITE_FRONT}/login-facebook/${userDoc.loginToken}/${userDoc._id}/false`
         );
       } else {
         const splitUserName = req.user.displayName.split(" ");
@@ -1025,6 +1028,7 @@ exports.loginFacebook = (req, res, next) => {
                   phone: null,
                   accountVerified: true,
                   codeToVerified: null,
+                  hasPhone: false,
                 });
                 const token = jwt.sign(
                   {
@@ -1039,9 +1043,16 @@ exports.loginFacebook = (req, res, next) => {
                 user.loginToken = token;
                 user.save((err, userSaved) => {
                   if (!!!err) {
+                    transporter.sendMail({
+                      to: userSaved.email,
+                      from: "nootis.help@gmail.com",
+                      subject: "Tworzenie konta zakończone powodzeniem",
+                      html: `<h1>Utworzono nowe konto za pomocą facebook-a</h1>
+                      <p>Twoje nowe wygenerowane hasło to: <b>${randomPassword}</b>. Możesz go zmienić w ustawieniach konta na stronie nootis.pl</p>`,
+                    });
                     res.redirect(
                       303,
-                      `http://localhost:8000/login-facebook/${userSaved.loginToken}/${userSaved._id}`
+                      `${SITE_FRONT}/login-facebook/${userSaved.loginToken}/${userSaved._id}/true`
                     );
                   } else {
                     const error = new Error(

@@ -105,6 +105,14 @@ const reserwationSchema = new Schema({
     type: Boolean,
     required: false,
   },
+  activeHappyHour: {
+    type: Boolean,
+    required: false,
+  },
+  activeStamp: {
+    type: Boolean,
+    required: false,
+  },
   basicPrice: {
     type: String,
     required: true,

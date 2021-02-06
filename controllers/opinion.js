@@ -19,11 +19,10 @@ const transporter = nodemailer.createTransport(
   })
 );
 
-
 exports.addOpinion = (req, res, next) => {
   const userId = req.userId;
   const opinionData = req.body.opinionData;
-  
+
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const error = new Error("Validation faild entered data is incorrect.");
@@ -58,17 +57,23 @@ exports.addOpinion = (req, res, next) => {
                       reserwationId: opinionData.reserwationId,
                       user: userId,
                     });
-                    const validOpinionCount = !!companyDoc.opinionsCount ? companyDoc.opinionsCount : 0;
-                    const validOpinionValue = !!companyDoc.opinionsValue ? companyDoc.opinionsValue : 0;
+                    const validOpinionCount = !!companyDoc.opinionsCount
+                      ? companyDoc.opinionsCount
+                      : 0;
+                    const validOpinionValue = !!companyDoc.opinionsValue
+                      ? companyDoc.opinionsValue
+                      : 0;
                     companyDoc.opinionsCount = Number(validOpinionCount) + 1;
-                    companyDoc.opinionsValue = Number(validOpinionValue) + Number(opinionData.opinionStars);
+                    companyDoc.opinionsValue =
+                      Number(validOpinionValue) +
+                      Number(opinionData.opinionStars);
                     reserwationData.opinionId = newOpinion._id;
                     companyDoc.save();
                     reserwationData.save();
                     return newOpinion.save();
                   }
                 });
-              } else {
+            } else {
               const error = new Error("Brak firmy.");
               error.statusCode = 412;
               throw error;
@@ -80,7 +85,7 @@ exports.addOpinion = (req, res, next) => {
         throw error;
       }
     })
-    .then(resultSave => {
+    .then((resultSave) => {
       resultSave
         .populate("user", "name")
         .populate({
@@ -131,10 +136,10 @@ exports.updateEditedOpinion = (req, res, next) => {
   })
     .then((opinionDoc) => {
       if (!!opinionDoc) {
-        if(!!!opinionDoc.editedOpinionMessage){
+        if (!!!opinionDoc.editedOpinionMessage) {
           opinionDoc.editedOpinionMessage = opinionData.opinionEditedMessage;
           return opinionDoc.save();
-        }else{
+        } else {
           const error = new Error("Edytowana opinia została już dodana.");
           error.statusCode = 412;
           throw error;
@@ -213,42 +218,40 @@ exports.addReplayOpinion = (req, res, next) => {
     throw error;
   }
 
-
-Company.findOne({
-  _id: companyId,
-})
-  .select("_id owner")
-  .then((resultCompanyDoc) => {
-    if (!!resultCompanyDoc) {
-      let hasPermission = resultCompanyDoc.owner == userId;
-      if (hasPermission) {
-        return hasPermission;
-      } else {
-        const error = new Error("Brak dostępu.");
-        error.statusCode = 401;
-        throw error;
-      }
-    } else {
-      const error = new Error("Brak wybranej firmy.");
-      error.statusCode = 403;
-      throw error;
-    }
+  Company.findOne({
+    _id: companyId,
   })
-  .then(()=>{
-    return Opinion.findOne({
-      _id: opinionId
-    })
-    .then(resultOpinion => {
-      if (!!resultOpinion) {
-        resultOpinion.replayOpinionMessage = replay;
-        return resultOpinion.save();
-      }else{
-        const error = new Error("Nie znaleziono opinii.");
+    .select("_id owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return hasPermission;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
         error.statusCode = 403;
         throw error;
       }
     })
-  })
+    .then(() => {
+      return Opinion.findOne({
+        _id: opinionId,
+      }).then((resultOpinion) => {
+        if (!!resultOpinion) {
+          resultOpinion.replayOpinionMessage = replay;
+          return resultOpinion.save();
+        } else {
+          const error = new Error("Nie znaleziono opinii.");
+          error.statusCode = 403;
+          throw error;
+        }
+      });
+    })
     .then(() => {
       res.status(201).json({
         message: "Dodano odpowiedz do opinii",
