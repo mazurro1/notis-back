@@ -208,6 +208,10 @@ exports.login = (req, res, next) => {
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions"
     )
     .populate(
+      "stamps.companyId",
+      "_id companyStamps services.serviceName services._id"
+    )
+    .populate(
       "stamps.reserwations",
       "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled"
     )
@@ -582,6 +586,10 @@ exports.autoLogin = (req, res, next) => {
     .populate(
       "stamps.reserwations",
       "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled"
+    )
+    .populate(
+      "stamps.companyId",
+      "_id companyStamps services.serviceName services._id"
     )
     .populate(
       "company",

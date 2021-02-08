@@ -456,7 +456,22 @@ exports.addReserwation = (req, res, next) => {
                                 !!!happyHourNumber &&
                                 !!isStampActive
                               ) {
-                                const findCompanyStamp = companyDoc.companyStamps.find(
+                                const filterCompanyStampsNoDisabled = companyDoc.companyStamps.filter(
+                                  (item) => item.disabled !== true
+                                );
+
+                                filterCompanyStampsNoDisabled.sort((a, b) => {
+                                  const firstItemToSort = a.promotionPercent;
+                                  const secondItemToSort = b.promotionPercent;
+                                  if (firstItemToSort < secondItemToSort)
+                                    return 1;
+                                  if (firstItemToSort > secondItemToSort)
+                                    return -1;
+                                  return 0;
+                                });
+
+                                //was companyDoc.companyStamps <- filterCompanyStampsNoDisabled
+                                const findCompanyStamp = filterCompanyStampsNoDisabled.find(
                                   (itemStamp) => {
                                     const isInStampsService = itemStamp.servicesId.some(
                                       (stampService) =>

@@ -293,4 +293,35 @@ router.post(
   company.companyMainImage
 );
 
+router.post(
+  "/company-add-stamp",
+  isAuth,
+  [body("companyId")],
+  [body("disabledStamp")],
+  [body("promotionPercent")],
+  [body("stampCount")],
+  [body("selectedServicesIds")],
+  company.companyAddStamp
+);
+
+router.post(
+  "/company-delete-stamp",
+  isAuth,
+  [body("companyId")],
+  [body("stampId")],
+  company.companyDeleteStamp
+);
+
+router.post(
+  "/company-update-stamp",
+  isAuth,
+  [body("companyId")],
+  [body("stampId")],
+  [body("disabledStamp")],
+  [body("promotionPercent")],
+  [body("stampCount")],
+  [body("selectedServicesIds")],
+  company.companyUpdateStamp
+);
+
 module.exports = router;

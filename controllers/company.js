@@ -1540,7 +1540,7 @@ exports.companyServicesPatch = (req, res, next) => {
     _id: companyId,
   })
     .select(
-      "_id workers.permissions workers.user workers.servicesCategory ownerData.servicesCategory owner services promotions happyHoursConst"
+      "_id workers.permissions workers.user workers.servicesCategory ownerData.servicesCategory owner services promotions happyHoursConst companyStamps"
     )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
@@ -1687,9 +1687,47 @@ exports.companyServicesPatch = (req, res, next) => {
         });
 
         companyDoc.promotions = newPromotions;
+
+        //delete service in stamps companyStamps
+        const newStamps = [];
+        companyDoc.companyStamps.forEach((stamp) => {
+          const isServiceInStamp = stamp.servicesId.some((stampService) => {
+            const isInDeleted = services.deleted.some(
+              (serviceDeleted) => serviceDeleted == stampService
+            );
+            return isInDeleted;
+          });
+
+          if (isServiceInStamp) {
+            const filterServiceInStamp = stamp.servicesId.filter(
+              (stampService) => {
+                const isInDeleted = services.deleted.some((serviceDeleted) => {
+                  return serviceDeleted == stampService;
+                });
+                return !isInDeleted;
+              }
+            );
+
+            if (filterServiceInStamp.length > 0) {
+              const newStampsItemService = {
+                servicesId: filterServiceInStamp,
+                _id: stamp._id,
+                disabled: stamp.disabled,
+                countStampsToActive: stamp.countStampsToActive,
+                promotionPercent: stamp.promotionPercent,
+              };
+
+              newStamps.push(newStampsItemService);
+            }
+          } else {
+            newStamps.push(stamp);
+          }
+        });
+        companyDoc.companyStamps = newStamps;
       }
       //end deleted in promotions
 
+      // edited services
       if (services.edited.length > 0) {
         const newServices = companyDoc.services.map((itemFirst) => {
           const isInArray = services.edited.some((itemSecond) => {
@@ -1732,6 +1770,7 @@ exports.companyServicesPatch = (req, res, next) => {
         workers: companySave.workers,
         promotions: companySave.promotions,
         happyHoursConst: companySave.happyHoursConst,
+        companyStamps: companySave.companyStamps,
       });
     })
     .catch((err) => {
@@ -3364,6 +3403,183 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.companyAddStamp = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const disabledStamp = req.body.disabledStamp;
+  const promotionPercent = req.body.promotionPercent;
+  const stampCount = req.body.stampCount;
+  const selectedServicesIds = req.body.selectedServicesIds;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner companyStamps")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      resultCompanyDoc.companyStamps.push({
+        disabled: disabledStamp,
+        promotionPercent: promotionPercent,
+        countStampsToActive: stampCount,
+        servicesId: selectedServicesIds,
+      });
+      return resultCompanyDoc.save();
+    })
+    .then((resultSave) => {
+      res.status(201).json({
+        newCompanyStamps: resultSave.companyStamps,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas dodawania pieczątki.";
+      }
+      next(err);
+    });
+};
+
+exports.companyDeleteStamp = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const stampId = req.body.stampId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner companyStamps")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      const filterStamps = resultCompanyDoc.companyStamps.filter(
+        (item) => item._id != stampId
+      );
+      resultCompanyDoc.companyStamps = filterStamps;
+      return resultCompanyDoc.save();
+    })
+    .then((resultSave) => {
+      res.status(201).json({
+        newCompanyStamps: resultSave.companyStamps,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas dodawania pieczątki.";
+      }
+      next(err);
+    });
+};
+
+exports.companyUpdateStamp = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const disabledStamp = req.body.disabledStamp;
+  const promotionPercent = req.body.promotionPercent;
+  const stampCount = req.body.stampCount;
+  const selectedServicesIds = req.body.selectedServicesIds;
+  const stampId = req.body.stampId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner companyStamps")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      const findIndexStamp = resultCompanyDoc.companyStamps.findIndex(
+        (item) => item._id == stampId
+      );
+      if (findIndexStamp >= 0) {
+        resultCompanyDoc.companyStamps[findIndexStamp].disabled = disabledStamp;
+        resultCompanyDoc.companyStamps[
+          findIndexStamp
+        ].promotionPercent = promotionPercent;
+        resultCompanyDoc.companyStamps[
+          findIndexStamp
+        ].countStampsToActive = stampCount;
+        resultCompanyDoc.companyStamps[
+          findIndexStamp
+        ].servicesId = selectedServicesIds;
+      }
+
+      return resultCompanyDoc.save();
+    })
+    .then((resultSave) => {
+      res.status(201).json({
+        newCompanyStamps: resultSave.companyStamps,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas dodawania pieczątki.";
       }
       next(err);
     });
