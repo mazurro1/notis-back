@@ -62,7 +62,7 @@ exports.addReserwation = (req, res, next) => {
     visitCanceled: false,
   })
     .then((allReserwations) => {
-      return Company.findOne({ _id: companyId })
+      return Company.findOne({ _id: companyId, pauseCompany: false })
         .select(
           "openingDays ownerData workers owner daysOff reservationMonthTime services usersInformation promotions happyHoursConst companyStamps"
         )
@@ -972,6 +972,7 @@ exports.getWorkerDisabledHours = (req, res, next) => {
     .then((reserwationDoc) => {
       return Company.findOne({
         _id: companyId,
+        pauseCompany: false,
       })
         .select(
           "workers owner ownerData reservationEveryTime daysOff reservationMonthTime promotions happyHoursConst"
