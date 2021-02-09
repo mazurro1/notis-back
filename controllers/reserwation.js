@@ -74,7 +74,7 @@ exports.addReserwation = (req, res, next) => {
               .select("_id stamps")
               .populate(
                 "stamps.reserwations",
-                "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled"
+                "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate"
               )
               .then((resultUserDoc) => {
                 if (!!resultUserDoc) {
@@ -385,6 +385,7 @@ exports.addReserwation = (req, res, next) => {
                                     return -1;
                                   return 0;
                                 });
+
                                 promotionNumber =
                                   filterSelectedPromotions[0].promotionPercent;
                               }
@@ -450,6 +451,7 @@ exports.addReserwation = (req, res, next) => {
                               // promotionNumber; happyHourNumber
 
                               // promotion in stamp
+
                               let stampNumber = null;
                               if (
                                 !!!promotionNumber &&
@@ -457,16 +459,17 @@ exports.addReserwation = (req, res, next) => {
                                 !!isStampActive
                               ) {
                                 const filterCompanyStampsNoDisabled = companyDoc.companyStamps.filter(
-                                  (item) => item.disabled !== true
+                                  (item) => item.disabled === false
                                 );
 
                                 filterCompanyStampsNoDisabled.sort((a, b) => {
-                                  const firstItemToSort = a.promotionPercent;
-                                  const secondItemToSort = b.promotionPercent;
+                                  const firstItemToSort = a.countStampsToActive;
+                                  const secondItemToSort =
+                                    b.countStampsToActive;
                                   if (firstItemToSort < secondItemToSort)
-                                    return 1;
-                                  if (firstItemToSort > secondItemToSort)
                                     return -1;
+                                  if (firstItemToSort > secondItemToSort)
+                                    return 1;
                                   return 0;
                                 });
 
@@ -495,6 +498,9 @@ exports.addReserwation = (req, res, next) => {
 
                                     if (findStampId >= 0) {
                                       let numberOfActiveStamps = 0;
+                                      const badDateReserwations = [];
+                                      const goodDateReserwations = [];
+
                                       resultUserDoc.stamps[
                                         findStampId
                                       ].reserwations.forEach(
@@ -504,7 +510,7 @@ exports.addReserwation = (req, res, next) => {
                                           );
                                           const reserwationStampDateEnd = new Date(
                                             stampReserwation.dateYear,
-                                            stampReserwation.dateMonth,
+                                            stampReserwation.dateMonth - 1,
                                             stampReserwation.dateDay,
                                             Number(splitDateEnd[0]),
                                             Number(splitDateEnd[1])
@@ -516,6 +522,13 @@ exports.addReserwation = (req, res, next) => {
                                           ) {
                                             numberOfActiveStamps =
                                               numberOfActiveStamps + 1;
+                                            goodDateReserwations.push(
+                                              stampReserwation
+                                            );
+                                          } else {
+                                            badDateReserwations.push(
+                                              stampReserwation
+                                            );
                                           }
                                         }
                                       );
@@ -524,11 +537,35 @@ exports.addReserwation = (req, res, next) => {
                                         findCompanyStamp.countStampsToActive <=
                                           numberOfActiveStamps
                                       ) {
+                                        goodDateReserwations.sort((a, b) => {
+                                          const firstItemToSort = new Date(
+                                            a.fullDate
+                                          );
+                                          const secondItemToSort = new Date(
+                                            b.fullDate
+                                          );
+                                          if (
+                                            firstItemToSort < secondItemToSort
+                                          )
+                                            return -1;
+                                          if (
+                                            firstItemToSort > secondItemToSort
+                                          )
+                                            return 1;
+                                          return 0;
+                                        });
                                         stampNumber =
                                           findCompanyStamp.promotionPercent;
+                                        const newGoodDateReserwation = goodDateReserwations.slice(
+                                          findCompanyStamp.countStampsToActive
+                                        );
+                                        const newUserReserwations = [
+                                          ...badDateReserwations,
+                                          ...newGoodDateReserwation,
+                                        ];
                                         resultUserDoc.stamps[
                                           findStampId
-                                        ].reserwations = [];
+                                        ].reserwations = newUserReserwations;
                                         resultUserDoc.save();
                                       }
                                     }
@@ -1178,7 +1215,6 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                       return 0;
                     });
                   }
-                  // console.log(companyDoc.happyHoursConst);
 
                   for (
                     let i = workerStartWork;
@@ -1245,7 +1281,9 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                     (item) => {
                       let timeService = "";
                       if (Number(item.time) < 60) {
-                        timeService = `0:${item}`;
+                        timeService = `0:${
+                          item.time < 10 ? `0${item.time}` : item.time
+                        }`;
                       } else {
                         const numberTime = Number(item.time);
                         const numberOfHours = Math.floor(numberTime / 60);

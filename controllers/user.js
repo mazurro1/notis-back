@@ -209,11 +209,11 @@ exports.login = (req, res, next) => {
     )
     .populate(
       "stamps.companyId",
-      "_id companyStamps services.serviceName services._id"
+      "_id linkPath companyStamps services.serviceName services._id name"
     )
     .populate(
       "stamps.reserwations",
-      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled"
+      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate"
     )
     .populate({
       path: "alerts.reserwationId",
@@ -585,11 +585,11 @@ exports.autoLogin = (req, res, next) => {
     .slice("alerts", 10)
     .populate(
       "stamps.reserwations",
-      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled"
+      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate"
     )
     .populate(
       "stamps.companyId",
-      "_id companyStamps services.serviceName services._id"
+      "_id linkPath companyStamps services.serviceName services._id name"
     )
     .populate(
       "company",
