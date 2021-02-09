@@ -12,9 +12,9 @@ const {
   TOKEN_PASSWORD,
   BCRIPT_SECURITY_VALUE,
   BCRIPT_EXPIRES_IN,
-  AWS_ACCESS_KEY_ID,
-  AWS_SECRET_ACCESS_KEY,
-  AWS_REGION,
+  AWS_ACCESS_KEY_ID_APP,
+  AWS_SECRET_ACCESS_KEY_APP,
+  AWS_REGION_APP,
   AWS_BUCKET,
   AWS_PATH_URL,
   MAIL_API_KEY,
@@ -31,9 +31,9 @@ const transporter = nodemailer.createTransport(
 );
 
 AWS.config.update({
-  accessKeyId: AWS_ACCESS_KEY_ID,
-  secretAccessKey: AWS_SECRET_ACCESS_KEY,
-  region: AWS_REGION,
+  accessKeyId: AWS_ACCESS_KEY_ID_APP,
+  secretAccessKey: AWS_SECRET_ACCESS_KEY_APP,
+  region: AWS_REGION_APP,
 });
 
 const s3Bucket = new AWS.S3({
