@@ -124,4 +124,18 @@ router.get(
   user.loginFacebook
 );
 
+router.patch(
+  "/add-company-favourites",
+  isAuth,
+  [body("companyId")],
+  user.addCompanyFavourites
+);
+
+router.patch(
+  "/delete-company-favourites",
+  isAuth,
+  [body("companyId")],
+  user.deleteCompanyFavourites
+);
+
 module.exports = router;

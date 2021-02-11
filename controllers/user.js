@@ -203,6 +203,7 @@ exports.login = (req, res, next) => {
   })
     .select("-phone -codeToVerified")
     .slice("alerts", 10)
+    .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "company",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions"
@@ -273,6 +274,7 @@ exports.login = (req, res, next) => {
               imageUrl: user.imageUrl,
               hasPhone: user.hasPhone,
               stamps: user.stamps,
+              favouritesCompanys: user.favouritesCompanys,
             });
           })
           .catch((err) => {
@@ -583,6 +585,7 @@ exports.autoLogin = (req, res, next) => {
   })
     .select("-password -phone -codeToVerified")
     .slice("alerts", 10)
+    .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "stamps.reserwations",
       "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate"
@@ -630,6 +633,7 @@ exports.autoLogin = (req, res, next) => {
           imageUrl: user.imageUrl,
           hasPhone: user.hasPhone,
           stamps: user.stamps,
+          favouritesCompanys: user.favouritesCompanys,
         });
       } else {
         res.status(422).json({
@@ -1078,6 +1082,90 @@ exports.loginFacebook = (req, res, next) => {
           throw error;
         }
       }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.addCompanyFavourites = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id favouritesCompanys")
+    .then((userDoc) => {
+      if (!!userDoc) {
+        const isInFavourites = userDoc.favouritesCompanys.some(
+          (item) => item == companyId
+        );
+        if (!isInFavourites) {
+          userDoc.favouritesCompanys.push(companyId);
+        }
+        return userDoc.save();
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Dodano do ulubionych",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.deleteCompanyFavourites = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id favouritesCompanys")
+    .then((userDoc) => {
+      if (!!userDoc) {
+        const filterUserFavourites = userDoc.favouritesCompanys.filter(
+          (item) => item != companyId
+        );
+        userDoc.favouritesCompanys = filterUserFavourites;
+        return userDoc.save();
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Usunięto z ulubionych",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {

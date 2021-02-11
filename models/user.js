@@ -82,11 +82,9 @@ const userSchema = new Schema(
     ],
     favouritesCompanys: [
       {
-        companyId: {
-          type: Schema.Types.ObjectId,
-          ref: "Companys",
-          required: false,
-        },
+        type: Schema.Types.ObjectId,
+        ref: "Companys",
+        required: false,
       },
     ],
     alertActiveCount: {
