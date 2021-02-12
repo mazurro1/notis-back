@@ -5,6 +5,7 @@ const bodyParser = require("body-parser");
 const userRoutes = require("./routes/user");
 const companyRoutes = require("./routes/company");
 const reserwationRoutes = require("./routes/reserwation");
+const availabilityRoutes = require("./routes/companyAvailability");
 const opinionRoutes = require("./routes/opinion");
 const cors = require("cors");
 const companyUsersInformationsRoutes = require("./routes/companyUsersInformations");
@@ -41,6 +42,7 @@ app.use(cors({ origin: "http://localhost:8000" }));
 app.use(userRoutes);
 app.use(companyRoutes);
 app.use(reserwationRoutes);
+app.use(availabilityRoutes);
 app.use(opinionRoutes);
 app.use(companyUsersInformationsRoutes);
 

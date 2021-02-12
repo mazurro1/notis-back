@@ -293,7 +293,7 @@ exports.getCompanyData = (req, res, next) => {
     .populate("workers.user", "name surname email imageUrl")
     .then((companyDoc) => {
       if (companyDoc) {
-        Opinion.find({
+        return Opinion.find({
           company: companyDoc._id,
         })
           .populate("user", "name")
@@ -316,7 +316,7 @@ exports.getCompanyData = (req, res, next) => {
               );
               if (!!workerSelected) {
                 const workerHasAccess = workerSelected.permissions.some(
-                  (perm) => perm === 2 || perm === 3 || perm === 4
+                  (perm) => perm === 2 || perm === 3 || perm === 4 || perm === 6
                 );
                 if (workerHasAccess) {
                   userHasPermission = true;
@@ -2649,7 +2649,7 @@ exports.companyAddConstDateHappyHour = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions owner happyHoursConst")
+    .select("_id workers.permissions workers.user owner happyHoursConst")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2715,7 +2715,7 @@ exports.companyDeleteConstDateHappyHour = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions owner happyHoursConst")
+    .select("_id workers.permissions workers.user owner happyHoursConst")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2777,7 +2777,7 @@ exports.companyUpdateConstDateHappyHour = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions owner happyHoursConst")
+    .select("_id workers.permissions workers.user owner happyHoursConst")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2850,7 +2850,7 @@ exports.companyAddPromotion = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions owner promotions")
+    .select("_id workers.permissions workers.user owner promotions")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2915,7 +2915,7 @@ exports.companyDeletePromotion = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions owner promotions")
+    .select("_id workers.permissions workers.user owner promotions")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2977,7 +2977,7 @@ exports.companyUpdatePromotion = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions owner promotions")
+    .select("_id workers.permissions workers.user owner promotions")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
