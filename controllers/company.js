@@ -316,7 +316,12 @@ exports.getCompanyData = (req, res, next) => {
               );
               if (!!workerSelected) {
                 const workerHasAccess = workerSelected.permissions.some(
-                  (perm) => perm === 2 || perm === 3 || perm === 4 || perm === 6
+                  (perm) =>
+                    perm === 2 ||
+                    perm === 3 ||
+                    perm === 4 ||
+                    perm === 6 ||
+                    perm === 7
                 );
                 if (workerHasAccess) {
                   userHasPermission = true;
@@ -435,6 +440,7 @@ exports.getCompanyData = (req, res, next) => {
                 imagesUrl: dataCompany.imagesUrl,
                 mainImageUrl: dataCompany.mainImageUrl,
                 companyStamps: dataCompany.companyStamps,
+                shopStore: dataCompany.shopStore,
               };
 
               res.status(201).json({
@@ -1184,7 +1190,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "companyStamps mainImageUrl imagesUrl workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
+      "shopStore companyStamps mainImageUrl imagesUrl workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
     )
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
@@ -1300,6 +1306,7 @@ exports.companyPath = (req, res, next) => {
               imagesUrl: resultCompanyDoc.imagesUrl,
               mainImageUrl: resultCompanyDoc.mainImageUrl,
               companyStamps: resultCompanyDoc.companyStamps,
+              shopStore: resultCompanyDoc.shopStore,
             };
 
             res.status(201).json({

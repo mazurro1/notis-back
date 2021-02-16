@@ -674,7 +674,6 @@ exports.edit = (req, res, next) => {
         //   error.statusCode = 422;
         //   throw error;
         // }
-
         return bcrypt
           .compare(password, user.password)
           .then((doMatch) => {
@@ -700,7 +699,7 @@ exports.edit = (req, res, next) => {
                 }
                 if (newPassword) {
                   return bcrypt
-                    .hash(newPassword, BCRIPT_SECURITY_VALUE)
+                    .hash(newPassword, Number(BCRIPT_SECURITY_VALUE))
                     .then((hashedPassword) => {
                       if (hashedPassword) {
                         user.password = hashedPassword;
@@ -839,7 +838,7 @@ exports.resetPassword = (req, res, next) => {
     .then((user) => {
       if (user) {
         return bcrypt
-          .hash(password, BCRIPT_SECURITY_VALUE)
+          .hash(password, Number(BCRIPT_SECURITY_VALUE))
           .then((hashedPassword) => {
             if (hashedPassword) {
               const token = jwt.sign(
@@ -1003,7 +1002,6 @@ exports.userDeleteImage = (req, res, next) => {
 };
 
 exports.loginFacebook = (req, res, next) => {
-  // console.log(req.user);
   User.findOne({
     email: req.user.emails[0].value,
   })

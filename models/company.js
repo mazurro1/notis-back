@@ -588,6 +588,38 @@ const companySchema = new Schema(
         ],
       },
     ],
+    shopStore: [
+      {
+        category: {
+          type: String,
+          required: false,
+        },
+        items: [
+          {
+            name: {
+              type: String,
+              required: false,
+            },
+            description: {
+              type: String,
+              required: false,
+            },
+            count: {
+              type: String,
+              required: false,
+            },
+            price: {
+              type: Number,
+              required: false,
+            },
+            disabled: {
+              type: Boolean,
+              required: false,
+            },
+          },
+        ],
+      },
+    ],
   },
   {
     timestamps: true,
