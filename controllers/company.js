@@ -3591,3 +3591,114 @@ exports.companyUpdateStamp = (req, res, next) => {
       next(err);
     });
 };
+
+exports.companyUpdateShopStore = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const newCategorys = req.body.newCategorys;
+  const editedCategory = req.body.editedCategory;
+  const deletedCategory = req.body.deletedCategory;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner shopStore")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      let allCompanyShopStore = [...resultCompanyDoc.shopStore];
+
+      //new items
+      if (newCategorys.length > 0) {
+        newCategorys.forEach((category) => {
+          const newCategoryData = {
+            category: category.category,
+            items: [],
+          };
+          category.items.forEach((item) => {
+            const newItem = {
+              count: item.count,
+              description: item.description,
+              disabled: item.disabled,
+              name: item.name,
+              price: item.price,
+            };
+            newCategoryData.items.push(newItem);
+          });
+          allCompanyShopStore.push(newCategoryData);
+        });
+      }
+
+      //edited items
+      if (editedCategory.length > 0) {
+        editedCategory.forEach((category) => {
+          const findIndexEditedCategory = allCompanyShopStore.findIndex(
+            (item) => item._id == category._id
+          );
+          if (findIndexEditedCategory >= 0) {
+            allCompanyShopStore[findIndexEditedCategory].items = [];
+            category.items.forEach((item) => {
+              const editedItem = {
+                count: item.count,
+                description: item.description,
+                disabled: item.disabled,
+                name: item.name,
+                price: item.price,
+              };
+              allCompanyShopStore[findIndexEditedCategory].items.push(
+                editedItem
+              );
+            });
+          }
+        });
+      }
+
+      //deleted items
+      if (deletedCategory.length > 0) {
+        const filterCompanyShopStore = allCompanyShopStore.filter(
+          (itemCompany) => {
+            const isInDeleted = deletedCategory.some(
+              (itemDeleted) => itemDeleted == itemCompany._id
+            );
+            return !isInDeleted;
+          }
+        );
+        allCompanyShopStore = filterCompanyShopStore;
+      }
+
+      resultCompanyDoc.shopStore = allCompanyShopStore;
+      return resultCompanyDoc.save();
+    })
+    .then((resultSave) => {
+      res.status(201).json({
+        shopStore: resultSave.shopStore,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas dodawania pieczątki.";
+      }
+      next(err);
+    });
+};

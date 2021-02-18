@@ -324,4 +324,14 @@ router.post(
   company.companyUpdateStamp
 );
 
+router.post(
+  "/edit-company-shop-store",
+  isAuth,
+  [body("companyId")],
+  [body("newCategorys")],
+  [body("editedCategory")],
+  [body("deletedCategory")],
+  company.companyUpdateShopStore
+);
+
 module.exports = router;
