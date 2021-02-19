@@ -1,4 +1,5 @@
 const Company = require("../models/company");
+const Reserwation = require("../models/reserwation");
 const Opinion = require("../models/opinion");
 const mongoose = require("mongoose");
 const User = require("../models/user");
@@ -766,416 +767,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
     });
 };
 
-// exports.updateCompanyProfil = (req, res, next) => {
-//   const companyId = req.body.companyId;
-//   const textAboutUs = req.body.textAboutUs;
-//   const textRezerwation = req.body.textRezerwation;
-//   const ownerSpecialization = req.body.ownerSpecialization;
-//   const editedWorkers = req.body.editedWorkers;
-//   const editedAdress = req.body.editedAdress;
-//   const editedLinks = req.body.editedLinks;
-//   const openingHours = req.body.openingHours;
-//   const companyPaused = req.body.companyPaused;
-//   const services = req.body.services;
-//   const reservationEveryTime = req.body.reservationEveryTime;
-//   const ownerSerwiceCategory = req.body.ownerSerwiceCategory;
-//   const editedWorkersHours = req.body.editedWorkersHours;
-//   const userSentId = req.userId;
-//   const deletedDayOff = req.body.deletedDayOff;
-//   const createdDayOff = req.body.createdDayOff;
-//   const reservationMonthTime = req.body.reservationMonthTime;
-//   const newIndustries = req.body.newIndustries;
-//   const deletedIndustries = req.body.deletedIndustries;
-
-//   const errors = validationResult(req);
-
-//   if (!errors.isEmpty()) {
-//     const error = new Error("Validation faild entered data is incorrect.");
-//     error.statusCode = 422;
-//     throw error;
-//   }
-
-//   Company.findOne({
-//     _id: companyId
-//   })
-//     .select(
-//       "title name pauseCompany reserationText ownerData city district adress phone linkFacebook linkInstagram linkiWebsite openingDays workers services owner daysOff reservationMonthTime companyType"
-//     )
-//     .then((companyDoc) => {
-//       if(!!companyDoc){
-//         let userHasPermission = userSentId == companyDoc.owner._id;
-//         if (!!!userHasPermission) {
-//           const workerSelected = companyDoc.workers.find(
-//             (worker) => worker.user._id == userSentId
-//           );
-//           if (!!workerSelected) {
-//             const workerHasAccess = workerSelected.permissions.some(
-//               (perm) => perm === 2 || perm === 3 || perm === 4
-//             );
-//             if (workerHasAccess) {
-//               userHasPermission = true;
-//             }
-//           }
-//         }
-//         if (userHasPermission){
-//             if (!!ownerSerwiceCategory) {
-//               companyDoc.ownerData.servicesCategory = ownerSerwiceCategory;
-//             }
-//             if (!!reservationMonthTime) {
-//               companyDoc.reservationMonthTime = reservationMonthTime;
-//             }
-//             if (!!reservationEveryTime) {
-//               companyDoc.reservationEveryTime = reservationEveryTime;
-//             }
-
-//             if (!!textAboutUs) {
-//               companyDoc.title = textAboutUs;
-//             }
-
-//             if (companyPaused !== null) {
-//               companyDoc.pauseCompany = companyPaused;
-//             }
-//             if (!!textRezerwation) {
-//               companyDoc.reserationText = textRezerwation;
-//             }
-
-//             if (!!ownerSpecialization) {
-//               companyDoc.ownerData.specialization = ownerSpecialization;
-//             }
-
-//             if (!!deletedIndustries) {
-//               const filterCompanyIndustries = [
-//                 ...companyDoc.companyType,
-//               ].filter((companyIndustries) => {
-//                 const isInDeleted = deletedIndustries.some(
-//                   (itemDeleted) => itemDeleted === companyIndustries
-//                 );
-//                 return !isInDeleted;
-//               });
-//               companyDoc.companyType = filterCompanyIndustries;
-//             }
-
-//             if (!!newIndustries) {
-//               newIndustries.forEach((industriesItem) => {
-//                 companyDoc.companyType.push(industriesItem);
-//               });
-//             }
-//             if (services.new.length > 0) {
-//               services.new.forEach((item) => {
-//                 const newItem = {
-//                   serviceCategory: item.serviceCategory,
-//                   serviceName: item.serviceName,
-//                   serviceText: item.serviceText,
-//                   serviceCost: item.serviceCost,
-//                   extraCost: item.extraCost,
-//                   time: item.time,
-//                   extraTime: item.extraTime,
-//                   serviceColor: item.serviceColor,
-//                 };
-//                 companyDoc.services.push(newItem);
-//               });
-//             }
-
-//             if (services.edited.length > 0) {
-//               const newServices = companyDoc.services.map((itemFirst) => {
-//                 const isInArray = services.edited.some((itemSecond) => {
-//                   return itemSecond._id == itemFirst._id;
-//                 });
-//                 if (isInArray) {
-//                   const findItem = services.edited.find((itemSecond) => {
-//                     return itemSecond._id == itemFirst._id;
-//                   });
-//                   findItem._id = itemFirst._id;
-//                   return findItem;
-//                 } else {
-//                   return itemFirst;
-//                 }
-//               });
-//               companyDoc.services = newServices;
-//             }
-
-//             if (services.deleted.length > 0) {
-//               const newArray = companyDoc.services.filter((itemFirst) => {
-//                 const isInArray = services.deleted.some((itemSecond) => {
-//                   return itemSecond._id == itemFirst._id;
-//                 });
-//                 return !isInArray;
-//               });
-//               companyDoc.services = newArray;
-//             }
-
-//             if (!!editedAdress) {
-//               if (!!editedAdress.companyName) {
-//                 Company.findOne({
-//                   name: editedAdress.companyName,
-//                 }).then((resultCompanyName) => {
-//                   if (!!!resultCompanyName) {
-//                     companyDoc.name = editedAdress.companyName;
-//                   } else {
-//                     const error = new Error("Nazwa firmy jest zajęta.");
-//                     error.statusCode = 403;
-//                     throw error;
-//                   }
-//                 });
-//               }
-//               if (!!editedAdress.city) {
-//                 companyDoc.city = editedAdress.city;
-//               }
-
-//               if (!!editedAdress.discrict) {
-//                 companyDoc.district = editedAdress.discrict;
-//               }
-
-//               if (!!editedAdress.adress) {
-//                 const hashedAdress = Buffer.from(
-//                   editedAdress.adress,
-//                   "utf-8"
-//                 ).toString("base64");
-//                 companyDoc.adress = hashedAdress;
-//               }
-
-//               if (!!editedAdress.phone) {
-//                 const hashedPhoneNumber = Buffer.from(
-//                   editedAdress.phone,
-//                   "utf-8"
-//                 ).toString("base64");
-//                 companyDoc.phone = hashedPhoneNumber;
-//               }
-//             }
-
-//             if (!!editedLinks) {
-//               if (editedLinks.facebook !== null) {
-//                 companyDoc.linkFacebook = editedLinks.facebook;
-//               }
-
-//               if (editedLinks.instagram !== null) {
-//                 companyDoc.linkInstagram = editedLinks.instagram;
-//               }
-
-//               if (editedLinks.website !== null) {
-//                 companyDoc.linkiWebsite = editedLinks.website;
-//               }
-//             }
-//             if (openingHours) {
-//               openingHours.forEach((item) => {
-//                 companyDoc.openingDays[item.dayMonth].disabled = item.disabled;
-//                 companyDoc.openingDays[item.dayMonth].start = item.start;
-//                 companyDoc.openingDays[item.dayMonth].end = item.end;
-//               });
-//             }
-//             if (!!deletedDayOff) {
-//               const filterDAysOff = companyDoc.daysOff.filter((item) => {
-//                 const isInDeleted = deletedDayOff.some((itemDayOff) => {
-//                   return itemDayOff == item._id;
-//                 });
-//                 return !isInDeleted;
-//               });
-//               companyDoc.daysOff = filterDAysOff;
-//             }
-
-//             if (!!createdDayOff) {
-//               createdDayOff.forEach((itemCreated) => {
-//                 const newDayOff = {
-//                   day: itemCreated.day,
-//                   month: itemCreated.month,
-//                   year: itemCreated.year,
-//                 };
-//                 companyDoc.daysOff.push(newDayOff);
-//               });
-//             }
-//             if (!!editedWorkers) {
-//               editedWorkers.forEach((workerEdited) => {
-//                 companyDoc.workers.forEach((worker, index) => {
-//                   if (worker._id == workerEdited.indexWorker) {
-//                     if (!!workerEdited.specializationText) {
-//                       companyDoc.workers[index].specialization =
-//                         workerEdited.specializationText;
-//                     }
-//                     if (!!workerEdited.servicesCategory) {
-//                       companyDoc.workers[index].servicesCategory =
-//                         workerEdited.servicesCategory;
-//                     }
-//                     if (!!workerEdited.permissions) {
-//                       companyDoc.workers[index].permissions =
-//                         workerEdited.permissions;
-//                     }
-//                   }
-//                 });
-//               });
-//             }
-//             if (editedWorkersHours.length > 0) {
-//               const findOwnerWorkersHours = editedWorkersHours.find(
-//                 (itemHours) => itemHours.indexWorker == companyDoc.owner
-//               );
-
-//               if (!!findOwnerWorkersHours) {
-//                 if (findOwnerWorkersHours.constantWorkingHours.length > 0) {
-//                   findOwnerWorkersHours.constantWorkingHours.forEach(
-//                     (constDate) => {
-//                       const dateIsInBackend = companyDoc.ownerData.constantWorkingHours.findIndex(
-//                         (item) => item.dayOfTheWeek === constDate.dayOfTheWeek
-//                       );
-//                       if (dateIsInBackend >= 0) {
-//                         companyDoc.ownerData.constantWorkingHours[
-//                           dateIsInBackend
-//                         ] = constDate;
-//                       } else {
-//                         companyDoc.ownerData.constantWorkingHours.push(
-//                           constDate
-//                         );
-//                       }
-//                     }
-//                   );
-//                 }
-//                 if (
-//                   findOwnerWorkersHours.noConstantWorkingHours.deletedEventsIds
-//                     .length > 0
-//                 ) {
-//                   const filterCompanyWorkersNoConstDate = companyDoc.ownerData.noConstantWorkingHours.filter(
-//                     (companyNoConstWorkingHour) => {
-//                       const isInDeleted = findOwnerWorkersHours.noConstantWorkingHours.deletedEventsIds.some(
-//                         (itemWorkerEditedDeleted) => {
-//                           return (
-//                             itemWorkerEditedDeleted ==
-//                             companyNoConstWorkingHour._id
-//                           );
-//                         }
-//                       );
-//                       return !isInDeleted;
-//                     }
-//                   );
-//                   companyDoc.ownerData.noConstantWorkingHours = filterCompanyWorkersNoConstDate;
-//                 }
-//                 if (
-//                   findOwnerWorkersHours.noConstantWorkingHours.newEvents
-//                     .length > 0
-//                 ) {
-//                   findOwnerWorkersHours.noConstantWorkingHours.newEvents.forEach(
-//                     (noConstDate) => {
-//                       const newNoConstDateToSave = {
-//                         fullDate: noConstDate.fullDate,
-//                         holidays: noConstDate.holidays,
-//                         start: noConstDate.start,
-//                         end: noConstDate.end,
-//                       };
-//                       companyDoc.ownerData.noConstantWorkingHours.push(
-//                         newNoConstDateToSave
-//                       );
-//                     }
-//                   );
-//                 }
-//               }
-
-//               const filterWorkerWorkersHours = editedWorkersHours.filter(
-//                 (itemHours) => itemHours.indexWorker != companyDoc.owner
-//               );
-//               if (!!filterWorkerWorkersHours) {
-//                 filterWorkerWorkersHours.forEach((workerEdited) => {
-//                   companyDoc.workers.forEach((worker, index) => {
-//                     if (worker._id == workerEdited.indexWorker) {
-//                       if (workerEdited.constantWorkingHours.length > 0) {
-//                         workerEdited.constantWorkingHours.forEach(
-//                           (constDate) => {
-//                             const dateIsInBackend = companyDoc.workers[
-//                               index
-//                             ].constantWorkingHours.findIndex(
-//                               (item) =>
-//                                 item.dayOfTheWeek === constDate.dayOfTheWeek
-//                             );
-//                             if (dateIsInBackend >= 0) {
-//                               companyDoc.workers[index].constantWorkingHours[
-//                                 dateIsInBackend
-//                               ].dayOfTheWeek = constDate.dayOfTheWeek;
-//                               companyDoc.workers[index].constantWorkingHours[
-//                                 dateIsInBackend
-//                               ].startWorking = constDate.startWorking;
-//                               companyDoc.workers[index].constantWorkingHours[
-//                                 dateIsInBackend
-//                               ].endWorking = constDate.endWorking;
-//                               companyDoc.workers[index].constantWorkingHours[
-//                                 dateIsInBackend
-//                               ].disabled = constDate.disabled;
-//                             } else {
-//                               companyDoc.workers[
-//                                 index
-//                               ].constantWorkingHours.push(constDate);
-//                             }
-//                           }
-//                         );
-//                       }
-//                       if (
-//                         workerEdited.noConstantWorkingHours.deletedEventsIds
-//                           .length > 0
-//                       ) {
-//                         const filterCompanyWorkersNoConstDate = worker.noConstantWorkingHours.filter(
-//                           (companyNoConstWorkingHour) => {
-//                             const isInDeleted = workerEdited.noConstantWorkingHours.deletedEventsIds.some(
-//                               (itemWorkerEditedDeleted) => {
-//                                 return (
-//                                   itemWorkerEditedDeleted ==
-//                                   companyNoConstWorkingHour._id
-//                                 );
-//                               }
-//                             );
-//                             return !isInDeleted;
-//                           }
-//                         );
-//                         companyDoc.workers[
-//                           index
-//                         ].noConstantWorkingHours = filterCompanyWorkersNoConstDate;
-//                       }
-//                       if (
-//                         workerEdited.noConstantWorkingHours.newEvents.length > 0
-//                       ) {
-//                         workerEdited.noConstantWorkingHours.newEvents.forEach(
-//                           (noConstDate) => {
-//                             const newNoConstDateToSave = {
-//                               fullDate: noConstDate.fullDate,
-//                               holidays: noConstDate.holidays,
-//                               start: noConstDate.start,
-//                               end: noConstDate.end,
-//                             };
-//                             companyDoc.workers[
-//                               index
-//                             ].noConstantWorkingHours.push(newNoConstDateToSave);
-//                           }
-//                         );
-//                       }
-//                     }
-//                   });
-//                 });
-//               }
-//             }
-//             return companyDoc.save();
-//           } else {
-//             const error = new Error(
-//               "Brak uprawnień do aktualizacji danych firmowych."
-//             );
-//             error.statusCode = 403;
-//             throw error;
-//           }
-//         }else{
-//            const error = new Error(
-//              "Brak firmy"
-//            );
-//            error.statusCode = 422;
-//            throw error;
-//         }
-//     })
-//     .then(() => {
-//       res.status(201).json({
-//         message: "Zaktualizowano profil firmowy",
-//       });
-//     })
-//     .catch((err) => {
-//       if (!err.statusCode) {
-//         err.statusCode = 501;
-//         err.message = "Błąd podczas aktualizwoania danych firmy.";
-//       }
-//       next(err);
-//     });
-// };
-
 exports.companyPath = (req, res, next) => {
   const companyPath = req.body.companyPath;
   const errors = validationResult(req);
@@ -1190,7 +781,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "shopStore companyStamps mainImageUrl imagesUrl workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
+      "shopStore companyStamps mainImageUrl imagesUrl workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
     )
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
@@ -3692,6 +3283,68 @@ exports.companyUpdateShopStore = (req, res, next) => {
     .then((resultSave) => {
       res.status(201).json({
         shopStore: resultSave.shopStore,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas dodawania pieczątki.";
+      }
+      next(err);
+    });
+};
+
+exports.companyStatistics = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const months = req.body.months;
+  const year = req.body.year;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then(() => {
+      return Reserwation.find({
+        company: companyId,
+        dateYear: year,
+        workerReserwation: false,
+        dateMonth: { $in: months },
+      })
+        .select(
+          "company dateYear dateMonth dateDay costReserwation visitNotFinished visitCanceled visitChanged activePromotion activeHappyHour activeStamp fullDate toWorkerUserId dateEnd"
+        )
+        .populate("toWorkerUserId", "name surname")
+        .sort({ fullDate: 1 })
+        .then((resultReserwation) => {
+          return resultReserwation;
+        });
+    })
+    .then((resultSave) => {
+      res.status(201).json({
+        stats: resultSave,
       });
     })
     .catch((err) => {

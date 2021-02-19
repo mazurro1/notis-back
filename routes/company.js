@@ -92,30 +92,6 @@ router.post(
   company.companyUsersInformationsBlock
 );
 
-// router.patch(
-//   "/update-company-profil",
-//   isAuth,
-//   [body("companyId").trim().isLength({ min: 5 })],
-//   [body("textAboutUs")],
-//   [body("textRezerwation")],
-//   [body("ownerSpecialization")],
-//   [body("editedWorkers")],
-//   [body("editedAdress")],
-//   [body("editedLinks")],
-//   [body("openingHours")],
-//   [body("services")],
-//   [body("companyPaused")],
-//   [body("reservationEveryTime")],
-//   [body("reservationMonthTime")],
-//   [body("ownerSerwiceCategory")],
-//   [body("deletedDayOff")],
-//   [body("createdDayOff")],
-//   [body("newIndustries")],
-//   [body("deletedIndustries")],
-//   [body("editedWorkersHours")],
-//   company.updateCompanyProfil
-// );
-
 router.patch(
   "/company-services-patch",
   isAuth,
@@ -332,6 +308,15 @@ router.post(
   [body("editedCategory")],
   [body("deletedCategory")],
   company.companyUpdateShopStore
+);
+
+router.post(
+  "/get-company-statistics",
+  isAuth,
+  [body("companyId")],
+  [body("months")],
+  [body("year")],
+  company.companyStatistics
 );
 
 module.exports = router;

@@ -56,7 +56,7 @@ const reserwationSchema = new Schema({
   },
 
   costReserwation: {
-    type: String,
+    type: Number,
     required: true,
   },
 
