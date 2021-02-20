@@ -3309,7 +3309,7 @@ exports.companyStatistics = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id owner")
+    .select("_id owner services.serviceName services._id")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -3326,7 +3326,7 @@ exports.companyStatistics = (req, res, next) => {
         throw error;
       }
     })
-    .then(() => {
+    .then((resultCompanyDoc) => {
       return Reserwation.find({
         company: companyId,
         dateYear: year,
@@ -3334,17 +3334,21 @@ exports.companyStatistics = (req, res, next) => {
         dateMonth: { $in: months },
       })
         .select(
-          "company dateYear dateMonth dateDay costReserwation visitNotFinished visitCanceled visitChanged activePromotion activeHappyHour activeStamp fullDate toWorkerUserId dateEnd"
+          "company serviceId dateYear dateMonth dateDay costReserwation visitNotFinished visitCanceled visitChanged activePromotion activeHappyHour activeStamp fullDate toWorkerUserId dateEnd"
         )
         .populate("toWorkerUserId", "name surname")
         .sort({ fullDate: 1 })
         .then((resultReserwation) => {
-          return resultReserwation;
+          return {
+            resultReserwation: resultReserwation,
+            services: resultCompanyDoc.services,
+          };
         });
     })
     .then((resultSave) => {
       res.status(201).json({
-        stats: resultSave,
+        stats: resultSave.resultReserwation,
+        services: resultSave.services,
       });
     })
     .catch((err) => {
