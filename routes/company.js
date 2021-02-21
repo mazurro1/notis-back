@@ -9,7 +9,7 @@ const fileUpload = require("../middleware/file-uploads");
 router.post(
   "/company-registration",
   isAuth,
-  [body("companyEmail").isEmail().normalizeEmail()],
+  [body("companyEmail").isEmail()],
   [body("companyName").trim().isLength({ min: 5 })],
   [body("companyNumber").trim().isLength({ min: 9 })],
   [body("companyCity").trim().isLength({ min: 3 })],
@@ -44,7 +44,7 @@ router.post(
   "/sent-email-to-active-company-worker",
   isAuth,
   [body("companyId").trim().isLength({ min: 5 })],
-  [body("emailWorker").isEmail().normalizeEmail()],
+  [body("emailWorker").isEmail()],
   company.sentEmailToActiveCompanyWorker
 );
 
@@ -52,7 +52,7 @@ router.post(
   "/sent-again-email-to-active-company-worker",
   isAuth,
   [body("companyId").trim().isLength({ min: 5 })],
-  [body("emailWorker").isEmail().normalizeEmail()],
+  [body("emailWorker").isEmail()],
   company.sentAgainEmailToActiveCompanyWorker
 );
 
@@ -68,7 +68,7 @@ router.post(
   "/delete-worker-from-company",
   isAuth,
   [body("companyId").trim().isLength({ min: 5 })],
-  [body("workerEmail").isEmail().normalizeEmail()],
+  [body("workerEmail").isEmail()],
   company.deleteWorkerFromCompany
 );
 

@@ -62,7 +62,7 @@ router.patch(
 
 router.post(
   "/sent-email-reset-password",
-  [body("email").isEmail().normalizeEmail()],
+  [body("email").isEmail()],
   user.sentEmailResetPassword
 );
 
@@ -75,7 +75,7 @@ router.post(
 
 router.post(
   "/reset-password",
-  [body("email").isEmail().normalizeEmail()],
+  [body("email").isEmail()],
   [body("password").trim().isLength({ min: 5 })],
   [body("codeReset").trim().isLength({ min: 5 })],
   user.resetPassword

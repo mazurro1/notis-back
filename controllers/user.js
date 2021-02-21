@@ -93,9 +93,9 @@ exports.registration = (req, res, next) => {
   }
 
   User.findOne({ email: email })
-    .select("-phone -password")
+    .select("email _id")
     .then((userDoc) => {
-      if (!userDoc) {
+      if (!!!userDoc) {
         return bcrypt
           .hash(password, Number(BCRIPT_EXPIRES_IN))
           .then((hashedPassword) => {
@@ -201,7 +201,9 @@ exports.login = (req, res, next) => {
   User.findOne({
     email: email,
   })
-    .select("-phone -codeToVerified")
+    .select(
+      "email _id imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified hasCompany alertActiveCount"
+    )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
@@ -226,7 +228,7 @@ exports.login = (req, res, next) => {
       },
     })
     .then((user) => {
-      if (user) {
+      if (!!user) {
         bcrypt
           .compare(password, user.password)
           .then((doMatch) => {
@@ -305,21 +307,27 @@ exports.sentAgainVerifiedEmail = (req, res, next) => {
     _id: userId,
     accountVerified: false,
   })
-    .select("-phone -name -surname -password -loginToken")
+    .select("_id accountVerified codeToVerified email")
     .then((user) => {
-      const unhashedCodeToVerified = Buffer.from(
-        user.codeToVerified,
-        "base64"
-      ).toString("ascii");
-      transporter.sendMail({
-        to: user.email,
-        from: "nootis.help@gmail.com",
-        subject: "Tworzenie konta zakończone powodzeniem",
-        html: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified}`,
-      });
-      res.status(201).json({
-        message: "Email został wysłany",
-      });
+      if (!!user) {
+        const unhashedCodeToVerified = Buffer.from(
+          user.codeToVerified,
+          "base64"
+        ).toString("ascii");
+        transporter.sendMail({
+          to: user.email,
+          from: "nootis.help@gmail.com",
+          subject: "Tworzenie konta zakończone powodzeniem",
+          html: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified}`,
+        });
+        res.status(201).json({
+          message: "Email został wysłany",
+        });
+      } else {
+        const error = new Error("Brak użytkownika");
+        error.statusCode = 502;
+        throw error;
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -336,16 +344,22 @@ exports.getUserPhone = (req, res, next) => {
   User.findOne({
     _id: userId,
   })
-    .select("-name -surname -password -loginToken -password -email")
+    .select("_id phone")
     .then((user) => {
-      if (!!user.phone) {
-        const userPhone = Buffer.from(user.phone, "base64").toString("ascii");
-        res.status(201).json({
-          userPhone: userPhone,
-        });
+      if (!!user) {
+        if (!!user.phone) {
+          const userPhone = Buffer.from(user.phone, "base64").toString("ascii");
+          res.status(201).json({
+            userPhone: userPhone,
+          });
+        } else {
+          const error = new Error("Brak numeru telefonu.");
+          error.statusCode = 401;
+          throw error;
+        }
       } else {
-        const error = new Error("Brak numeru telefonu.");
-        error.statusCode = 401;
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 502;
         throw error;
       }
     })
@@ -439,9 +453,9 @@ exports.veryfiedEmail = (req, res, next) => {
     _id: userId,
     accountVerified: false,
   })
-    .select("-phone -name -surname -password -loginToken -email")
+    .select("_id accountVerified codeToVerified hasCompany company")
     .then((user) => {
-      if (user) {
+      if (!!user) {
         const unhashedCodeToVerified = Buffer.from(
           user.codeToVerified,
           "base64"
@@ -494,7 +508,7 @@ exports.resetAllerts = (req, res, next) => {
     .select("alerts _id alertActiveCount")
     .where({ "alerts.active": true })
     .then((user) => {
-      if (user) {
+      if (!!user) {
         user.alerts.forEach((alert, index) => {
           user.alerts[index].active = false;
         });
@@ -548,7 +562,7 @@ exports.getMoreAlerts = (req, res, next) => {
       },
     })
     .then((user) => {
-      if (user) {
+      if (!!user) {
         res.status(200).json({
           newAllerts: user.alerts,
         });
@@ -583,7 +597,9 @@ exports.autoLogin = (req, res, next) => {
     _id: userId,
     loginToken: token,
   })
-    .select("-password -phone -codeToVerified")
+    .select(
+      "_id loginToken favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified hasCompany imageUrl hasPhone"
+    )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
@@ -608,7 +624,7 @@ exports.autoLogin = (req, res, next) => {
       },
     })
     .then((user) => {
-      if (user) {
+      if (!!user) {
         const userName = Buffer.from(user.name, "base64").toString("ascii");
         const userSurname = Buffer.from(user.surname, "base64").toString(
           "ascii"
@@ -666,9 +682,11 @@ exports.edit = (req, res, next) => {
   User.findOne({
     _id: userId,
   })
-    .select("-codeToVerified")
+    .select(
+      "_id password email loginToken phone name surname accountVerified hasCompany company"
+    )
     .then((user) => {
-      if (user) {
+      if (!!user) {
         // if (user.email === newEmail) {
         //   const error = new Error("Email jest taki sam");
         //   error.statusCode = 422;
@@ -729,20 +747,10 @@ exports.edit = (req, res, next) => {
       }
     })
     .then((result) => {
-      const userName = Buffer.from(result.name, "base64").toString("ascii");
-      const userSurname = Buffer.from(result.surname, "base64").toString(
-        "ascii"
-      );
       const userPhone = Buffer.from(result.phone, "base64").toString("ascii");
       res.status(201).json({
-        userId: result._id.toString(),
         email: result.email,
-        userName: userName,
-        userSurname: userSurname,
         token: result.loginToken,
-        accountVerified: result.accountVerified,
-        hasCompany: result.hasCompany,
-        company: result.company,
         userPhone: userPhone,
       });
     })
@@ -758,7 +766,6 @@ exports.edit = (req, res, next) => {
 
 exports.sentEmailResetPassword = (req, res, next) => {
   const email = req.body.email;
-
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -770,9 +777,9 @@ exports.sentEmailResetPassword = (req, res, next) => {
   User.findOne({
     email: email,
   })
-    .select("-password -phone -codeToVerified")
+    .select("email codeToResetPassword")
     .then((user) => {
-      if (user) {
+      if (!!user) {
         if (!!!user.codeToResetPassword) {
           const codeToReset = Math.floor(
             10000 + Math.random() * 90000
@@ -834,9 +841,9 @@ exports.resetPassword = (req, res, next) => {
     email: email,
     codeToResetPassword: codeToResetPassword,
   })
-    .select("-phone -codeToVerified")
+    .select("email codeToResetPassword _id loginToken password")
     .then((user) => {
-      if (user) {
+      if (!!user) {
         return bcrypt
           .hash(password, Number(BCRIPT_SECURITY_VALUE))
           .then((hashedPassword) => {
@@ -865,7 +872,7 @@ exports.resetPassword = (req, res, next) => {
         throw error;
       }
     })
-    .then((result) => {
+    .then(() => {
       res.status(200).json({
         message: "Hasło zostało zmienione",
       });
@@ -896,13 +903,19 @@ exports.addCompanyId = (req, res, next) => {
     company: null,
     hasCompany: false,
   })
-    .select("-name -surname -password -loginToken -password -email -phone")
+    .select("_id company hasCompany")
     .then((user) => {
-      user.company = companyId;
-      user.hasCompany = true;
-      return user.save();
+      if (!!user) {
+        user.company = companyId;
+        user.hasCompany = true;
+        return user.save();
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 502;
+        throw error;
+      }
     })
-    .then((result) => {
+    .then(() => {
       res.status(201).json({
         message: "Dodano firmę użytkownikowi",
       });
@@ -972,20 +985,26 @@ exports.userDeleteImage = (req, res, next) => {
   })
     .select("_id imageUrl")
     .then((userDoc) => {
-      return s3Bucket.deleteObject(
-        {
-          Bucket: AWS_BUCKET,
-          Key: imagePath,
-        },
-        function (err, data) {
-          if (err) {
-            res.status(500).send(error);
-          } else {
-            userDoc.imageUrl = "";
-            return userDoc.save();
+      if (!!userDoc) {
+        return s3Bucket.deleteObject(
+          {
+            Bucket: AWS_BUCKET,
+            Key: imagePath,
+          },
+          function (err, data) {
+            if (err) {
+              res.status(500).send(error);
+            } else {
+              userDoc.imageUrl = "";
+              return userDoc.save();
+            }
           }
-        }
-      );
+        );
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 502;
+        throw error;
+      }
     })
     .then(() => {
       res.status(201).json({

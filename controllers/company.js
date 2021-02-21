@@ -8,6 +8,7 @@ const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const getImgBuffer = require("../getImgBuffer");
 require("dotenv").config();
+const io = require("../socket");
 
 const {
   AWS_ACCESS_KEY_ID_APP,
@@ -528,7 +529,7 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
                 to: emailWorker,
                 from: "nootis.help@gmail.com",
                 subject: `Potwierdzenie dodania do listy pracowników w firmie ${result.name}`,
-                html: `<h1>Kliknij link aby potwierdzić</h1> <a href="http://www.localhost:8000/confirm-added-worker-to-company/${result._id}/${hashedEmail}/${hashedRandomValue}">kliknij tutaj</a>`,
+                html: `<h1>Kliknij link aby potwierdzić</h1> <a href="http://localhost:8000/confirm-added-worker-to-company/${result._id}/${hashedEmail}/${hashedRandomValue}">kliknij tutaj</a>`,
                 // html: `<h1>Kliknij link aby potwierdzić</h1> <a href="http://www.localhost:3000/confirm-added-worker-to-company/${result._id}/${hashedEmail}/${randomValue}">kliknij tutaj</a>`,
               });
 
@@ -590,13 +591,13 @@ exports.sentAgainEmailToActiveCompanyWorker = (req, res, next) => {
             "base64"
           );
           console.log(
-            `http://www.localhost:8000/confirm-added-worker-to-company/${companyData._id}/${hashedEmail}/${thisWorker.codeToActive}`
+            `http://localhost:8000/confirm-added-worker-to-company/${companyData._id}/${hashedEmail}/${thisWorker.codeToActive}`
           );
           transporter.sendMail({
             to: emailWorker,
             from: "nootis.help@gmail.com",
             subject: `Potwierdzenie dodania do listy pracowników w firmie ${companyData.name}`,
-            html: `<h1>Kliknij link aby potwierdzić</h1> <a href="http://www.localhost:8000/confirm-added-worker-to-company/${companyData._id}/${hashedEmail}/${thisWorker.codeToActive}">kliknij tutaj</a>`,
+            html: `<h1>Kliknij link aby potwierdzić</h1> <a href="http://localhost:8000/confirm-added-worker-to-company/${companyData._id}/${hashedEmail}/${thisWorker.codeToActive}">kliknij tutaj</a>`,
           });
 
           res.status(201).json({
@@ -723,6 +724,7 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
 };
 
 exports.deleteWorkerFromCompany = (req, res, next) => {
+  const userId = req.userId;
   const companyId = req.body.companyId;
   const workerEmail = req.body.workerEmail;
   const errors = validationResult(req);
@@ -738,19 +740,135 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
   })
     .select("name workers email _id owner email")
     .then((companyDoc) => {
-      const allWorkers = companyDoc.workers.filter((worker) => {
-        return worker.email !== workerEmail;
-      });
-      companyDoc.workers = allWorkers;
-      return companyDoc.save();
+      if (!!companyDoc) {
+        if (companyDoc.owner == userId) {
+          const allWorkers = companyDoc.workers.filter((worker) => {
+            return worker.email !== workerEmail;
+          });
+          companyDoc.workers = allWorkers;
+          return companyDoc.save();
+        } else {
+          const error = new Error("Brak uprawnień.");
+          error.statusCode = 501;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak firmy.");
+        error.statusCode = 501;
+        throw error;
+      }
     })
     .then(() => {
-      User.findOne({
+      return User.findOne({
         email: workerEmail,
-      }).then((userDoc) => {
-        userDoc.hasCompany = false;
-        userDoc.company = null;
-        return userDoc.save();
+      })
+        .select("email _id")
+        .then((userDoc) => {
+          if (!!userDoc) {
+            userDoc.hasCompany = false;
+            userDoc.company = null;
+            return userDoc.save();
+          } else {
+            const error = new Error("Nie znaleziono pracownika.");
+            error.statusCode = 501;
+            throw error;
+          }
+        });
+    })
+    .then((userDoc) => {
+      const actualDay = new Date();
+      return Reserwation.find({
+        toWorkerUserId: userDoc._id,
+        company: companyId,
+        dateYear: actualDay.getFullYear(),
+        visitNotFinished: false,
+        visitCanceled: false,
+      })
+        .select(
+          "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName"
+        )
+        .populate({
+          path: "company fromUser",
+          select: "name surname linkPath",
+        })
+        .then((allWorkerReserwations) => {
+          const allUsersReserwations = [];
+          if (!!allWorkerReserwations) {
+            allWorkerReserwations.forEach((item) => {
+              const splitDateStart = item.dateStart.split(":");
+              const reserwationDate = new Date(
+                item.dateYear,
+                item.dateMonth - 1,
+                item.dateDay,
+                Number(splitDateStart[0]),
+                Number(splitDateStart[1])
+              );
+              if (reserwationDate > actualDay) {
+                item.visitCanceled = true;
+                item.save();
+                const findUserReserwations = allUsersReserwations.findIndex(
+                  (reserwation) => reserwation.userId == item.fromUser._id
+                );
+                if (findUserReserwations >= 0) {
+                  allUsersReserwations[findUserReserwations].items.push(item);
+                } else {
+                  const newUserData = {
+                    userId: item.fromUser._id,
+                    items: [item],
+                  };
+                  allUsersReserwations.push(newUserData);
+                }
+              }
+            });
+            return allUsersReserwations;
+          }
+        });
+    })
+    .then((result) => {
+      result.forEach((userDoc) => {
+        User.findOne({
+          _id: userDoc.userId,
+        })
+          .select("_id alerts")
+          .then((userReserwationDoc) => {
+            if (!!userReserwationDoc) {
+              const allUserAlertsToSave = [];
+
+              userDoc.items.forEach((itemReserwation) => {
+                const userAlertToSave = {
+                  reserwationId: itemReserwation._id,
+                  active: true,
+                  type: "rezerwation_canceled",
+                  creationTime: new Date(),
+                  companyChanged: true,
+                };
+
+                allUserAlertsToSave.push(userAlertToSave);
+
+                io.getIO().emit(`user${userReserwationDoc._id}`, {
+                  action: "update-alerts",
+                  alertData: {
+                    reserwationId: itemReserwation,
+                    active: true,
+                    type: "rezerwation_canceled",
+                    creationTime: new Date(),
+                    companyChanged: true,
+                  },
+                });
+              });
+
+              userReserwationDoc.alerts.unshift(...allUserAlertsToSave);
+
+              const countAlertsActiveValid = !!userReserwationDoc.alertActiveCount
+                ? userReserwationDoc.alertActiveCount
+                : 0;
+              userReserwationDoc.userReserwationDoc =
+                countAlertsActiveValid + allUserAlertsToSave.length;
+
+              userReserwationDoc.save();
+            }
+          });
+        return true;
       });
     })
     .then(() => {
@@ -1685,17 +1803,30 @@ exports.companyWorkersNoConstData = (req, res, next) => {
   ])
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
-        let hasPermission = resultCompanyDoc[0].owner == userId;
-        if (!hasPermission) {
-          hasPermission = resultCompanyDoc[0].workers.permissions.some(
-            (perm) => perm === 4
-          );
-        }
-        if (hasPermission) {
-          return resultCompanyDoc;
+        const findWorkerResultId = resultCompanyDoc.findIndex((item) => {
+          return item.workers._id == workerId;
+        });
+        if (findWorkerResultId >= 0) {
+          let hasPermission =
+            resultCompanyDoc[findWorkerResultId].owner == userId;
+          if (!hasPermission) {
+            hasPermission = resultCompanyDoc[
+              findWorkerResultId
+            ].workers.permissions.some((perm) => perm === 4);
+          }
+          if (hasPermission) {
+            return {
+              resultCompanyDoc: resultCompanyDoc,
+              findWorkerResultId: findWorkerResultId,
+            };
+          } else {
+            const error = new Error("Brak dostępu.");
+            error.statusCode = 401;
+            throw error;
+          }
         } else {
-          const error = new Error("Brak dostępu.");
-          error.statusCode = 401;
+          const error = new Error("Brak pracownika.");
+          error.statusCode = 403;
           throw error;
         }
       } else {
@@ -1704,9 +1835,11 @@ exports.companyWorkersNoConstData = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultCompanyDoc) => {
+    .then((result) => {
       res.status(201).json({
-        noConstWorkingHours: resultCompanyDoc[0].workers.noConstantWorkingHours,
+        noConstWorkingHours:
+          result.resultCompanyDoc[result.findWorkerResultId].workers
+            .noConstantWorkingHours,
       });
     })
     .catch((err) => {
