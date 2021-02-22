@@ -87,6 +87,9 @@ router.post(
   "/all-companys-type",
   [body("page").trim()],
   [body("type").trim()],
+  [body("sorts")],
+  [body("filters")],
+  [body("localization")],
   company.allCompanysOfType
 );
 

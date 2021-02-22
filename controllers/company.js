@@ -1144,75 +1144,41 @@ exports.allCompanys = (req, res, next) => {
     });
 };
 
-/*
-exports.allCompanys = (req, res, next) => {
-  const page = req.body.page;
-  const errors = validationResult(req);
-
-  if (!errors.isEmpty()) {
-    const error = new Error("Validation faild entered data is incorrect.");
-    error.statusCode = 422;
-    throw error;
-  }
-
-  Company.find({
-    // pauseCompany: false,
-  })
-    .select(
-      "adress city district linkPath name pauseCompany reserationText services title opinionsCount opinionsValue mainImageUrl imagesUrl"
-    )
-    .skip((page - 1) * 10)
-    .limit(10)
-    .then((resultCompanyDoc) => {
-      if (resultCompanyDoc.length > 0) {
-        const allCompanysToSent = [];
-        resultCompanyDoc.forEach((itemCompany) => {
-          const unhashedAdress = Buffer.from(
-            itemCompany.adress,
-            "base64"
-          ).toString("ascii");
-
-          const dataToSent = {
-            adress: unhashedAdress,
-            city: itemCompany.city,
-            district: itemCompany.district,
-            linkPath: itemCompany.linkPath,
-            name: itemCompany.name,
-            services: itemCompany.services,
-            title: itemCompany.title,
-            _id: itemCompany._id,
-            mainImageUrl: itemCompany.mainImageUrl,
-            imagesUrl: itemCompany.imagesUrl,
-            opinionsCount: !!itemCompany.opinionsCount
-              ? itemCompany.opinionsCount
-              : 0,
-            opinionsValue: !!itemCompany.opinionsValue
-              ? itemCompany.opinionsValue
-              : 0,
-          };
-          allCompanysToSent.push(dataToSent);
-        });
-        res.status(201).json({
-          companysDoc: allCompanysToSent,
-        });
-      } else {
-        const error = new Error("Brak dancyh do pobrania.");
-        error.statusCode = 403;
-        throw error;
-      }
-    })
-    .catch((err) => {
-      if (!err.statusCode) {
-        err.statusCode = 501;
-        err.message = "Błąd podczas pobierania danych.";
-      }
-      next(err);
-    });
-};*/
-
 exports.allCompanysOfType = (req, res, next) => {
   const page = req.body.page;
   const type = req.body.type;
+  const sorts = req.body.sorts;
+  const filters = req.body.filters;
+  const localization = req.body.localization;
+
+  const localizationValid = !!localization ? localization.value : null;
+  const filtersValid = !!filters ? filters.value : null;
+  const regexFilterCity = new RegExp(
+    ["^", localizationValid, "$"].join(""),
+    "i"
+  );
+  const regexFilterFilters = new RegExp(["^", filtersValid, "$"].join(""), "i");
+
+  const propsFilterCity = !!localizationValid
+    ? { city: { $in: [regexFilterCity] } }
+    : {};
+  const propsFilterFilters = !!filtersValid
+    ? { "services.serviceName": { $in: [regexFilterFilters] } }
+    : {};
+
+  const sortValid = !!sorts ? sorts.value : null;
+  const propsSort = !!sortValid
+    ? sortValid === "aToZ"
+      ? { name: 1 }
+      : sortValid === "zToA"
+      ? { name: -1 }
+      : sortValid === "mostlyRated"
+      ? { opinionsCount: -1 }
+      : sortValid === ""
+      ? { opinionsValue: -1 }
+      : {}
+    : {};
+
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -1221,12 +1187,13 @@ exports.allCompanysOfType = (req, res, next) => {
     throw error;
   }
 
-  Company.find({ companyType: type })
+  Company.find({ companyType: type, ...propsFilterCity, ...propsFilterFilters })
     .select(
       "adress city district linkPath name services title opinionsCount opinionsValue mainImageUrl imagesUrl"
     )
     .skip((page - 1) * 10)
     .limit(10)
+    .sort(propsSort)
     .then((resultCompanyDoc) => {
       if (resultCompanyDoc.length > 0) {
         const allCompanysToSent = [];
