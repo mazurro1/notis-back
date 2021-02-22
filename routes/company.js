@@ -80,6 +80,7 @@ router.post(
   [body("sorts")],
   [body("filters")],
   [body("localization")],
+  [body("selectedName")],
   company.allCompanys
 );
 
@@ -90,6 +91,7 @@ router.post(
   [body("sorts")],
   [body("filters")],
   [body("localization")],
+  [body("selectedName")],
   company.allCompanysOfType
 );
 

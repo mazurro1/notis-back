@@ -1049,6 +1049,8 @@ exports.allCompanys = (req, res, next) => {
   const sorts = req.body.sorts;
   const filters = req.body.filters;
   const localization = req.body.localization;
+  const selectedName = req.body.selectedName;
+
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -1072,6 +1074,16 @@ exports.allCompanys = (req, res, next) => {
     ? { "services.serviceName": { $in: [regexFilterFilters] } }
     : {};
 
+  const validSelectedName = !!selectedName ? selectedName : null;
+  const regexSelectedName = new RegExp(
+    ["^", validSelectedName, "$"].join(""),
+    "i"
+  );
+
+  const propsSelectedName = !!validSelectedName
+    ? { name: { $in: [regexSelectedName] } }
+    : {};
+
   const sortValid = !!sorts ? sorts.value : null;
   const propsSort = !!sortValid
     ? sortValid === "aToZ"
@@ -1088,6 +1100,7 @@ exports.allCompanys = (req, res, next) => {
   Company.find({
     ...propsFilterCity,
     ...propsFilterFilters,
+    ...propsSelectedName,
   })
 
     .select(
@@ -1150,6 +1163,7 @@ exports.allCompanysOfType = (req, res, next) => {
   const sorts = req.body.sorts;
   const filters = req.body.filters;
   const localization = req.body.localization;
+  const selectedName = req.body.selectedName;
 
   const localizationValid = !!localization ? localization.value : null;
   const filtersValid = !!filters ? filters.value : null;
@@ -1179,6 +1193,16 @@ exports.allCompanysOfType = (req, res, next) => {
       : {}
     : {};
 
+  const validSelectedName = !!selectedName ? selectedName : null;
+  const regexSelectedName = new RegExp(
+    ["^", validSelectedName, "$"].join(""),
+    "i"
+  );
+
+  const propsSelectedName = !!validSelectedName
+    ? { name: { $in: [regexSelectedName] } }
+    : {};
+
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -1187,7 +1211,12 @@ exports.allCompanysOfType = (req, res, next) => {
     throw error;
   }
 
-  Company.find({ companyType: type, ...propsFilterCity, ...propsFilterFilters })
+  Company.find({
+    companyType: type,
+    ...propsFilterCity,
+    ...propsFilterFilters,
+    ...propsSelectedName,
+  })
     .select(
       "adress city district linkPath name services title opinionsCount opinionsValue mainImageUrl imagesUrl"
     )

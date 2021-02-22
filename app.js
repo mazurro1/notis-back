@@ -16,6 +16,14 @@ const {
   MONGODB_USER,
 } = process.env;
 
+app.use(
+  cors({
+    credentials: true,
+    orgin: true,
+    // origin: ["https://api.nootis.pl", "https://www.nootis.pl"],
+    exposedHeaders: "*",
+  })
+);
 const passport = require("passport");
 app.use(passport.initialize());
 app.use(passport.session());
@@ -28,17 +36,6 @@ passport.deserializeUser(function (user, done) {
 });
 app.use(express.json({ limit: "2mb" }));
 app.use(bodyParser.json());
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "OPTIONS, GET, POST, PUT, PATCH, DELETE"
-  );
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Allow-Credentials", true);
-  next();
-});
-app.use(cors({ origin: "http://localhost:8000" }));
 app.use(userRoutes);
 app.use(companyRoutes);
 app.use(reserwationRoutes);
