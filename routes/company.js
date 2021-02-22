@@ -74,7 +74,14 @@ router.post(
 
 router.post("/company-path", [body("companyPath").trim()], company.companyPath);
 
-router.post("/all-companys", [body("page").trim()], company.allCompanys);
+router.post(
+  "/all-companys",
+  [body("page").trim()],
+  [body("sorts")],
+  [body("filters")],
+  [body("localization")],
+  company.allCompanys
+);
 
 router.post(
   "/all-companys-type",
