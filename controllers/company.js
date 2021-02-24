@@ -3156,7 +3156,9 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
   const companyId = req.body.companyId;
   const year = req.body.year;
   const month = req.body.month;
-
+  const workerId = req.body.workerId;
+  console.log(workerId);
+  console.log(userId);
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const error = new Error("Validation faild entered data is incorrect.");
@@ -3201,6 +3203,7 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
   ])
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
+        console.log(resultCompanyDoc);
         let hasPermission = resultCompanyDoc[0].owner == userId;
         if (!hasPermission) {
           hasPermission = resultCompanyDoc[0].workers.user == userId;

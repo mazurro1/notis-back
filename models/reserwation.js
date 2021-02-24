@@ -115,7 +115,7 @@ const reserwationSchema = new Schema({
   },
   basicPrice: {
     type: String,
-    required: true,
+    required: false,
   },
   opinionId: {
     type: Schema.Types.ObjectId,

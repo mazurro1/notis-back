@@ -923,13 +923,51 @@ exports.addReserwationWorker = (req, res, next) => {
         timeReserwation: 0,
         fullDate: actualDate,
       });
-
       return newReserwationWorker.save();
     })
-    .then(() => {
-      res.status(201).json({
-        message: "Dokonano rezerwację czasu!",
-      });
+    .then((result) => {
+      result
+        .populate(
+          "company",
+          "linkPath name services._id services.serviceColor _id"
+        )
+        .populate(
+          {
+            path: "fromUser",
+            select: "name surname _id",
+          },
+          function (err, resultReserwationPopulate) {
+            return User.findOne({
+              _id: resultReserwationPopulate.toWorkerUserId,
+            })
+              .select("_id alerts")
+              .then((userDoc) => {
+                if (!!userDoc) {
+                  io.getIO().emit(`user${userDoc._id}`, {
+                    action: "update-alerts",
+                    alertData: {
+                      reserwationId: resultReserwationPopulate,
+                      active: true,
+                      type: "new_rezerwation_worker",
+                      creationTime: new Date(),
+                      companyChanged: false,
+                    },
+                  });
+                  userDoc.alerts.unshift({
+                    reserwationId: resultReserwationPopulate._id,
+                    active: true,
+                    type: "new_rezerwation_worker",
+                    creationTime: new Date(),
+                    companyChanged: false,
+                  });
+                  userDoc.save();
+                }
+                res.status(201).json({
+                  reserwation: resultReserwationPopulate,
+                });
+              });
+          }
+        );
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -1893,51 +1931,61 @@ exports.updateWorkerReserwation = (req, res, next) => {
         .select("_id alerts alertActiveCount")
         .then((allUsers) => {
           if (!!allUsers) {
-            const reserwationStatus = resultReserwation.visitCanceled
+            const reserwationStatus = !!resultReserwation.workerReserwation
+              ? "rezerwation_worker"
+              : resultReserwation.visitCanceled
               ? "rezerwation_canceled"
               : resultReserwation.visitChanged
               ? "rezerwation_changed"
               : resultReserwation.visitNotFinished
               ? "reserwation_not_finished"
               : "reserwation_finished";
-            allUsers.forEach((userResult) => {
-              const newAlertData = {
-                reserwationId: resultReserwation._id,
-                active: true,
-                type: reserwationStatus,
-                creationTime: new Date(),
-                companyChanged: true,
-              };
-              resultReserwation
-                .populate(
-                  "reserwationId",
-                  "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
-                )
-                .populate(
-                  {
-                    path: "company fromUser",
-                    select: "name surname linkPath",
-                  },
-                  function (err, resultReserwationPopulate) {
-                    io.getIO().emit(`user${userResult._id}`, {
-                      action: "update-alerts",
-                      alertData: {
-                        reserwationId: resultReserwationPopulate,
-                        active: true,
-                        type: reserwationStatus,
-                        creationTime: new Date(),
-                        companyChanged: true,
-                      },
-                    });
-                  }
-                );
 
-              userResult.alerts.unshift(newAlertData);
-              const countAlertsActiveValid = !!userResult.alertActiveCount
-                ? userResult.alertActiveCount
-                : 0;
-              userResult.alertActiveCount = countAlertsActiveValid + 1;
-              return userResult.save();
+            allUsers.forEach((userResult) => {
+              let isAccessToSentAlert = true;
+              if (!!resultReserwation.workerReserwation) {
+                isAccessToSentAlert =
+                  userId === resultReserwation.toWorkerUserId._id;
+              }
+              if (isAccessToSentAlert) {
+                const newAlertData = {
+                  reserwationId: resultReserwation._id,
+                  active: true,
+                  type: reserwationStatus,
+                  creationTime: new Date(),
+                  companyChanged: true,
+                };
+                resultReserwation
+                  .populate(
+                    "reserwationId",
+                    "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
+                  )
+                  .populate(
+                    {
+                      path: "company fromUser",
+                      select: "name surname linkPath",
+                    },
+                    function (err, resultReserwationPopulate) {
+                      io.getIO().emit(`user${userResult._id}`, {
+                        action: "update-alerts",
+                        alertData: {
+                          reserwationId: resultReserwationPopulate,
+                          active: true,
+                          type: reserwationStatus,
+                          creationTime: new Date(),
+                          companyChanged: true,
+                        },
+                      });
+                    }
+                  );
+
+                userResult.alerts.unshift(newAlertData);
+                const countAlertsActiveValid = !!userResult.alertActiveCount
+                  ? userResult.alertActiveCount
+                  : 0;
+                userResult.alertActiveCount = countAlertsActiveValid + 1;
+                userResult.save();
+              }
             });
 
             // transporter.sendMail({
