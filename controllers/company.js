@@ -3157,8 +3157,6 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
   const year = req.body.year;
   const month = req.body.month;
   const workerId = req.body.workerId;
-  console.log(workerId);
-  console.log(userId);
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const error = new Error("Validation faild entered data is incorrect.");
@@ -3203,7 +3201,6 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
   ])
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
-        console.log(resultCompanyDoc);
         let hasPermission = resultCompanyDoc[0].owner == userId;
         if (!hasPermission) {
           hasPermission = resultCompanyDoc[0].workers.user == userId;
@@ -3542,12 +3539,27 @@ exports.companyStatistics = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id owner services.serviceName services._id")
+    .select(
+      "_id owner services.serviceName services._id workers.user workers._id"
+    )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
+        let selectedWorkerId = null;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = true;
+            selectedWorkerId = selectedWorker.user;
+          }
+        }
         if (hasPermission) {
-          return resultCompanyDoc;
+          return {
+            resultCompanyDoc: resultCompanyDoc,
+            selectedWorkerId: selectedWorkerId,
+          };
         } else {
           const error = new Error("Brak dostępu.");
           error.statusCode = 401;
@@ -3559,9 +3571,13 @@ exports.companyStatistics = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultCompanyDoc) => {
+    .then((result) => {
+      const findOnlyWorker = !!result.selectedWorkerId
+        ? { toWorkerUserId: result.selectedWorkerId }
+        : {};
       return Reserwation.find({
         company: companyId,
+        ...findOnlyWorker,
         dateYear: year,
         workerReserwation: false,
         dateMonth: { $in: months },
@@ -3574,7 +3590,7 @@ exports.companyStatistics = (req, res, next) => {
         .then((resultReserwation) => {
           return {
             resultReserwation: resultReserwation,
-            services: resultCompanyDoc.services,
+            services: result.resultCompanyDoc.services,
           };
         });
     })

@@ -894,80 +894,117 @@ exports.addReserwationWorker = (req, res, next) => {
     Number(splitDateStart[1])
   );
 
-  Reserwation.find({
-    company: companyId,
-    toWorkerUserId: workerUserId,
-    dateDay: Number(arrayDateFull[0]),
-    dateMonth: Number(arrayDateFull[1]),
-    dateYear: Number(arrayDateFull[2]),
-    visitCanceled: false,
+  Company.findOne({
+    _id: companyId,
   })
-    .then(() => {
-      const newReserwationWorker = new Reserwation({
-        fromUser: userId,
-        toWorkerUserId: workerUserId,
-        company: companyId,
-        dateYear: Number(arrayDateFull[2]),
-        dateMonth: Number(arrayDateFull[1]),
-        dateDay: Number(arrayDateFull[0]),
-        dateStart: dateStart,
-        dateEnd: dateEnd,
-        costReserwation: null,
-        timeReserwation: null,
-        visitNotFinished: false,
-        visitCanceled: false,
-        visitChanged: false,
-        workerReserwation: true,
-        reserwationMessage: reserwationMessage,
-        costReserwation: 0,
-        timeReserwation: 0,
-        fullDate: actualDate,
-      });
-      return newReserwationWorker.save();
-    })
-    .then((result) => {
-      result
-        .populate(
-          "company",
-          "linkPath name services._id services.serviceColor _id"
-        )
-        .populate(
-          {
-            path: "fromUser",
-            select: "name surname _id",
-          },
-          function (err, resultReserwationPopulate) {
-            return User.findOne({
-              _id: resultReserwationPopulate.toWorkerUserId,
-            })
-              .select("_id alerts")
-              .then((userDoc) => {
-                if (!!userDoc) {
-                  io.getIO().emit(`user${userDoc._id}`, {
-                    action: "update-alerts",
-                    alertData: {
-                      reserwationId: resultReserwationPopulate,
-                      active: true,
-                      type: "new_rezerwation_worker",
-                      creationTime: new Date(),
-                      companyChanged: false,
-                    },
-                  });
-                  userDoc.alerts.unshift({
-                    reserwationId: resultReserwationPopulate._id,
-                    active: true,
-                    type: "new_rezerwation_worker",
-                    creationTime: new Date(),
-                    companyChanged: false,
-                  });
-                  userDoc.save();
-                }
-                res.status(201).json({
-                  reserwation: resultReserwationPopulate,
-                });
-              });
+    .select("_id workers.permissions workers.user owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = true;
           }
-        );
+        }
+        if (!!hasPermission) {
+          return hasPermission;
+        } else {
+          const error = new Error("Brak uprawnień.");
+          error.statusCode = 403;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then(() => {
+      return Reserwation.find({
+        company: companyId,
+        toWorkerUserId: workerUserId,
+        dateDay: Number(arrayDateFull[0]),
+        dateMonth: Number(arrayDateFull[1]),
+        dateYear: Number(arrayDateFull[2]),
+        visitCanceled: false,
+      })
+        .then(() => {
+          const newReserwationWorker = new Reserwation({
+            fromUser: userId,
+            toWorkerUserId: workerUserId,
+            company: companyId,
+            dateYear: Number(arrayDateFull[2]),
+            dateMonth: Number(arrayDateFull[1]),
+            dateDay: Number(arrayDateFull[0]),
+            dateStart: dateStart,
+            dateEnd: dateEnd,
+            costReserwation: null,
+            timeReserwation: null,
+            visitNotFinished: false,
+            visitCanceled: false,
+            visitChanged: false,
+            workerReserwation: true,
+            reserwationMessage: reserwationMessage,
+            costReserwation: 0,
+            timeReserwation: 0,
+            fullDate: actualDate,
+          });
+          return newReserwationWorker.save();
+        })
+        .then((result) => {
+          result
+            .populate(
+              "company",
+              "linkPath name services._id services.serviceColor _id"
+            )
+            .populate(
+              {
+                path: "fromUser",
+                select: "name surname _id",
+              },
+              function (err, resultReserwationPopulate) {
+                return User.findOne({
+                  _id: resultReserwationPopulate.toWorkerUserId,
+                })
+                  .select("_id alerts")
+                  .then((userDoc) => {
+                    if (!!userDoc) {
+                      io.getIO().emit(`user${userDoc._id}`, {
+                        action: "update-alerts",
+                        alertData: {
+                          reserwationId: resultReserwationPopulate,
+                          active: true,
+                          type: "new_rezerwation_worker",
+                          creationTime: new Date(),
+                          companyChanged: false,
+                        },
+                      });
+                      userDoc.alerts.unshift({
+                        reserwationId: resultReserwationPopulate._id,
+                        active: true,
+                        type: "new_rezerwation_worker",
+                        creationTime: new Date(),
+                        companyChanged: false,
+                      });
+                      userDoc.save();
+                    }
+                    res.status(201).json({
+                      reserwation: resultReserwationPopulate,
+                    });
+                  });
+              }
+            );
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas składania rezerwacji czasu.";
+          }
+          next(err);
+        });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -1944,8 +1981,9 @@ exports.updateWorkerReserwation = (req, res, next) => {
             allUsers.forEach((userResult) => {
               let isAccessToSentAlert = true;
               if (!!resultReserwation.workerReserwation) {
-                isAccessToSentAlert =
-                  userId === resultReserwation.toWorkerUserId._id;
+                isAccessToSentAlert = !(
+                  workerUserId === resultReserwation.toWorkerUserId._id
+                );
               }
               if (isAccessToSentAlert) {
                 const newAlertData = {
