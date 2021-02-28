@@ -17,6 +17,7 @@ const {
   AWS_BUCKET,
   AWS_PATH_URL,
   MAIL_API_KEY,
+  SITE_FRONT,
 } = process.env;
 
 AWS.config.update({
@@ -525,12 +526,12 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
               const hashedEmail = Buffer.from(emailWorker, "utf-8").toString(
                 "base64"
               );
+
               transporter.sendMail({
                 to: emailWorker,
                 from: "nootis.help@gmail.com",
                 subject: `Potwierdzenie dodania do listy pracowników w firmie ${result.name}`,
-                html: `<h1>Kliknij link aby potwierdzić</h1> <a href="http://localhost:8000/confirm-added-worker-to-company/${result._id}/${hashedEmail}/${hashedRandomValue}">kliknij tutaj</a>`,
-                // html: `<h1>Kliknij link aby potwierdzić</h1> <a href="http://www.localhost:3000/confirm-added-worker-to-company/${result._id}/${hashedEmail}/${randomValue}">kliknij tutaj</a>`,
+                html: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${result._id}&${hashedEmail}&${hashedRandomValue}">kliknij tutaj</a>`,
               });
 
               res.status(201).json({
@@ -590,14 +591,12 @@ exports.sentAgainEmailToActiveCompanyWorker = (req, res, next) => {
           const hashedEmail = Buffer.from(emailWorker, "utf-8").toString(
             "base64"
           );
-          console.log(
-            `http://localhost:8000/confirm-added-worker-to-company/${companyData._id}/${hashedEmail}/${thisWorker.codeToActive}`
-          );
+
           transporter.sendMail({
             to: emailWorker,
             from: "nootis.help@gmail.com",
             subject: `Potwierdzenie dodania do listy pracowników w firmie ${companyData.name}`,
-            html: `<h1>Kliknij link aby potwierdzić</h1> <a href="http://localhost:8000/confirm-added-worker-to-company/${companyData._id}/${hashedEmail}/${thisWorker.codeToActive}">kliknij tutaj</a>`,
+            html: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${companyData._id}&${hashedEmail}&${thisWorker.codeToActive}">kliknij tutaj</a>`,
           });
 
           res.status(201).json({
@@ -651,7 +650,7 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
     .select("name workers email _id owner email")
     .populate("workers.item.user", "name surname email")
     .then((companyDoc) => {
-      if (companyDoc) {
+      if (!!companyDoc) {
         const unhashedCodeFromClient = Buffer.from(
           codeToActive,
           "base64"

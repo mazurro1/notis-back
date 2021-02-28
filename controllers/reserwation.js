@@ -695,7 +695,10 @@ exports.addReserwation = (req, res, next) => {
         });
     })
     .then((resultReserwation) => {
-      return User.find({ _id: { $in: [userId, workerUserId] } })
+      return User.find({
+        _id: { $in: [userId, workerUserId] },
+        accountVerified: true,
+      })
         .select("_id alerts alertActiveCount stamps")
         .then((allUsers) => {
           if (!!allUsers) {

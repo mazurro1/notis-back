@@ -149,7 +149,7 @@ exports.registration = (req, res, next) => {
           });
       } else {
         const error = new Error("Użytkownik zajęty.");
-        error.statusCode = 500;
+        error.statusCode = 412;
         throw error;
       }
     })
