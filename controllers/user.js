@@ -453,7 +453,7 @@ exports.veryfiedEmail = (req, res, next) => {
     _id: userId,
     accountVerified: false,
   })
-    .select("_id accountVerified codeToVerified hasCompany company")
+    .select("_id accountVerified codeToVerified hasCompany company email")
     .then((user) => {
       if (!!user) {
         const unhashedCodeToVerified = Buffer.from(
@@ -478,6 +478,12 @@ exports.veryfiedEmail = (req, res, next) => {
       }
     })
     .then((result) => {
+      transporter.sendMail({
+        to: result.email,
+        from: "nootis.help@gmail.com",
+        subject: "Tworzenie konta zakończone powodzeniem",
+        html: `<h1>Adres e-mail został zweryfikowany</h1>`,
+      });
       res.status(201).json({
         accountVerified: result.accountVerified,
       });
@@ -748,6 +754,12 @@ exports.edit = (req, res, next) => {
     })
     .then((result) => {
       const userPhone = Buffer.from(result.phone, "base64").toString("ascii");
+      transporter.sendMail({
+        to: result.email,
+        from: "nootis.help@gmail.com",
+        subject: "Tworzenie konta zakończone powodzeniem",
+        html: `<h1>Edycja konta zakończona pomyślnie</h1>`,
+      });
       res.status(201).json({
         email: result.email,
         token: result.loginToken,
@@ -777,21 +789,21 @@ exports.sentEmailResetPassword = (req, res, next) => {
   User.findOne({
     email: email,
   })
-    .select("email codeToResetPassword")
+    .select("email codeToResetPassword dateToResetPassword")
     .then((user) => {
       if (!!user) {
-        if (!!!user.codeToResetPassword) {
-          const codeToReset = Math.floor(
-            10000 + Math.random() * 90000
-          ).toString();
-          const hashedResetCode = Buffer.from(codeToReset, "utf-8").toString(
-            "base64"
-          );
-          user.codeToResetPassword = hashedResetCode;
-          return user.save();
-        } else {
-          return user;
-        }
+        const codeToReset = Math.floor(
+          10000 + Math.random() * 90000
+        ).toString();
+        const hashedResetCode = Buffer.from(codeToReset, "utf-8").toString(
+          "base64"
+        );
+        const dateResetPassword = new Date(
+          new Date().setMinutes(new Date().getMinutes() + 10)
+        );
+        user.codeToResetPassword = hashedResetCode;
+        user.dateToResetPassword = dateResetPassword;
+        return user.save();
       }
     })
     .then((result) => {
@@ -799,12 +811,29 @@ exports.sentEmailResetPassword = (req, res, next) => {
         result.codeToResetPassword,
         "base64"
       ).toString("ascii");
-
+      const showDate = `${result.dateToResetPassword.getFullYear()}-${
+        result.dateToResetPassword.getMonth() + 1 < 10
+          ? `0${result.dateToResetPassword.getMonth() + 1}`
+          : result.dateToResetPassword.getMonth() + 1
+      }-${
+        result.dateToResetPassword.getDate() < 10
+          ? `0${result.dateToResetPassword.getDate()}`
+          : result.dateToResetPassword.getDate()
+      } ${
+        result.dateToResetPassword.getHours() < 10
+          ? `0${result.dateToResetPassword.getHours()}`
+          : result.dateToResetPassword.getHours()
+      }:${
+        result.dateToResetPassword.getMinutes() < 10
+          ? `0${result.dateToResetPassword.getMinutes()}`
+          : result.dateToResetPassword.getMinutes()
+      }`;
       transporter.sendMail({
         to: result.email,
         from: "nootis.help@gmail.com",
         subject: "Kod z kodem resetującym hasło an nootise",
-        html: `<h1>Kod resetujący hasło</h1> ${codeToResetPassword}`,
+        html: `<h1>Kod resetujący hasło</h1> ${codeToResetPassword}.
+        <h2>Data wygaśnięcia kodu: ${showDate}</h2>`,
       });
 
       res.status(200).json({
@@ -841,29 +870,37 @@ exports.resetPassword = (req, res, next) => {
     email: email,
     codeToResetPassword: codeToResetPassword,
   })
-    .select("email codeToResetPassword _id loginToken password")
+    .select(
+      "email codeToResetPassword _id loginToken password dateToResetPassword"
+    )
     .then((user) => {
       if (!!user) {
-        return bcrypt
-          .hash(password, Number(BCRIPT_SECURITY_VALUE))
-          .then((hashedPassword) => {
-            if (hashedPassword) {
-              const token = jwt.sign(
-                {
-                  email: user.email,
-                  userId: user._id.toString(),
-                },
-                TOKEN_PASSWORD,
-                {
-                  expiresIn: BCRIPT_EXPIRES_IN,
-                }
-              );
-              user.loginToken = token;
-              user.codeToResetPassword = null;
-              user.password = hashedPassword;
-              return user.save();
-            }
-          });
+        if (user.dateToResetPassword > new Date()) {
+          return bcrypt
+            .hash(password, Number(BCRIPT_SECURITY_VALUE))
+            .then((hashedPassword) => {
+              if (hashedPassword) {
+                const token = jwt.sign(
+                  {
+                    email: user.email,
+                    userId: user._id.toString(),
+                  },
+                  TOKEN_PASSWORD,
+                  {
+                    expiresIn: BCRIPT_EXPIRES_IN,
+                  }
+                );
+                user.loginToken = token;
+                user.codeToResetPassword = null;
+                user.password = hashedPassword;
+                return user.save();
+              }
+            });
+        } else {
+          const error = new Error("Kod resetujący hasło wygasł.");
+          error.statusCode = 422;
+          throw error;
+        }
       } else {
         const error = new Error(
           "Brak użytkownika, lub kod resetujący jest błędny."
@@ -872,7 +909,13 @@ exports.resetPassword = (req, res, next) => {
         throw error;
       }
     })
-    .then(() => {
+    .then((result) => {
+      transporter.sendMail({
+        to: result.email,
+        from: "nootis.help@gmail.com",
+        subject: "Tworzenie konta zakończone powodzeniem",
+        html: `<h1>Hasło zostało zmienione</h1>`,
+      });
       res.status(200).json({
         message: "Hasło zostało zmienione",
       });
@@ -903,7 +946,7 @@ exports.addCompanyId = (req, res, next) => {
     company: null,
     hasCompany: false,
   })
-    .select("_id company hasCompany")
+    .select("_id company hasCompany email")
     .then((user) => {
       if (!!user) {
         user.company = companyId;
@@ -915,7 +958,13 @@ exports.addCompanyId = (req, res, next) => {
         throw error;
       }
     })
-    .then(() => {
+    .then((result) => {
+      transporter.sendMail({
+        to: result.email,
+        from: "nootis.help@gmail.com",
+        subject: "Tworzenie konta zakończone powodzeniem",
+        html: `<h1>Dodano do firmy!</h1>`,
+      });
       res.status(201).json({
         message: "Dodano firmę użytkownikowi",
       });

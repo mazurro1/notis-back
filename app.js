@@ -20,7 +20,11 @@ app.use(
   cors({
     credentials: true,
     orgin: true,
-    // origin: ["https://api.nootis.pl", "https://www.nootis.pl"],
+    // origin: [
+    //   "https://api.nootis.pl",
+    //   "https://www.nootis.pl",
+    //   "https://nootis.pl/",
+    // ],
     exposedHeaders: "*",
   })
 );

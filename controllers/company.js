@@ -1064,23 +1064,23 @@ exports.allCompanys = (req, res, next) => {
     ["^", localizationValid, "$"].join(""),
     "i"
   );
-  const regexFilterFilters = new RegExp(["^", filtersValid, "$"].join(""), "i");
 
   const propsFilterCity = !!localizationValid
     ? { city: { $in: [regexFilterCity] } }
     : {};
+
   const propsFilterFilters = !!filtersValid
-    ? { "services.serviceName": { $in: [regexFilterFilters] } }
+    ? {
+        "services.serviceName": {
+          $regex: new RegExp(filtersValid, "i"),
+        },
+      }
     : {};
 
   const validSelectedName = !!selectedName ? selectedName : null;
-  const regexSelectedName = new RegExp(
-    ["^", validSelectedName, "$"].join(""),
-    "i"
-  );
 
   const propsSelectedName = !!validSelectedName
-    ? { name: { $in: [regexSelectedName] } }
+    ? { name: { $regex: new RegExp(validSelectedName, "i") } }
     : {};
 
   const sortValid = !!sorts ? sorts.value : null;
@@ -1170,13 +1170,17 @@ exports.allCompanysOfType = (req, res, next) => {
     ["^", localizationValid, "$"].join(""),
     "i"
   );
-  const regexFilterFilters = new RegExp(["^", filtersValid, "$"].join(""), "i");
 
   const propsFilterCity = !!localizationValid
     ? { city: { $in: [regexFilterCity] } }
     : {};
+
   const propsFilterFilters = !!filtersValid
-    ? { "services.serviceName": { $in: [regexFilterFilters] } }
+    ? {
+        "services.serviceName": {
+          $regex: new RegExp(filtersValid, "i"),
+        },
+      }
     : {};
 
   const sortValid = !!sorts ? sorts.value : null;
@@ -1193,13 +1197,9 @@ exports.allCompanysOfType = (req, res, next) => {
     : {};
 
   const validSelectedName = !!selectedName ? selectedName : null;
-  const regexSelectedName = new RegExp(
-    ["^", validSelectedName, "$"].join(""),
-    "i"
-  );
 
   const propsSelectedName = !!validSelectedName
-    ? { name: { $in: [regexSelectedName] } }
+    ? { name: { $regex: new RegExp(validSelectedName, "i") } }
     : {};
 
   const errors = validationResult(req);

@@ -55,6 +55,10 @@ const userSchema = new Schema(
       type: String,
       required: false,
     },
+    dateToResetPassword: {
+      type: Date,
+      required: false,
+    },
     company: {
       type: Schema.Types.ObjectId,
       ref: "Companys",
