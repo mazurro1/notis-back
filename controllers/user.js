@@ -3,7 +3,6 @@ const Company = require("../models/company");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
-const io = require("../socket");
 const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const getImgBuffer = require("../getImgBuffer");
@@ -17,18 +16,22 @@ const {
   AWS_REGION_APP,
   AWS_BUCKET,
   AWS_PATH_URL,
-  MAIL_API_KEY,
   SITE_FRONT,
+  MAIL_INFO,
+  MAIL_PORT,
+  MAIL_HOST,
+  MAIL_PASSWORD,
 } = process.env;
 
-const sendgridTransport = require("nodemailer-sendgrid-transport");
-const transporter = nodemailer.createTransport(
-  sendgridTransport({
-    auth: {
-      api_key: MAIL_API_KEY,
-    },
-  })
-);
+const transporter = nodemailer.createTransport({
+  host: MAIL_HOST,
+  port: Number(MAIL_PORT),
+  secure: true,
+  auth: {
+    user: MAIL_INFO,
+    pass: MAIL_PASSWORD,
+  },
+});
 
 AWS.config.update({
   accessKeyId: AWS_ACCESS_KEY_ID_APP,
@@ -164,7 +167,7 @@ exports.registration = (req, res, next) => {
       ).toString("ascii");
       transporter.sendMail({
         to: result.email,
-        from: "nootis.help@gmail.com",
+        from: MAIL_INFO,
         subject: "Tworzenie konta zakończone powodzeniem",
         html: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified}`,
       });
@@ -202,7 +205,7 @@ exports.login = (req, res, next) => {
     email: email,
   })
     .select(
-      "email _id imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified hasCompany alertActiveCount"
+      "email _id imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified hasCompany alertActiveCount imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -273,7 +276,7 @@ exports.login = (req, res, next) => {
               alertActiveCount: !!userWithToken.alertActiveCount
                 ? userWithToken.alertActiveCount
                 : 0,
-              imageUrl: user.imageUrl,
+              imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
               hasPhone: user.hasPhone,
               stamps: user.stamps,
               favouritesCompanys: user.favouritesCompanys,
@@ -316,7 +319,7 @@ exports.sentAgainVerifiedEmail = (req, res, next) => {
         ).toString("ascii");
         transporter.sendMail({
           to: user.email,
-          from: "nootis.help@gmail.com",
+          from: MAIL_INFO,
           subject: "Tworzenie konta zakończone powodzeniem",
           html: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified}`,
         });
@@ -480,7 +483,7 @@ exports.veryfiedEmail = (req, res, next) => {
     .then((result) => {
       transporter.sendMail({
         to: result.email,
-        from: "nootis.help@gmail.com",
+        from: MAIL_INFO,
         subject: "Tworzenie konta zakończone powodzeniem",
         html: `<h1>Adres e-mail został zweryfikowany</h1>`,
       });
@@ -604,7 +607,7 @@ exports.autoLogin = (req, res, next) => {
     loginToken: token,
   })
     .select(
-      "_id loginToken favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified hasCompany imageUrl hasPhone"
+      "_id loginToken favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified hasCompany imageUrl hasPhone imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -641,6 +644,7 @@ exports.autoLogin = (req, res, next) => {
             validUserActiveCount = user.alertActiveCount;
           }
         }
+
         res.status(200).json({
           userId: user._id.toString(),
           email: user.email,
@@ -652,7 +656,7 @@ exports.autoLogin = (req, res, next) => {
           company: user.company,
           alerts: user.alerts,
           alertActiveCount: validUserActiveCount,
-          imageUrl: user.imageUrl,
+          imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
           hasPhone: user.hasPhone,
           stamps: user.stamps,
           favouritesCompanys: user.favouritesCompanys,
@@ -756,7 +760,7 @@ exports.edit = (req, res, next) => {
       const userPhone = Buffer.from(result.phone, "base64").toString("ascii");
       transporter.sendMail({
         to: result.email,
-        from: "nootis.help@gmail.com",
+        from: MAIL_INFO,
         subject: "Tworzenie konta zakończone powodzeniem",
         html: `<h1>Edycja konta zakończona pomyślnie</h1>`,
       });
@@ -830,7 +834,7 @@ exports.sentEmailResetPassword = (req, res, next) => {
       }`;
       transporter.sendMail({
         to: result.email,
-        from: "nootis.help@gmail.com",
+        from: MAIL_INFO,
         subject: "Kod z kodem resetującym hasło an nootise",
         html: `<h1>Kod resetujący hasło</h1> ${codeToResetPassword}.
         <h2>Data wygaśnięcia kodu: ${showDate}</h2>`,
@@ -912,7 +916,7 @@ exports.resetPassword = (req, res, next) => {
     .then((result) => {
       transporter.sendMail({
         to: result.email,
-        from: "nootis.help@gmail.com",
+        from: MAIL_INFO,
         subject: "Tworzenie konta zakończone powodzeniem",
         html: `<h1>Hasło zostało zmienione</h1>`,
       });
@@ -961,7 +965,7 @@ exports.addCompanyId = (req, res, next) => {
     .then((result) => {
       transporter.sendMail({
         to: result.email,
-        from: "nootis.help@gmail.com",
+        from: MAIL_INFO,
         subject: "Tworzenie konta zakończone powodzeniem",
         html: `<h1>Dodano do firmy!</h1>`,
       });
@@ -1069,21 +1073,24 @@ exports.userDeleteImage = (req, res, next) => {
     });
 };
 
-exports.loginFacebook = (req, res, next) => {
+exports.loginFacebookNew = (req, res, next) => {
+  const {
+    _json: { email, name, picture },
+  } = req.user.profile;
   User.findOne({
-    email: req.user.emails[0].value,
+    email: email,
   })
     .select("email _id loginToken")
     .then((userDoc) => {
       if (!!userDoc) {
         res.redirect(
           303,
-          `${SITE_FRONT}/login-facebook/${userDoc.loginToken}/${userDoc._id}/false`
+          `${SITE_FRONT}/login-facebook?${userDoc.loginToken}&${userDoc._id}&false`
         );
       } else {
-        const splitUserName = req.user.displayName.split(" ");
-        const randomPassword = makeid(15);
-        if (req.user.emails[0].value) {
+        const splitUserName = name.split(" ");
+        const randomPassword = makeid(10);
+        if (!!email) {
           return bcrypt
             .hash(randomPassword, Number(BCRIPT_EXPIRES_IN))
             .then((hashedPassword) => {
@@ -1099,7 +1106,7 @@ exports.loginFacebook = (req, res, next) => {
                 ).toString("base64");
 
                 const user = new User({
-                  email: req.user.emails[0].value,
+                  email: email,
                   name: hashedUserName,
                   surname: hashedUserSurname,
                   password: hashedPassword,
@@ -1107,10 +1114,11 @@ exports.loginFacebook = (req, res, next) => {
                   accountVerified: true,
                   codeToVerified: null,
                   hasPhone: false,
+                  imageOther: !!picture ? picture.data.url : "",
                 });
                 const token = jwt.sign(
                   {
-                    email: req.user.emails[0].value,
+                    email: email,
                     userId: user._id.toString(),
                   },
                   TOKEN_PASSWORD,
@@ -1123,14 +1131,14 @@ exports.loginFacebook = (req, res, next) => {
                   if (!!!err) {
                     transporter.sendMail({
                       to: userSaved.email,
-                      from: "nootis.help@gmail.com",
+                      from: MAIL_INFO,
                       subject: "Tworzenie konta zakończone powodzeniem",
                       html: `<h1>Utworzono nowe konto za pomocą facebook-a</h1>
                       <p>Twoje nowe wygenerowane hasło to: <b>${randomPassword}</b>. Możesz go zmienić w ustawieniach konta na stronie nootis.pl</p>`,
                     });
                     res.redirect(
                       303,
-                      `${SITE_FRONT}/login-facebook/${userSaved.loginToken}/${userSaved._id}/true`
+                      `${SITE_FRONT}/login-facebook?${userSaved.loginToken}&${userSaved._id}&true`
                     );
                   } else {
                     const error = new Error(
@@ -1232,6 +1240,140 @@ exports.deleteCompanyFavourites = (req, res, next) => {
       res.status(201).json({
         message: "Usunięto z ulubionych",
       });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.loginFacebookCustom = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id favouritesCompanys")
+    .then((userDoc) => {
+      if (!!userDoc) {
+        const filterUserFavourites = userDoc.favouritesCompanys.filter(
+          (item) => item != companyId
+        );
+        userDoc.favouritesCompanys = filterUserFavourites;
+        return userDoc.save();
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Usunięto z ulubionych",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.loginGoogle = (req, res, next) => {
+  const {
+    _json: { email, name, picture },
+  } = req.user.profile;
+  User.findOne({
+    email: email,
+  })
+    .select("email _id loginToken")
+    .then((userDoc) => {
+      if (!!userDoc) {
+        res.redirect(
+          303,
+          `${SITE_FRONT}/login-google?${userDoc.loginToken}&${userDoc._id}&false`
+        );
+      } else {
+        const splitUserName = name.split(" ");
+        const randomPassword = makeid(10);
+        if (!!email) {
+          return bcrypt
+            .hash(randomPassword, Number(BCRIPT_EXPIRES_IN))
+            .then((hashedPassword) => {
+              if (!!hashedPassword) {
+                const hashedUserName = Buffer.from(
+                  splitUserName[0],
+                  "utf-8"
+                ).toString("base64");
+
+                const hashedUserSurname = Buffer.from(
+                  splitUserName[1],
+                  "utf-8"
+                ).toString("base64");
+
+                const user = new User({
+                  email: email,
+                  name: hashedUserName,
+                  surname: hashedUserSurname,
+                  password: hashedPassword,
+                  phone: null,
+                  accountVerified: true,
+                  codeToVerified: null,
+                  hasPhone: false,
+                  imageOther: !!picture ? picture : "",
+                });
+                const token = jwt.sign(
+                  {
+                    email: email,
+                    userId: user._id.toString(),
+                  },
+                  TOKEN_PASSWORD,
+                  {
+                    expiresIn: BCRIPT_EXPIRES_IN,
+                  }
+                );
+                user.loginToken = token;
+                user.save((err, userSaved) => {
+                  if (!!!err) {
+                    transporter.sendMail({
+                      to: userSaved.email,
+                      from: MAIL_INFO,
+                      subject: "Tworzenie konta zakończone powodzeniem",
+                      html: `<h1>Utworzono nowe konto za pomocą googla</h1>
+                      <p>Twoje nowe wygenerowane hasło to: <b>${randomPassword}</b>. Możesz go zmienić w ustawieniach konta na stronie nootis.pl</p>`,
+                    });
+                    res.redirect(
+                      303,
+                      `${SITE_FRONT}/login-google?${userSaved.loginToken}&${userSaved._id}&true`
+                    );
+                  } else {
+                    const error = new Error(
+                      "Błąd podczas logowania użytkownika"
+                    );
+                    error.statusCode = 422;
+                    throw error;
+                  }
+                });
+              }
+            });
+        } else {
+          const error = new Error("Coś poszło nie tak.");
+          error.statusCode = 422;
+          throw error;
+        }
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {

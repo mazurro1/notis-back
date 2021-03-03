@@ -15,7 +15,6 @@ const {
   MONGODB_DATABASE,
   MONGODB_USER,
 } = process.env;
-
 app.use(
   cors({
     credentials: true,
@@ -28,16 +27,6 @@ app.use(
     exposedHeaders: "*",
   })
 );
-const passport = require("passport");
-app.use(passport.initialize());
-app.use(passport.session());
-passport.serializeUser(function (user, done) {
-  done(null, user);
-});
-
-passport.deserializeUser(function (user, done) {
-  done(null, user);
-});
 app.use(express.json({ limit: "2mb" }));
 app.use(bodyParser.json());
 app.use(userRoutes);

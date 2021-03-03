@@ -4,8 +4,100 @@ const { body } = require("express-validator");
 const user = require("../controllers/user");
 const isAuth = require("../middleware/is-auth");
 const fileUpload = require("../middleware/file-uploads");
+const passport = require("passport");
+const FacebookStrategy = require("passport-facebook").Strategy;
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const {
+  FACEBOOK_APP_ID,
+  FACEBOOK_APP_SECRET,
+  SITE_FRONT,
+  GOOGLE_CLIENT_ID,
+  GOOGLE_APP_SECRET,
+  BACKEND_URL,
+} = process.env;
 
-const { FACEBOOK_APP_ID, FACEBOOK_APP_SECRET } = process.env;
+router.use(passport.initialize());
+router.use(passport.session());
+
+passport.use(
+  new FacebookStrategy(
+    {
+      clientID: FACEBOOK_APP_ID,
+      clientSecret: FACEBOOK_APP_SECRET,
+      callbackURL: `${BACKEND_URL}/auth/facebook/callback`,
+      profileFields: ["emails", "displayName", "picture.type(large)"],
+    },
+    function (token, refreshToken, profile, done) {
+      const user = {
+        token: token,
+        profile: profile,
+      };
+      return done(null, user);
+    }
+  )
+);
+
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: GOOGLE_CLIENT_ID,
+      clientSecret: GOOGLE_APP_SECRET,
+      callbackURL: `${BACKEND_URL}/auth/google/callback`,
+      profileFields: ["emails", "displayName", "picture.type(large)"],
+    },
+    function (token, refreshToken, profile, done) {
+      const user = {
+        token: token,
+        profile: profile,
+      };
+      return done(null, user);
+    }
+  )
+);
+
+passport.serializeUser(function (user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function (user, done) {
+  done(null, user);
+});
+
+router.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["email", "profile"] })
+);
+
+router.get(
+  "/auth/google/callback",
+  passport.authenticate("google", {
+    failureRedirect: `${SITE_FRONT}/404`,
+  }),
+  user.loginGoogle,
+  function (err, req, res, next) {
+    if (err) {
+      res.redirect(303, `${SITE_FRONT}/404?${err}`);
+    }
+  }
+);
+
+router.get(
+  "/auth/facebook",
+  passport.authenticate("facebook", { scope: "email" })
+);
+
+router.get(
+  "/auth/facebook/callback",
+  passport.authenticate("facebook", {
+    failureRedirect: `${SITE_FRONT}/404`,
+  }),
+  user.loginFacebookNew,
+  function (err, req, res, next) {
+    if (err) {
+      res.redirect(303, `${SITE_FRONT}/404?${err}`);
+    }
+  }
+);
 
 router.post(
   "/registration",
@@ -97,31 +189,6 @@ router.post(
   isAuth,
   [body("imagePath")],
   user.userDeleteImage
-);
-
-const passport = require("passport");
-const FacebookStrategy = require("passport-facebook").Strategy;
-
-passport.use(
-  new FacebookStrategy(
-    {
-      clientID: FACEBOOK_APP_ID,
-      clientSecret: FACEBOOK_APP_SECRET,
-      callbackURL: "/auth/facebook",
-      profileFields: ["emails", "displayName"], // email should be in the scope.
-    },
-    function (accessToken, refreshToken, profile, done) {
-      return done(null, profile);
-    }
-  )
-);
-
-router.get(
-  "/auth/facebook",
-  passport.authenticate("facebook", {
-    scope: "email",
-  }),
-  user.loginFacebook
 );
 
 router.patch(

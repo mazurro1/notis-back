@@ -1,23 +1,7 @@
-const User = require("../models/user");
 const Company = require("../models/company");
 const Opinion = require("../models/opinion");
 const Reserwation = require("../models/reserwation");
-const CompanyUsersInformations = require("../models/companyUsersInformations");
-const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
-const jwt = require("jsonwebtoken");
-const io = require("../socket");
-const nodemailer = require("nodemailer");
-const sendgridTransport = require("nodemailer-sendgrid-transport");
-require("dotenv").config();
-const { MAIL_API_KEY } = process.env;
-const transporter = nodemailer.createTransport(
-  sendgridTransport({
-    auth: {
-      api_key: MAIL_API_KEY,
-    },
-  })
-);
 
 exports.addOpinion = (req, res, next) => {
   const userId = req.userId;

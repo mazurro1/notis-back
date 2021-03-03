@@ -1,21 +1,7 @@
-const User = require("../models/user");
 const Company = require("../models/company");
 const CompanyAvailability = require("../models/companyAvailability");
-const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
-const jwt = require("jsonwebtoken");
-const io = require("../socket");
-const nodemailer = require("nodemailer");
 require("dotenv").config();
-const { MAIL_API_KEY } = process.env;
-const sendgridTransport = require("nodemailer-sendgrid-transport");
-const transporter = nodemailer.createTransport(
-  sendgridTransport({
-    auth: {
-      api_key: MAIL_API_KEY,
-    },
-  })
-);
 
 exports.getCompanyAvailability = (req, res, next) => {
   const userId = req.userId;

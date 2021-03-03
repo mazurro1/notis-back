@@ -2,23 +2,22 @@ const Reserwation = require("../models/reserwation");
 const User = require("../models/user");
 const Company = require("../models/company");
 const CompanyUsersInformations = require("../models/companyUsersInformations");
-const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
-const jwt = require("jsonwebtoken");
 const io = require("../socket");
 const nodemailer = require("nodemailer");
-const sendgridTransport = require("nodemailer-sendgrid-transport");
-const company = require("../models/company");
 const mongoose = require("mongoose");
 require("dotenv").config();
-const { MAIL_API_KEY } = process.env;
-const transporter = nodemailer.createTransport(
-  sendgridTransport({
-    auth: {
-      api_key: MAIL_API_KEY,
-    },
-  })
-);
+const { MAIL_HOST, MAIL_PORT, MAIL_INFO, MAIL_PASSWORD } = process.env;
+
+const transporter = nodemailer.createTransport({
+  host: MAIL_HOST,
+  port: Number(MAIL_PORT),
+  secure: true,
+  auth: {
+    user: MAIL_INFO,
+    pass: MAIL_PASSWORD,
+  },
+});
 
 exports.addReserwation = (req, res, next) => {
   const userId = req.userId;
@@ -806,30 +805,32 @@ exports.addReserwation = (req, res, next) => {
               return userResult.save();
             });
 
-            // transporter.sendMail({
-            //   to: userEmail,
-            //   from: "nootis.help@gmail.com",
-            //   subject: `Dokonano rezerwacji w firmie ${result.company.name}`,
-            //   html: `<h1>Termin rezerwacji:</h1>
-            //   <h4>
-            //     Nazwa usługi: ${result.serviceName}
-            //   </h4>
-            //   <h4>
-            //     Termin: ${result.dateDay}-${result.dateMonth}-${result.dateYear}
-            //   </h4>
-            //   <h4>
-            //     Godzina: ${result.dateStart}
-            //   </h4>
-            //   <h4>
-            //     Czas trwania: ${result.timeReserwation}min ${
-            //     result.extraTime ? "+" : ""
-            //   }
-            //   </h4>
-            //   <h4>
-            //     Koszt: ${result.costReserwation} zł ${result.extraCost ? "+" : ""}
-            //   </h4>
-            //   `,
-            // });
+            transporter.sendMail({
+              to: userEmail,
+              from: "nootis.help@gmail.com",
+              subject: `Dokonano rezerwacji w firmie ${result.company.name}`,
+              html: `<h1>Termin rezerwacji:</h1>
+              <h4>
+                Nazwa usługi: ${result.serviceName}
+              </h4>
+              <h4>
+                Termin: ${result.dateDay}-${result.dateMonth}-${result.dateYear}
+              </h4>
+              <h4>
+                Godzina: ${result.dateStart}
+              </h4>
+              <h4>
+                Czas trwania: ${result.timeReserwation}min ${
+                result.extraTime ? "+" : ""
+              }
+              </h4>
+              <h4>
+                Koszt: ${result.costReserwation} zł ${
+                result.extraCost ? "+" : ""
+              }
+              </h4>
+              `,
+            });
           }
           // else {
           //   const error = new Error("Brak podanej usługi.");

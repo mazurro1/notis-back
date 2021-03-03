@@ -39,6 +39,10 @@ const userSchema = new Schema(
       type: String,
       required: false,
     },
+    imageOther: {
+      type: String,
+      required: false,
+    },
     loginToken: {
       type: String,
       required: false,

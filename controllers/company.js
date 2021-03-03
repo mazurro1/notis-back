@@ -16,8 +16,11 @@ const {
   AWS_REGION_APP,
   AWS_BUCKET,
   AWS_PATH_URL,
-  MAIL_API_KEY,
   SITE_FRONT,
+  MAIL_HOST,
+  MAIL_PORT,
+  MAIL_INFO,
+  MAIL_PASSWORD,
 } = process.env;
 
 AWS.config.update({
@@ -29,6 +32,16 @@ AWS.config.update({
 const s3Bucket = new AWS.S3({
   params: {
     Bucket: AWS_BUCKET,
+  },
+});
+
+const transporter = nodemailer.createTransport({
+  host: MAIL_HOST,
+  port: Number(MAIL_PORT),
+  secure: true,
+  auth: {
+    user: MAIL_INFO,
+    pass: MAIL_PASSWORD,
   },
 });
 
@@ -56,16 +69,6 @@ const getImageUrl = async (type, base64Image) => {
   const currentTime = new Date().getTime();
   return imageUpload(`${type}/${currentTime}.jpeg`, buffer);
 };
-
-const sendgridTransport = require("nodemailer-sendgrid-transport");
-const { pipeline } = require("nodemailer/lib/xoauth2");
-const transporter = nodemailer.createTransport(
-  sendgridTransport({
-    auth: {
-      api_key: MAIL_API_KEY,
-    },
-  })
-);
 
 exports.registrationCompany = (req, res, next) => {
   const companyEmail = req.body.companyEmail;
