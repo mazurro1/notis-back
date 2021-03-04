@@ -67,3 +67,11 @@ yarn-error.log
 .pnp.js
 # Yarn Integrity file
 .yarn-integrity
+node_modules/nodemailer/lib/well-known/services.json
+node_modules/nodemailer/lib/well-known/services.json
+node_modules/nodemailer/lib/ses-transport/index.js
+node_modules/nodemailer/lib/mime-node/index.js
+node_modules/nodemailer/lib/mail-composer/index.js
+node_modules/nodemailer/README.md
+node_modules/nodemailer/package.json
+node_modules/nodemailer/CHANGELOG.md
