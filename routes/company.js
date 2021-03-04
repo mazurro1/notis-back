@@ -3,7 +3,6 @@ const router = express.Router();
 const { body } = require("express-validator");
 const company = require("../controllers/company");
 const isAuth = require("../middleware/is-auth");
-const getImgBuffer = require("../getImgBuffer");
 const fileUpload = require("../middleware/file-uploads");
 
 router.post(
@@ -76,7 +75,7 @@ router.post("/company-path", [body("companyPath").trim()], company.companyPath);
 
 router.post(
   "/all-companys",
-  [body("page").trim()],
+  [body("page").trim().isNumeric()],
   [body("sorts")],
   [body("filters")],
   [body("localization")],
@@ -329,6 +328,21 @@ router.post(
   [body("months")],
   [body("year")],
   company.companyStatistics
+);
+
+router.post(
+  "/company-sent-code-delete-company",
+  isAuth,
+  [body("companyId")],
+  company.companySentCodeDeleteCompany
+);
+
+router.post(
+  "/company-delete-company",
+  isAuth,
+  [body("companyId")],
+  [body("code")],
+  company.companyDeleteCompany
 );
 
 module.exports = router;

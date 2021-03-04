@@ -620,6 +620,14 @@ const companySchema = new Schema(
         ],
       },
     ],
+    codeDelete: {
+      type: String,
+      required: false,
+    },
+    codeDeleteDate: {
+      type: Date,
+      required: false,
+    },
   },
   {
     timestamps: true,

@@ -645,6 +645,28 @@ exports.autoLogin = (req, res, next) => {
           }
         }
 
+        const isNotCompanyStamps = user.stamps.some(
+          (stamp) => stamp.companyId === null
+        );
+        const isNotCompanyFavourites = user.favouritesCompanys.some(
+          (fav) => fav === null
+        );
+        if (isNotCompanyStamps || isNotCompanyFavourites) {
+          if (isNotCompanyStamps) {
+            const filterStampsUser = user.stamps.filter(
+              (stamp) => stamp.companyId !== null
+            );
+            user.stamps = filterStampsUser;
+          }
+          if (isNotCompanyFavourites) {
+            const filterFavUser = user.favouritesCompanys.filter(
+              (fav) => fav !== null
+            );
+            user.favouritesCompanys = filterFavUser;
+          }
+          user.save();
+        }
+
         res.status(200).json({
           userId: user._id.toString(),
           email: user.email,
@@ -1053,6 +1075,44 @@ exports.userDeleteImage = (req, res, next) => {
             }
           }
         );
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 502;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Usunięto zdjęcie",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.userDeleteImageOther = (req, res, next) => {
+  const userId = req.userId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id imageUrl")
+    .then((userDoc) => {
+      if (!!userDoc) {
+        userDoc.imageUrl = "";
+        userDoc.imageOther = "";
+        return userDoc.save();
       } else {
         const error = new Error("Brak użytkownika.");
         error.statusCode = 502;

@@ -1,4 +1,6 @@
 const Company = require("../models/company");
+const CompanyUsersInformations = require("../models/companyUsersInformations");
+const CompanyAvailability = require("../models/companyAvailability");
 const Reserwation = require("../models/reserwation");
 const Opinion = require("../models/opinion");
 const mongoose = require("mongoose");
@@ -44,6 +46,17 @@ const transporter = nodemailer.createTransport({
     pass: MAIL_PASSWORD,
   },
 });
+
+function makeid(length) {
+  var result = "";
+  var characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  var charactersLength = characters.length;
+  for (var i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return result;
+}
 
 const imageUpload = (path, buffer) => {
   const data = {
@@ -160,7 +173,7 @@ exports.registrationCompany = (req, res, next) => {
             ).toString("ascii");
             transporter.sendMail({
               to: result.email,
-              from: "nootis.help@gmail.com",
+              from: MAIL_INFO,
               subject: "Tworzenie konta firmowego zakończone powodzeniem",
               html: `<h1>Utworzono nowe konto firmowe</h1> ${unhashedCodeToVerified}`,
             });
@@ -207,7 +220,7 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
       ).toString("ascii");
       transporter.sendMail({
         to: companyData.email,
-        from: "nootis.help@gmail.com",
+        from: MAIL_INFO,
         subject: "Tworzenie konta firmowego zakończone powodzeniem",
         html: `<h1>Utworzono nowe konto firmowe</h1> ${unhashedCodeToVerified}`,
       });
@@ -532,7 +545,7 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
 
               transporter.sendMail({
                 to: emailWorker,
-                from: "nootis.help@gmail.com",
+                from: MAIL_INFO,
                 subject: `Potwierdzenie dodania do listy pracowników w firmie ${result.name}`,
                 html: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${result._id}&${hashedEmail}&${hashedRandomValue}">kliknij tutaj</a>`,
               });
@@ -597,7 +610,7 @@ exports.sentAgainEmailToActiveCompanyWorker = (req, res, next) => {
 
           transporter.sendMail({
             to: emailWorker,
-            from: "nootis.help@gmail.com",
+            from: MAIL_INFO,
             subject: `Potwierdzenie dodania do listy pracowników w firmie ${companyData.name}`,
             html: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${companyData._id}&${hashedEmail}&${thisWorker.codeToActive}">kliknij tutaj</a>`,
           });
@@ -782,7 +795,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
       return Reserwation.find({
         toWorkerUserId: userDoc._id,
         company: companyId,
-        dateYear: actualDay.getFullYear(),
         visitNotFinished: false,
         visitCanceled: false,
       })
@@ -1086,7 +1098,7 @@ exports.allCompanys = (req, res, next) => {
     ? { name: { $regex: new RegExp(validSelectedName, "i") } }
     : {};
 
-  const sortValid = !!sorts ? sorts.value : null;
+  const sortValid = !!sorts ? sorts : null;
   const propsSort = !!sortValid
     ? sortValid === "aToZ"
       ? { name: 1 }
@@ -1186,7 +1198,7 @@ exports.allCompanysOfType = (req, res, next) => {
       }
     : {};
 
-  const sortValid = !!sorts ? sorts.value : null;
+  const sortValid = !!sorts ? sorts : null;
   const propsSort = !!sortValid
     ? sortValid === "aToZ"
       ? { name: 1 }
@@ -3606,6 +3618,231 @@ exports.companyStatistics = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd podczas dodawania pieczątki.";
+      }
+      next(err);
+    });
+};
+
+exports.companySentCodeDeleteCompany = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const userId = req.userId;
+
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id name codeDeleteDate codeDelete email owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      const randomCode = makeid(10);
+      const dateDeleteCompany = new Date(
+        new Date().setMinutes(new Date().getMinutes() + 10)
+      );
+      resultCompanyDoc.codeDelete = randomCode;
+      resultCompanyDoc.codeDeleteDate = dateDeleteCompany;
+      return resultCompanyDoc.save();
+    })
+    .then((companyData) => {
+      transporter.sendMail({
+        to: companyData.email,
+        from: MAIL_INFO,
+        subject: `Potwierdzenie usunięcia działalności ${companyData.name}`,
+        html: `<h1>Kod do usunięcia działalności: ${companyData.codeDelete}</h1>`,
+      });
+      res.status(201).json({
+        message: "Wysłano kod do usunięcia działalności",
+      });
+    })
+
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danej działalności.";
+      }
+      next(err);
+    });
+};
+
+exports.companyDeleteCompany = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const userId = req.userId;
+  const code = req.body.code;
+
+  Company.findOne({
+    _id: companyId,
+  })
+    .select(
+      "_id name codeDeleteDate codeDelete email owner workers.user workers._id"
+    )
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      if (
+        resultCompanyDoc.codeDelete.toUpperCase() === code &&
+        resultCompanyDoc.codeDeleteDate > new Date()
+      ) {
+        return resultCompanyDoc;
+      } else {
+        const error = new Error("Nieprawidłowy kod");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      User.findOne({ _id: resultCompanyDoc.owner }).then((user) => {
+        user.hasCompany = false;
+        user.company = null;
+        user.save();
+      });
+      resultCompanyDoc.workers.forEach((worker) => {
+        User.findOne({ _id: worker.user }).then((user) => {
+          user.hasCompany = false;
+          user.company = null;
+          user.save();
+        });
+      });
+    })
+    .then(() => {
+      const actualDay = new Date();
+      return Reserwation.find({
+        company: companyId,
+        visitNotFinished: false,
+        visitCanceled: false,
+      })
+        .select(
+          "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName"
+        )
+        .populate({
+          path: "company fromUser",
+          select: "name surname linkPath",
+        })
+        .then((allWorkerReserwations) => {
+          const allUsersReserwations = [];
+          if (!!allWorkerReserwations) {
+            allWorkerReserwations.forEach((item) => {
+              const splitDateStart = item.dateStart.split(":");
+              const reserwationDate = new Date(
+                item.dateYear,
+                item.dateMonth - 1,
+                item.dateDay,
+                Number(splitDateStart[0]),
+                Number(splitDateStart[1])
+              );
+              if (reserwationDate > actualDay) {
+                item.visitCanceled = true;
+                item.save();
+                const findUserReserwations = allUsersReserwations.findIndex(
+                  (reserwation) => reserwation.userId == item.fromUser._id
+                );
+                if (findUserReserwations >= 0) {
+                  allUsersReserwations[findUserReserwations].items.push(item);
+                } else {
+                  const newUserData = {
+                    userId: item.fromUser._id,
+                    items: [item],
+                  };
+                  allUsersReserwations.push(newUserData);
+                }
+              }
+            });
+            return allUsersReserwations;
+          }
+        });
+    })
+    .then((result) => {
+      result.forEach((userDoc) => {
+        User.findOne({
+          _id: userDoc.userId,
+        })
+          .select("_id alerts")
+          .then((userReserwationDoc) => {
+            if (!!userReserwationDoc) {
+              const allUserAlertsToSave = [];
+
+              userDoc.items.forEach((itemReserwation) => {
+                const userAlertToSave = {
+                  reserwationId: itemReserwation._id,
+                  active: true,
+                  type: "rezerwation_canceled",
+                  creationTime: new Date(),
+                  companyChanged: true,
+                };
+
+                allUserAlertsToSave.push(userAlertToSave);
+
+                io.getIO().emit(`user${userReserwationDoc._id}`, {
+                  action: "update-alerts",
+                  alertData: {
+                    reserwationId: itemReserwation,
+                    active: true,
+                    type: "rezerwation_canceled",
+                    creationTime: new Date(),
+                    companyChanged: true,
+                  },
+                });
+              });
+
+              userReserwationDoc.alerts.unshift(...allUserAlertsToSave);
+
+              const countAlertsActiveValid = !!userReserwationDoc.alertActiveCount
+                ? userReserwationDoc.alertActiveCount
+                : 0;
+              userReserwationDoc.userReserwationDoc =
+                countAlertsActiveValid + allUserAlertsToSave.length;
+
+              userReserwationDoc.save();
+            }
+          });
+        return true;
+      });
+    })
+    .then(() => {
+      return CompanyUsersInformations.deleteMany({ companyId: companyId });
+    })
+    .then(() => {
+      return CompanyAvailability.deleteOne({ companyId: companyId });
+    })
+    .then(() => {
+      return Company.deleteOne({ _id: companyId });
+    })
+
+    .then((result) => {
+      res.status(201).json({
+        message: "Usunięto działalność",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danej działalności.";
       }
       next(err);
     });

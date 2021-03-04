@@ -191,6 +191,13 @@ router.post(
   user.userDeleteImage
 );
 
+router.post(
+  "/user-delete-image-other",
+  isAuth,
+  [body("imagePath")],
+  user.userDeleteImageOther
+);
+
 router.patch(
   "/add-company-favourites",
   isAuth,

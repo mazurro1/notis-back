@@ -807,7 +807,7 @@ exports.addReserwation = (req, res, next) => {
 
             transporter.sendMail({
               to: userEmail,
-              from: "nootis.help@gmail.com",
+              from: MAIL_INFO,
               subject: `Dokonano rezerwacji w firmie ${result.company.name}`,
               html: `<h1>Termin rezerwacji:</h1>
               <h4>
@@ -1600,7 +1600,7 @@ exports.getUserReserwationsAll = (req, res, next) => {
             otherPropsToReserwation.push(itemToExtraProps);
           }
         }
-        return item.company.name;
+        return !!item.company ? item.company.name : "None";
       });
 
       let tempReserwationsCategories = new Set(tempItemsReserwations);
@@ -1608,9 +1608,10 @@ exports.getUserReserwationsAll = (req, res, next) => {
 
       let allItems = [];
       allReserwationsCategories.forEach((itemCategory) => {
-        const filterItemsToCategory = reserwationsDoc.filter(
-          (item) => item.company.name === itemCategory
-        );
+        const filterItemsToCategory = reserwationsDoc.filter((item) => {
+          const companyName = !!item.company ? item.company.name : "None";
+          return companyName === itemCategory;
+        });
 
         filterItemsToCategory.sort((a, b) => {
           const splitFirstDate = a.dateStart.split(":");
@@ -1846,7 +1847,7 @@ exports.updateReserwation = (req, res, next) => {
 
             // transporter.sendMail({
             //   to: userEmail,
-            //   from: "nootis.help@gmail.com",
+            //   from: MAIL_INFO,
             //   subject: `Dokonano rezerwacji w firmie ${result.company.name}`,
             //   html: `<h1>Termin rezerwacji:</h1>
             //   <h4>
@@ -2032,7 +2033,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
 
             // transporter.sendMail({
             //   to: userEmail,
-            //   from: "nootis.help@gmail.com",
+            //   from: MAIL_INFO,
             //   subject: `Dokonano rezerwacji w firmie ${result.company.name}`,
             //   html: `<h1>Termin rezerwacji:</h1>
             //   <h4>
