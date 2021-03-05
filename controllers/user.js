@@ -1657,6 +1657,25 @@ exports.deleteUserAccount = (req, res, next) => {
       return CompanyUsersInformations.deleteMany({ userId: userId });
     })
     .then(() => {
+      return User.deleteOne({ _id: userId })
+        .select("_id email")
+        .then((userDoc) => {
+          if (!!userDoc) {
+            transporter.sendMail({
+              to: userDoc.email,
+              from: MAIL_INFO,
+              subject: "Usunięto konto!",
+              html: "<h1>Konto została usunięte</h1>",
+            });
+            return true;
+          } else {
+            const error = new Error("Błąd podczas usuwania konta.");
+            error.statusCode = 423;
+            throw error;
+          }
+        });
+    })
+    .then(() => {
       return User.deleteOne({ _id: userId });
     })
     .then(() => {

@@ -9,11 +9,11 @@ router.post(
   "/company-registration",
   isAuth,
   [body("companyEmail").isEmail()],
-  [body("companyName").trim().isLength({ min: 5 })],
+  [body("companyName").trim().isLength({ min: 3 })],
   [body("companyNumber").trim().isLength({ min: 7 })],
   [body("companyCity").trim().isLength({ min: 3 })],
   [body("companyDiscrict").trim().isLength({ min: 3 })],
-  [body("companyAdress").trim().isLength({ min: 5 })],
+  [body("companyAdress").trim().isLength({ min: 3 })],
   [body("companyIndustries")],
   company.registrationCompany
 );
