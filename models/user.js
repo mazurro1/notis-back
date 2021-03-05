@@ -72,6 +72,14 @@ const userSchema = new Schema(
       type: Boolean,
       required: false,
     },
+    codeDelete: {
+      type: String,
+      required: false,
+    },
+    codeDeleteDate: {
+      type: Date,
+      required: false,
+    },
     stamps: [
       {
         companyId: {

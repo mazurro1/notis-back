@@ -212,4 +212,17 @@ router.patch(
   user.deleteCompanyFavourites
 );
 
+router.post(
+  "/user-sent-code-delete-account",
+  isAuth,
+  user.userSentCodeDeleteCompany
+);
+
+router.post(
+  "/delete-user-account",
+  isAuth,
+  [body("code")],
+  user.deleteUserAccount
+);
+
 module.exports = router;

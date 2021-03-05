@@ -167,6 +167,26 @@ exports.registrationCompany = (req, res, next) => {
             }
           })
           .then((result) => {
+            return User.findOne({
+              _id: ownerId,
+              company: null,
+              hasCompany: false,
+            })
+              .select("_id company hasCompany email")
+              .then((user) => {
+                if (!!user) {
+                  user.company = result._id.toString();
+                  user.hasCompany = true;
+                  user.save();
+                  return result;
+                } else {
+                  const error = new Error("Brak użytkownika.");
+                  error.statusCode = 502;
+                  throw error;
+                }
+              });
+          })
+          .then((result) => {
             const unhashedCodeToVerified = Buffer.from(
               result.codeToVerified,
               "base64"
@@ -3652,16 +3672,23 @@ exports.companySentCodeDeleteCompany = (req, res, next) => {
       const dateDeleteCompany = new Date(
         new Date().setMinutes(new Date().getMinutes() + 10)
       );
-      resultCompanyDoc.codeDelete = randomCode;
+      const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
+        "base64"
+      );
+      resultCompanyDoc.codeDelete = hashedCodeToDelete;
       resultCompanyDoc.codeDeleteDate = dateDeleteCompany;
       return resultCompanyDoc.save();
     })
     .then((companyData) => {
+      const codeToDelete = Buffer.from(
+        companyData.codeDelete,
+        "base64"
+      ).toString("ascii");
       transporter.sendMail({
         to: companyData.email,
         from: MAIL_INFO,
         subject: `Potwierdzenie usunięcia działalności ${companyData.name}`,
-        html: `<h1>Kod do usunięcia działalności: ${companyData.codeDelete}</h1>`,
+        html: `<h1>Kod do usunięcia działalności: ${codeToDelete.toUpperCase()}</h1>`,
       });
       res.status(201).json({
         message: "Wysłano kod do usunięcia działalności",
@@ -3705,8 +3732,12 @@ exports.companyDeleteCompany = (req, res, next) => {
       }
     })
     .then((resultCompanyDoc) => {
+      const codeToDelete = Buffer.from(
+        resultCompanyDoc.codeDelete,
+        "base64"
+      ).toString("ascii");
       if (
-        resultCompanyDoc.codeDelete.toUpperCase() === code &&
+        codeToDelete.toUpperCase() === code.toUpperCase() &&
         resultCompanyDoc.codeDeleteDate > new Date()
       ) {
         return resultCompanyDoc;
@@ -3829,6 +3860,25 @@ exports.companyDeleteCompany = (req, res, next) => {
     })
     .then(() => {
       return CompanyAvailability.deleteOne({ companyId: companyId });
+    })
+    .then(() => {
+      return Company.findOne({ _id: companyId })
+        .select("email _id")
+        .then((companyData) => {
+          if (!!companyData) {
+            transporter.sendMail({
+              to: companyData.email,
+              from: MAIL_INFO,
+              subject: `Usunięto działalność!`,
+              html: `<h1>Działalność została usunięta</h1>`,
+            });
+            return true;
+          } else {
+            const error = new Error("Błąd podczas usuwania działalności.");
+            error.statusCode = 423;
+            throw error;
+          }
+        });
     })
     .then(() => {
       return Company.deleteOne({ _id: companyId });

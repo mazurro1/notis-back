@@ -1,5 +1,7 @@
 const User = require("../models/user");
 const Company = require("../models/company");
+const Reserwation = require("../models/reserwation");
+const CompanyUsersInformations = require("../models/companyUsersInformations");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
@@ -135,6 +137,7 @@ exports.registration = (req, res, next) => {
                 accountVerified: false,
                 codeToVerified: hashedCodeToVerified,
                 hasPhone: true,
+                hasCompany: false,
               });
               const token = jwt.sign(
                 {
@@ -263,6 +266,29 @@ exports.login = (req, res, next) => {
               userWithToken.surname,
               "base64"
             ).toString("ascii");
+
+            const isNotCompanyStamps = userWithToken.stamps.some(
+              (stamp) => stamp.companyId === null
+            );
+            const isNotCompanyFavourites = userWithToken.favouritesCompanys.some(
+              (fav) => fav === null
+            );
+            if (isNotCompanyStamps || isNotCompanyFavourites) {
+              if (isNotCompanyStamps) {
+                const filterStampsUser = userWithToken.stamps.filter(
+                  (stamp) => stamp.companyId !== null
+                );
+                userWithToken.stamps = filterStampsUser;
+              }
+              if (isNotCompanyFavourites) {
+                const filterFavUser = userWithToken.favouritesCompanys.filter(
+                  (fav) => fav !== null
+                );
+                userWithToken.favouritesCompanys = filterFavUser;
+              }
+              userWithToken.save();
+            }
+
             res.status(201).json({
               userId: userWithToken._id.toString(),
               email: userWithToken.email,
@@ -1175,6 +1201,8 @@ exports.loginFacebookNew = (req, res, next) => {
                   codeToVerified: null,
                   hasPhone: false,
                   imageOther: !!picture ? picture.data.url : "",
+                  hasCompany: false,
+                  company: null,
                 });
                 const token = jwt.sign(
                   {
@@ -1393,6 +1421,8 @@ exports.loginGoogle = (req, res, next) => {
                   codeToVerified: null,
                   hasPhone: false,
                   imageOther: !!picture ? picture : "",
+                  hasCompany: false,
+                  company: null,
                 });
                 const token = jwt.sign(
                   {
@@ -1439,6 +1469,205 @@ exports.loginGoogle = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
+exports.userSentCodeDeleteCompany = (req, res, next) => {
+  const userId = req.userId;
+
+  User.findOne({
+    _id: userId,
+    company: null,
+    hasCompany: false,
+  })
+    .select("_id codeDeleteDate codeDelete name surname email")
+    .then((resultUserDoc) => {
+      if (!!resultUserDoc) {
+        const randomCode = makeid(10);
+        const dateDeleteCompany = new Date(
+          new Date().setMinutes(new Date().getMinutes() + 10)
+        );
+        const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
+          "base64"
+        );
+        resultUserDoc.codeDeleteDate = dateDeleteCompany;
+        resultUserDoc.codeDelete = hashedCodeToDelete;
+        return resultUserDoc.save();
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((userSavedData) => {
+      const userName = Buffer.from(userSavedData.name, "base64").toString(
+        "ascii"
+      );
+      const userSurname = Buffer.from(userSavedData.surname, "base64").toString(
+        "ascii"
+      );
+      const codeToDelete = Buffer.from(
+        userSavedData.codeDelete,
+        "base64"
+      ).toString("ascii");
+      transporter.sendMail({
+        to: userSavedData.email,
+        from: MAIL_INFO,
+        subject: `Potwierdzenie usunięcia konta ${userName} ${userSurname}`,
+        html: `<h1>Kod do usunięcia konta: ${codeToDelete.toUpperCase()}</h1>`,
+      });
+      res.status(201).json({
+        message: "Wysłano kod do usunięcia konta",
+      });
+    })
+
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas ususwania konta.";
+      }
+      next(err);
+    });
+};
+
+exports.deleteUserAccount = (req, res, next) => {
+  const userId = req.userId;
+  const code = req.body.code;
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({ _id: userId, company: null, hasCompany: false })
+    .select("_id codeDeleteDate codeDelete name surname email")
+    .then((userData) => {
+      const codeToDelete = Buffer.from(userData.codeDelete, "base64").toString(
+        "ascii"
+      );
+      if (
+        code.toUpperCase() === codeToDelete.toUpperCase() &&
+        userData.codeDeleteDate > new Date()
+      ) {
+        return true;
+      } else {
+        const error = new Error("Błędny kod.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then(() => {
+      const actualDay = new Date();
+      return Reserwation.find({
+        fromUser: userId,
+        visitNotFinished: false,
+        visitCanceled: false,
+      })
+        .select(
+          "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName"
+        )
+        .populate({
+          path: "company fromUser",
+          select: "name surname linkPath",
+        })
+        .then((allWorkerReserwations) => {
+          const allUsersReserwations = [];
+          if (!!allWorkerReserwations) {
+            allWorkerReserwations.forEach((item) => {
+              const splitDateStart = item.dateStart.split(":");
+              const reserwationDate = new Date(
+                item.dateYear,
+                item.dateMonth - 1,
+                item.dateDay,
+                Number(splitDateStart[0]),
+                Number(splitDateStart[1])
+              );
+              if (reserwationDate > actualDay) {
+                item.visitCanceled = true;
+                item.save();
+                const findUserReserwations = allUsersReserwations.findIndex(
+                  (reserwation) => reserwation.userId == item.fromUser._id
+                );
+                if (findUserReserwations >= 0) {
+                  allUsersReserwations[findUserReserwations].items.push(item);
+                } else {
+                  const newUserData = {
+                    userId: item.fromUser._id,
+                    items: [item],
+                  };
+                  allUsersReserwations.push(newUserData);
+                }
+              }
+            });
+            return allUsersReserwations;
+          }
+        });
+    })
+    .then((result) => {
+      result.forEach((userDoc) => {
+        User.findOne({
+          _id: userDoc.userId,
+        })
+          .select("_id alerts")
+          .then((userReserwationDoc) => {
+            if (!!userReserwationDoc) {
+              const allUserAlertsToSave = [];
+
+              userDoc.items.forEach((itemReserwation) => {
+                const userAlertToSave = {
+                  reserwationId: itemReserwation._id,
+                  active: true,
+                  type: "rezerwation_canceled",
+                  creationTime: new Date(),
+                  companyChanged: true,
+                };
+
+                allUserAlertsToSave.push(userAlertToSave);
+
+                io.getIO().emit(`user${userReserwationDoc._id}`, {
+                  action: "update-alerts",
+                  alertData: {
+                    reserwationId: itemReserwation,
+                    active: true,
+                    type: "rezerwation_canceled",
+                    creationTime: new Date(),
+                    companyChanged: true,
+                  },
+                });
+              });
+
+              userReserwationDoc.alerts.unshift(...allUserAlertsToSave);
+
+              const countAlertsActiveValid = !!userReserwationDoc.alertActiveCount
+                ? userReserwationDoc.alertActiveCount
+                : 0;
+              userReserwationDoc.userReserwationDoc =
+                countAlertsActiveValid + allUserAlertsToSave.length;
+
+              userReserwationDoc.save();
+            }
+          });
+        return true;
+      });
+    })
+    .then(() => {
+      return CompanyUsersInformations.deleteMany({ userId: userId });
+    })
+    .then(() => {
+      return User.deleteOne({ _id: userId });
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Użytkownik został usunięty",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas usuwania użytkownika.";
       }
       next(err);
     });
