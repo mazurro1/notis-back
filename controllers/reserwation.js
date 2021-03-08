@@ -730,6 +730,35 @@ exports.addReserwation = (req, res, next) => {
                         companyChanged: false,
                       },
                     });
+
+                    transporter.sendMail({
+                      to: userEmail,
+                      from: MAIL_INFO,
+                      subject: `Dokonano rezerwacji w firmie ${resultReserwationPopulate.company.name}`,
+                      html: `<h1>Termin rezerwacji:</h1>
+                      <h4>
+                        Nazwa usługi: ${resultReserwationPopulate.serviceName}
+                      </h4>
+                      <h4>
+                        Termin: ${resultReserwationPopulate.dateDay}-${
+                        resultReserwationPopulate.dateMonth
+                      }-${resultReserwationPopulate.dateYear}
+                      </h4>
+                      <h4>
+                        Godzina: ${resultReserwationPopulate.dateStart}
+                      </h4>
+                      <h4>
+                        Czas trwania: ${
+                          resultReserwationPopulate.timeReserwation
+                        }min ${resultReserwationPopulate.extraTime ? "+" : ""}
+                      </h4>
+                      <h4>
+                        Koszt: ${
+                          resultReserwationPopulate.costReserwation
+                        } zł ${resultReserwationPopulate.extraCost ? "+" : ""}
+                      </h4>
+                      `,
+                    });
                   }
                 );
               if (!!numberPhone) {
@@ -804,39 +833,7 @@ exports.addReserwation = (req, res, next) => {
 
               return userResult.save();
             });
-
-            transporter.sendMail({
-              to: userEmail,
-              from: MAIL_INFO,
-              subject: `Dokonano rezerwacji w firmie ${result.company.name}`,
-              html: `<h1>Termin rezerwacji:</h1>
-              <h4>
-                Nazwa usługi: ${result.serviceName}
-              </h4>
-              <h4>
-                Termin: ${result.dateDay}-${result.dateMonth}-${result.dateYear}
-              </h4>
-              <h4>
-                Godzina: ${result.dateStart}
-              </h4>
-              <h4>
-                Czas trwania: ${result.timeReserwation}min ${
-                result.extraTime ? "+" : ""
-              }
-              </h4>
-              <h4>
-                Koszt: ${result.costReserwation} zł ${
-                result.extraCost ? "+" : ""
-              }
-              </h4>
-              `,
-            });
           }
-          // else {
-          //   const error = new Error("Brak podanej usługi.");
-          //   error.statusCode = 422;
-          //   throw error;
-          // }
         });
     })
     .then(() => {
@@ -1057,360 +1054,374 @@ exports.getWorkerDisabledHours = (req, res, next) => {
           "workers owner ownerData reservationEveryTime daysOff reservationMonthTime promotions happyHoursConst"
         )
         .then((companyDoc) => {
-          let selectedWorker = null;
-          if (companyDoc.owner == workerUserId) {
-            selectedWorker = companyDoc.ownerData;
-          } else {
-            selectedWorker = companyDoc.workers.find((item) => {
-              return item._id == workerId;
-            });
-          }
-          if (!!selectedWorker) {
-            const selectedDate = new Date(
-              selectedYear,
-              selectedMonth - 1,
-              selectedDay,
-              10,
-              0,
-              0,
-              0
-            );
-            const selectedDateDayOfTheWeek = selectedDate.getDay();
-            const selectedFullDate = `${selectedDay}-${selectedMonth}-${selectedYear}`;
-            const mapWorkerConstWorkingHours = selectedWorker.constantWorkingHours.map(
-              (item) => {
-                return {
-                  _id: item._id,
-                  dayOfTheWeek: item.dayOfTheWeek,
-                  start: item.startWorking,
-                  end: item.endWorking,
-                  disabled: item.disabled,
-                };
-              }
-            );
-
-            const workerConstWorkingHours = mapWorkerConstWorkingHours.find(
-              (item) => item.dayOfTheWeek === selectedDateDayOfTheWeek
-            );
-            let workerNoConstWorkingHours = selectedWorker.noConstantWorkingHours.find(
-              (item) => item.fullDate == selectedFullDate
-            );
-
-            if (!!workerNoConstWorkingHours) {
-              const startDate = new Date(workerNoConstWorkingHours.start);
-              const startDateResult = `${startDate.getHours()}:${startDate.getMinutes()}`;
-              const endDate = new Date(workerNoConstWorkingHours.end);
-              const endDateResult = `${endDate.getHours()}:${endDate.getMinutes()}`;
-              const newDateNoConst = {
-                _id: workerNoConstWorkingHours._id,
-                fullDate: workerNoConstWorkingHours.fullDate,
-                holidays: workerNoConstWorkingHours.holidays,
-                start: startDateResult,
-                end: endDateResult,
-              };
-              workerNoConstWorkingHours = newDateNoConst;
+          if (!!companyDoc) {
+            let selectedWorker = null;
+            if (companyDoc.owner == workerUserId) {
+              selectedWorker = companyDoc.ownerData;
+            } else {
+              selectedWorker = companyDoc.workers.find((item) => {
+                return item._id == workerId;
+              });
             }
-            const selectedDayToValid = !!workerNoConstWorkingHours
-              ? workerNoConstWorkingHours.holidays
-                ? null
-                : workerNoConstWorkingHours
-              : workerConstWorkingHours;
-
-            const findOffDay = companyDoc.daysOff.some(
-              (dayOff) =>
-                dayOff.day === selectedDay &&
-                dayOff.month === selectedMonth &&
-                dayOff.year === selectedYear
-            );
-
-            // sprawdzanie rezerwacji do przodu
-            let dateToReserwIsGood = true;
-            if (!!companyDoc.reservationMonthTime) {
-              const maxDateToReserw = new Date(
-                new Date().setMonth(
-                  new Date().getMonth() + companyDoc.reservationMonthTime
-                )
+            if (!!selectedWorker) {
+              const selectedDate = new Date(
+                selectedYear,
+                selectedMonth - 1,
+                selectedDay,
+                10,
+                0,
+                0,
+                0
               );
-              dateToReserwIsGood = maxDateToReserw >= selectedDate;
-            }
+              const selectedDateDayOfTheWeek = selectedDate.getDay();
+              const selectedFullDate = `${selectedDay}-${selectedMonth}-${selectedYear}`;
+              const mapWorkerConstWorkingHours = selectedWorker.constantWorkingHours.map(
+                (item) => {
+                  return {
+                    _id: item._id,
+                    dayOfTheWeek: item.dayOfTheWeek,
+                    start: item.startWorking,
+                    end: item.endWorking,
+                    disabled: item.disabled,
+                  };
+                }
+              );
 
-            if (dateToReserwIsGood) {
-              if (!!selectedDayToValid && !!!findOffDay) {
-                if (!!!selectedDayToValid.disabled) {
-                  const workerStartWorkDate = selectedDayToValid.start.split(
-                    ":"
-                  );
-                  const workerEndWorkDate = selectedDayToValid.end.split(":");
-                  const workerStartWork =
-                    Number(workerStartWorkDate[0]) * 60 +
-                    Number(workerStartWorkDate[1]);
+              const workerConstWorkingHours = mapWorkerConstWorkingHours.find(
+                (item) => item.dayOfTheWeek === selectedDateDayOfTheWeek
+              );
+              let workerNoConstWorkingHours = selectedWorker.noConstantWorkingHours.find(
+                (item) => item.fullDate == selectedFullDate
+              );
 
-                  const workerEndWork =
-                    Number(workerEndWorkDate[0]) * 60 +
-                    Number(workerEndWorkDate[1]);
+              if (!!workerNoConstWorkingHours) {
+                const startDate = new Date(workerNoConstWorkingHours.start);
+                const startDateResult = `${startDate.getHours()}:${startDate.getMinutes()}`;
+                const endDate = new Date(workerNoConstWorkingHours.end);
+                const endDateResult = `${endDate.getHours()}:${endDate.getMinutes()}`;
+                const newDateNoConst = {
+                  _id: workerNoConstWorkingHours._id,
+                  fullDate: workerNoConstWorkingHours.fullDate,
+                  holidays: workerNoConstWorkingHours.holidays,
+                  start: startDateResult,
+                  end: endDateResult,
+                };
+                workerNoConstWorkingHours = newDateNoConst;
+              }
+              const selectedDayToValid = !!workerNoConstWorkingHours
+                ? workerNoConstWorkingHours.holidays
+                  ? null
+                  : workerNoConstWorkingHours
+                : workerConstWorkingHours;
 
-                  const timeReservationEveryTime = Number(
-                    companyDoc.reservationEveryTime
-                  );
+              const findOffDay = companyDoc.daysOff.some(
+                (dayOff) =>
+                  dayOff.day === selectedDay &&
+                  dayOff.month === selectedMonth &&
+                  dayOff.year === selectedYear
+              );
 
-                  let avaibleHoursToConvertWithPromotions = [];
-                  // pobieranie wszystkich dostępnych godzin dla pracownika
+              // sprawdzanie rezerwacji do przodu
+              let dateToReserwIsGood = true;
+              if (!!companyDoc.reservationMonthTime) {
+                const maxDateToReserw = new Date(
+                  new Date().setMonth(
+                    new Date().getMonth() + companyDoc.reservationMonthTime
+                  )
+                );
+                dateToReserwIsGood = maxDateToReserw >= selectedDate;
+              }
 
-                  // patrzy czy data jest aktualna i jak jest to porównuje dostępne godziny
-                  const compareDateActual = new Date(
-                    new Date().getFullYear(),
-                    new Date().getMonth(),
-                    new Date().getDate(),
-                    10,
-                    0
-                  );
-                  const compareDateReserwation = new Date(
-                    Number(selectedYear),
-                    Number(selectedMonth) - 1,
-                    Number(selectedDay),
-                    10,
-                    0
-                  );
-                  const compareIsActualDay =
-                    compareDateActual.getTime() ===
-                    compareDateReserwation.getTime();
-
-                  const actualTime = new Date();
-                  const actualDateNumber =
-                    Number(actualTime.getHours()) * 60 +
-                    Number(actualTime.getMinutes());
-
-                  // promotions happyHoursConst serviceId
-
-                  //valid is day in promotion
-                  const convertDateReserwationToDateInPromotions = `${compareDateReserwation.getFullYear()}-${
-                    compareDateReserwation.getMonth() + 1 < 10
-                      ? `0${compareDateReserwation.getMonth() + 1}`
-                      : compareDateReserwation.getMonth()
-                  }-${
-                    compareDateReserwation.getDate() < 10
-                      ? `0${compareDateReserwation.getDate()}`
-                      : compareDateReserwation.getDate()
-                  }`;
-                  const dateConvertDateReserwationToDateInPromotions = new Date(
-                    convertDateReserwationToDateInPromotions
-                  );
-                  const filterSelectedPromotions = companyDoc.promotions.filter(
-                    (promotionItem) => {
-                      const dateStartPromotion = new Date(promotionItem.start);
-                      const dateEndPromotion = new Date(promotionItem.end);
-                      const isDayInPromotion =
-                        dateStartPromotion <=
-                          dateConvertDateReserwationToDateInPromotions &&
-                        dateEndPromotion >=
-                          dateConvertDateReserwationToDateInPromotions;
-
-                      const isServiceInPromotion = promotionItem.servicesInPromotion.some(
-                        (promotionItemService) =>
-                          promotionItemService == serviceId
-                      );
-                      return isServiceInPromotion && isDayInPromotion;
-                    }
-                  );
-                  //sort selected promotions
-                  let promotionNumber = null;
-
-                  if (filterSelectedPromotions.length > 0) {
-                    filterSelectedPromotions.sort((a, b) => {
-                      const firstItemToSort = a.promotionPercent;
-                      const secondItemToSort = b.promotionPercent;
-                      if (firstItemToSort < secondItemToSort) return 1;
-                      if (firstItemToSort > secondItemToSort) return -1;
-                      return 0;
-                    });
-                    promotionNumber =
-                      filterSelectedPromotions[0].promotionPercent;
-                  }
-                  //end valid is day in promotion
-                  const daysInHappyHours = [];
-
-                  // happyhour promotions valid
-                  const selectedReserwationDay = dateConvertDateReserwationToDateInPromotions.getDay();
-                  const filterSelectedHappyHours = companyDoc.happyHoursConst.filter(
-                    (happyHourItem) => {
-                      const isSelectedDayHappyHour = happyHourItem.dayWeekIndex.some(
-                        (happyHourItemService) =>
-                          happyHourItemService === selectedReserwationDay
-                      );
-                      const isServiceInHappyHour = happyHourItem.servicesInPromotion.some(
-                        (happyHourItemService) =>
-                          happyHourItemService == serviceId
-                      );
-                      return isSelectedDayHappyHour && isServiceInHappyHour;
-                    }
-                  );
-                  if (filterSelectedHappyHours.length > 0) {
-                    filterSelectedHappyHours.sort((a, b) => {
-                      const firstItemToSort = a.promotionPercent;
-                      const secondItemToSort = b.promotionPercent;
-                      if (firstItemToSort < secondItemToSort) return -1;
-                      if (firstItemToSort > secondItemToSort) return 1;
-                      return 0;
-                    });
-                    filterSelectedHappyHours.forEach((happyHour) => {
-                      const dateHappyHourStartSplit = happyHour.start.split(
-                        ":"
-                      );
-                      const dateHappyHourEndSplit = happyHour.end.split(":");
-                      const dateStartHappyHourInNumber =
-                        Number(dateHappyHourStartSplit[0]) * 60 +
-                        Number(dateHappyHourStartSplit[1]);
-                      const dateEndHappyHourInNumber =
-                        Number(dateHappyHourEndSplit[0]) * 60 +
-                        Number(dateHappyHourEndSplit[1]);
-
-                      //added hour with promotion
-                      for (
-                        let i = dateStartHappyHourInNumber;
-                        i >= dateStartHappyHourInNumber &&
-                        i <= dateEndHappyHourInNumber;
-                        i = i + timeReservationEveryTime
-                      ) {
-                        const indexDaysInHappyHours = daysInHappyHours.findIndex(
-                          (itemHour) => itemHour.time === i
-                        );
-                        if (indexDaysInHappyHours >= 0) {
-                          daysInHappyHours[indexDaysInHappyHours].happyHour =
-                            happyHour.promotionPercent;
-                        } else {
-                          daysInHappyHours.push({
-                            time: i,
-                            happyHour: happyHour.promotionPercent,
-                          });
-                        }
-                      }
-                    });
-                  }
-                  if (daysInHappyHours.length > 0) {
-                    daysInHappyHours.sort((a, b) => {
-                      const firstItemToSort = a.time;
-                      const secondItemToSort = b.time;
-                      if (firstItemToSort < secondItemToSort) return -1;
-                      if (firstItemToSort > secondItemToSort) return 1;
-                      return 0;
-                    });
-                  }
-
-                  for (
-                    let i = workerStartWork;
-                    i >= workerStartWork &&
-                    i <= workerEndWork - timeReserwation;
-                    i = i + timeReservationEveryTime
-                  ) {
-                    // znajduje item w happyhour w promocjach w danych godzinach
-                    let happyHourPromotionToTime = null;
-                    const findHappyHourPromotionItem = daysInHappyHours.find(
-                      (happyHourPromotion) => happyHourPromotion.time === i
+              if (dateToReserwIsGood) {
+                if (!!selectedDayToValid && !!!findOffDay) {
+                  if (!!!selectedDayToValid.disabled) {
+                    const workerStartWorkDate = selectedDayToValid.start.split(
+                      ":"
                     );
-                    if (!!findHappyHourPromotionItem) {
-                      happyHourPromotionToTime =
-                        findHappyHourPromotionItem.happyHour;
+                    const workerEndWorkDate = selectedDayToValid.end.split(":");
+                    const workerStartWork =
+                      Number(workerStartWorkDate[0]) * 60 +
+                      Number(workerStartWorkDate[1]);
+
+                    const workerEndWork =
+                      Number(workerEndWorkDate[0]) * 60 +
+                      Number(workerEndWorkDate[1]);
+
+                    const timeReservationEveryTime = Number(
+                      companyDoc.reservationEveryTime
+                    );
+
+                    let avaibleHoursToConvertWithPromotions = [];
+                    // pobieranie wszystkich dostępnych godzin dla pracownika
+
+                    // patrzy czy data jest aktualna i jak jest to porównuje dostępne godziny
+                    const compareDateActual = new Date(
+                      new Date().getFullYear(),
+                      new Date().getMonth(),
+                      new Date().getDate(),
+                      10,
+                      0
+                    );
+                    const compareDateReserwation = new Date(
+                      Number(selectedYear),
+                      Number(selectedMonth) - 1,
+                      Number(selectedDay),
+                      10,
+                      0
+                    );
+                    const compareIsActualDay =
+                      compareDateActual.getTime() ===
+                      compareDateReserwation.getTime();
+
+                    const actualTime = new Date();
+                    const actualDateNumber =
+                      Number(actualTime.getHours()) * 60 +
+                      Number(actualTime.getMinutes());
+
+                    // promotions happyHoursConst serviceId
+
+                    //valid is day in promotion
+                    const convertDateReserwationToDateInPromotions = `${compareDateReserwation.getFullYear()}-${
+                      compareDateReserwation.getMonth() + 1 < 10
+                        ? `0${compareDateReserwation.getMonth() + 1}`
+                        : compareDateReserwation.getMonth()
+                    }-${
+                      compareDateReserwation.getDate() < 10
+                        ? `0${compareDateReserwation.getDate()}`
+                        : compareDateReserwation.getDate()
+                    }`;
+                    const dateConvertDateReserwationToDateInPromotions = new Date(
+                      convertDateReserwationToDateInPromotions
+                    );
+                    const filterSelectedPromotions = companyDoc.promotions.filter(
+                      (promotionItem) => {
+                        const dateStartPromotion = new Date(
+                          promotionItem.start
+                        );
+                        const dateEndPromotion = new Date(promotionItem.end);
+                        const isDayInPromotion =
+                          dateStartPromotion <=
+                            dateConvertDateReserwationToDateInPromotions &&
+                          dateEndPromotion >=
+                            dateConvertDateReserwationToDateInPromotions;
+
+                        const isServiceInPromotion = promotionItem.servicesInPromotion.some(
+                          (promotionItemService) =>
+                            promotionItemService == serviceId
+                        );
+                        return isServiceInPromotion && isDayInPromotion;
+                      }
+                    );
+                    //sort selected promotions
+                    let promotionNumber = null;
+
+                    if (filterSelectedPromotions.length > 0) {
+                      filterSelectedPromotions.sort((a, b) => {
+                        const firstItemToSort = a.promotionPercent;
+                        const secondItemToSort = b.promotionPercent;
+                        if (firstItemToSort < secondItemToSort) return 1;
+                        if (firstItemToSort > secondItemToSort) return -1;
+                        return 0;
+                      });
+                      promotionNumber =
+                        filterSelectedPromotions[0].promotionPercent;
                     }
-                    // filtruje dostępne godziny na takie które są aktualne w czasie
-                    const newItemTime = {
-                      time: i,
-                      promotion: promotionNumber,
-                      happyHour: happyHourPromotionToTime,
-                    };
-                    if (compareIsActualDay) {
-                      if (i >= actualDateNumber) {
+                    //end valid is day in promotion
+                    const daysInHappyHours = [];
+
+                    // happyhour promotions valid
+                    const selectedReserwationDay = dateConvertDateReserwationToDateInPromotions.getDay();
+                    const filterSelectedHappyHours = companyDoc.happyHoursConst.filter(
+                      (happyHourItem) => {
+                        const isSelectedDayHappyHour = happyHourItem.dayWeekIndex.some(
+                          (happyHourItemService) =>
+                            happyHourItemService === selectedReserwationDay
+                        );
+                        const isServiceInHappyHour = happyHourItem.servicesInPromotion.some(
+                          (happyHourItemService) =>
+                            happyHourItemService == serviceId
+                        );
+                        return isSelectedDayHappyHour && isServiceInHappyHour;
+                      }
+                    );
+                    if (filterSelectedHappyHours.length > 0) {
+                      filterSelectedHappyHours.sort((a, b) => {
+                        const firstItemToSort = a.promotionPercent;
+                        const secondItemToSort = b.promotionPercent;
+                        if (firstItemToSort < secondItemToSort) return -1;
+                        if (firstItemToSort > secondItemToSort) return 1;
+                        return 0;
+                      });
+                      filterSelectedHappyHours.forEach((happyHour) => {
+                        const dateHappyHourStartSplit = happyHour.start.split(
+                          ":"
+                        );
+                        const dateHappyHourEndSplit = happyHour.end.split(":");
+                        const dateStartHappyHourInNumber =
+                          Number(dateHappyHourStartSplit[0]) * 60 +
+                          Number(dateHappyHourStartSplit[1]);
+                        const dateEndHappyHourInNumber =
+                          Number(dateHappyHourEndSplit[0]) * 60 +
+                          Number(dateHappyHourEndSplit[1]);
+
+                        //added hour with promotion
+                        for (
+                          let i = dateStartHappyHourInNumber;
+                          i >= dateStartHappyHourInNumber &&
+                          i <= dateEndHappyHourInNumber;
+                          i = i + timeReservationEveryTime
+                        ) {
+                          const indexDaysInHappyHours = daysInHappyHours.findIndex(
+                            (itemHour) => itemHour.time === i
+                          );
+                          if (indexDaysInHappyHours >= 0) {
+                            daysInHappyHours[indexDaysInHappyHours].happyHour =
+                              happyHour.promotionPercent;
+                          } else {
+                            daysInHappyHours.push({
+                              time: i,
+                              happyHour: happyHour.promotionPercent,
+                            });
+                          }
+                        }
+                      });
+                    }
+                    if (daysInHappyHours.length > 0) {
+                      daysInHappyHours.sort((a, b) => {
+                        const firstItemToSort = a.time;
+                        const secondItemToSort = b.time;
+                        if (firstItemToSort < secondItemToSort) return -1;
+                        if (firstItemToSort > secondItemToSort) return 1;
+                        return 0;
+                      });
+                    }
+
+                    for (
+                      let i = workerStartWork;
+                      i >= workerStartWork &&
+                      i <= workerEndWork - timeReserwation;
+                      i = i + timeReservationEveryTime
+                    ) {
+                      // znajduje item w happyhour w promocjach w danych godzinach
+                      let happyHourPromotionToTime = null;
+                      const findHappyHourPromotionItem = daysInHappyHours.find(
+                        (happyHourPromotion) => happyHourPromotion.time === i
+                      );
+                      if (!!findHappyHourPromotionItem) {
+                        happyHourPromotionToTime =
+                          findHappyHourPromotionItem.happyHour;
+                      }
+                      // filtruje dostępne godziny na takie które są aktualne w czasie
+                      const newItemTime = {
+                        time: i,
+                        promotion: promotionNumber,
+                        happyHour: happyHourPromotionToTime,
+                      };
+                      if (compareIsActualDay) {
+                        if (i >= actualDateNumber) {
+                          avaibleHoursToConvertWithPromotions.push(newItemTime);
+                        }
+                      } else {
                         avaibleHoursToConvertWithPromotions.push(newItemTime);
                       }
-                    } else {
-                      avaibleHoursToConvertWithPromotions.push(newItemTime);
                     }
-                  }
 
-                  // filtrowanie i konwertowanie tablicy rezerwacji i porównywanie dostępnych godzin dla dat z promocjami
-                  avaibleHoursToConvertWithPromotions = avaibleHoursToConvertWithPromotions.filter(
-                    (itemAvaible) => {
-                      if (reserwationDoc.length > 0) {
-                        const isActive = reserwationDoc.some((reserwation) => {
-                          const reserwationStartDate = reserwation.dateStart.split(
-                            ":"
+                    // filtrowanie i konwertowanie tablicy rezerwacji i porównywanie dostępnych godzin dla dat z promocjami
+                    avaibleHoursToConvertWithPromotions = avaibleHoursToConvertWithPromotions.filter(
+                      (itemAvaible) => {
+                        if (reserwationDoc.length > 0) {
+                          const isActive = reserwationDoc.some(
+                            (reserwation) => {
+                              const reserwationStartDate = reserwation.dateStart.split(
+                                ":"
+                              );
+                              const reserwationEndDate = reserwation.dateEnd.split(
+                                ":"
+                              );
+                              const reserwationStart =
+                                Number(reserwationStartDate[0]) * 60 +
+                                Number(reserwationStartDate[1]) -
+                                timeReserwation;
+                              const reserwationEnd =
+                                Number(reserwationEndDate[0]) * 60 +
+                                Number(reserwationEndDate[1]);
+                              return (
+                                itemAvaible.time >= reserwationStart &&
+                                itemAvaible.time < reserwationEnd
+                              );
+                            }
                           );
-                          const reserwationEndDate = reserwation.dateEnd.split(
-                            ":"
-                          );
-                          const reserwationStart =
-                            Number(reserwationStartDate[0]) * 60 +
-                            Number(reserwationStartDate[1]) -
-                            timeReserwation;
-                          const reserwationEnd =
-                            Number(reserwationEndDate[0]) * 60 +
-                            Number(reserwationEndDate[1]);
-                          return (
-                            itemAvaible.time >= reserwationStart &&
-                            itemAvaible.time < reserwationEnd
-                          );
-                        });
-                        return !isActive;
-                      } else {
-                        return true;
-                      }
-                    }
-                  );
-
-                  // konwertowanie liczb na godziny oraz minuty wraz z promocjami
-                  const unConvertAvaibleHoursWithPromotions = avaibleHoursToConvertWithPromotions.map(
-                    (item) => {
-                      let timeService = "";
-                      if (Number(item.time) < 60) {
-                        timeService = `0:${
-                          item.time < 10 ? `0${item.time}` : item.time
-                        }`;
-                      } else {
-                        const numberTime = Number(item.time);
-                        const numberOfHours = Math.floor(numberTime / 60);
-                        if (Number(item.time) % 60 === 0) {
-                          timeService = `${numberOfHours}:00`;
+                          return !isActive;
                         } else {
-                          const numberOfMinutes =
-                            numberTime - numberOfHours * 60;
-                          timeService = `${numberOfHours}:${
-                            numberOfMinutes < 10
-                              ? `0${numberOfMinutes}`
-                              : numberOfMinutes
-                          }`;
+                          return true;
                         }
                       }
-                      return {
-                        time: timeService,
-                        promotion: item.promotion,
-                        happyHour: item.happyHour,
-                      };
-                    }
-                  );
+                    );
 
-                  res.status(201).json({
-                    avaibleHoursWithPromotions: unConvertAvaibleHoursWithPromotions,
-                  });
+                    // konwertowanie liczb na godziny oraz minuty wraz z promocjami
+                    const unConvertAvaibleHoursWithPromotions = avaibleHoursToConvertWithPromotions.map(
+                      (item) => {
+                        let timeService = "";
+                        if (Number(item.time) < 60) {
+                          timeService = `0:${
+                            item.time < 10 ? `0${item.time}` : item.time
+                          }`;
+                        } else {
+                          const numberTime = Number(item.time);
+                          const numberOfHours = Math.floor(numberTime / 60);
+                          if (Number(item.time) % 60 === 0) {
+                            timeService = `${numberOfHours}:00`;
+                          } else {
+                            const numberOfMinutes =
+                              numberTime - numberOfHours * 60;
+                            timeService = `${numberOfHours}:${
+                              numberOfMinutes < 10
+                                ? `0${numberOfMinutes}`
+                                : numberOfMinutes
+                            }`;
+                          }
+                        }
+                        return {
+                          time: timeService,
+                          promotion: item.promotion,
+                          happyHour: item.happyHour,
+                        };
+                      }
+                    );
+
+                    res.status(201).json({
+                      avaibleHoursWithPromotions: unConvertAvaibleHoursWithPromotions,
+                    });
+                  } else {
+                    const error = new Error(
+                      "Pracownik ma wolne w podanym dniu."
+                    );
+                    error.statusCode = 422;
+                    throw error;
+                  }
                 } else {
-                  const error = new Error("Pracownik ma wolne w podanym dniu.");
+                  const error = new Error(
+                    "Pracownik nie pracuje w podanym dniu."
+                  );
                   error.statusCode = 422;
                   throw error;
                 }
               } else {
                 const error = new Error(
-                  "Pracownik nie pracuje w podanym dniu."
+                  "Brak możliwości rezerwacji w podanym terminie."
                 );
                 error.statusCode = 422;
                 throw error;
               }
             } else {
-              const error = new Error(
-                "Brak możliwości rezerwacji w podanym terminie."
-              );
+              const error = new Error("Brak podanego pracownika.");
               error.statusCode = 422;
               throw error;
             }
           } else {
-            const error = new Error("Brak podanego pracownika.");
+            const error = new Error(
+              "Brak podanej firmy lub działalność jest wstrzymana."
+            );
             error.statusCode = 422;
             throw error;
           }

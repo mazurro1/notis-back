@@ -23,6 +23,10 @@ const userSchema = new Schema(
       type: Boolean,
       required: false,
     },
+    phoneVerified: {
+      type: Boolean,
+      required: false,
+    },
     password: {
       type: String,
       required: true,
@@ -77,6 +81,14 @@ const userSchema = new Schema(
       required: false,
     },
     codeDeleteDate: {
+      type: Date,
+      required: false,
+    },
+    codeVerifiedPhone: {
+      type: String,
+      required: false,
+    },
+    codeVerifiedPhoneDate: {
       type: Date,
       required: false,
     },

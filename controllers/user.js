@@ -7,6 +7,7 @@ const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
+const io = require("../socket");
 const getImgBuffer = require("../getImgBuffer");
 require("dotenv").config();
 const {
@@ -138,6 +139,7 @@ exports.registration = (req, res, next) => {
                 codeToVerified: hashedCodeToVerified,
                 hasPhone: true,
                 hasCompany: false,
+                phoneVerified: false,
               });
               const token = jwt.sign(
                 {
@@ -208,7 +210,7 @@ exports.login = (req, res, next) => {
     email: email,
   })
     .select(
-      "email _id imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified hasCompany alertActiveCount imageOther"
+      "email _id phoneVerified imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified hasCompany alertActiveCount imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -306,6 +308,7 @@ exports.login = (req, res, next) => {
               hasPhone: user.hasPhone,
               stamps: user.stamps,
               favouritesCompanys: user.favouritesCompanys,
+              phoneVerified: user.phoneVerified,
             });
           })
           .catch((err) => {
@@ -383,7 +386,7 @@ exports.getUserPhone = (req, res, next) => {
           });
         } else {
           const error = new Error("Brak numeru telefonu.");
-          error.statusCode = 401;
+          error.statusCode = 422;
           throw error;
         }
       } else {
@@ -633,7 +636,7 @@ exports.autoLogin = (req, res, next) => {
     loginToken: token,
   })
     .select(
-      "_id loginToken favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified hasCompany imageUrl hasPhone imageOther"
+      "_id loginToken phoneVerified favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified hasCompany imageUrl hasPhone imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -708,6 +711,7 @@ exports.autoLogin = (req, res, next) => {
           hasPhone: user.hasPhone,
           stamps: user.stamps,
           favouritesCompanys: user.favouritesCompanys,
+          phoneVerified: user.phoneVerified,
         });
       } else {
         res.status(422).json({
@@ -741,7 +745,7 @@ exports.edit = (req, res, next) => {
     _id: userId,
   })
     .select(
-      "_id password email loginToken phone name surname accountVerified hasCompany company"
+      "_id phoneVerified password email loginToken phone name surname accountVerified hasCompany company"
     )
     .then((user) => {
       if (!!user) {
@@ -753,8 +757,8 @@ exports.edit = (req, res, next) => {
         return bcrypt
           .compare(password, user.password)
           .then((doMatch) => {
-            if (doMatch) {
-              if (newPhone || newPassword) {
+            if (!!doMatch) {
+              if (!!newPhone || !!newPassword) {
                 const token = jwt.sign(
                   {
                     email: user.email,
@@ -766,14 +770,16 @@ exports.edit = (req, res, next) => {
                   }
                 );
                 user.loginToken = token;
-                if (newPhone) {
+                if (!!newPhone) {
                   const hashedPhoneNumber = Buffer.from(
                     newPhone,
                     "utf-8"
                   ).toString("base64");
                   user.phone = hashedPhoneNumber;
+                  user.hasPhone = true;
+                  user.phoneVerified = false;
                 }
-                if (newPassword) {
+                if (!!newPassword) {
                   return bcrypt
                     .hash(newPassword, Number(BCRIPT_SECURITY_VALUE))
                     .then((hashedPassword) => {
@@ -781,6 +787,14 @@ exports.edit = (req, res, next) => {
                         user.password = hashedPassword;
                         return user;
                       }
+                    })
+                    .catch(() => {
+                      if (!err.statusCode) {
+                        const error = new Error("Coś poszło nie tak");
+                        error.statusCode = 501;
+                        throw error;
+                      }
+                      next(err);
                     });
                 }
                 return user;
@@ -797,26 +811,38 @@ exports.edit = (req, res, next) => {
           })
           .then((resultUser) => {
             return resultUser.save();
+          })
+          .then((result) => {
+            const userPhone = !!result.phone
+              ? Buffer.from(result.phone, "base64").toString("ascii")
+              : null;
+            transporter.sendMail({
+              to: result.email,
+              from: MAIL_INFO,
+              subject: "Tworzenie konta zakończone powodzeniem",
+              html: `<h1>Edycja konta zakończona pomyślnie</h1>`,
+            });
+            res.status(201).json({
+              email: result.email,
+              token: result.loginToken,
+              userPhone: userPhone,
+              phoneVerified: result.phoneVerified,
+              hasPhone: result.hasPhone,
+            });
+          })
+          .catch((err) => {
+            if (!err.statusCode) {
+              const error = new Error("Błędne hasła");
+              error.statusCode = 501;
+              throw error;
+            }
+            next(err);
           });
       } else {
         const error = new Error("Brak użytkownika");
         error.statusCode = 412;
         throw error;
       }
-    })
-    .then((result) => {
-      const userPhone = Buffer.from(result.phone, "base64").toString("ascii");
-      transporter.sendMail({
-        to: result.email,
-        from: MAIL_INFO,
-        subject: "Tworzenie konta zakończone powodzeniem",
-        html: `<h1>Edycja konta zakończona pomyślnie</h1>`,
-      });
-      res.status(201).json({
-        email: result.email,
-        token: result.loginToken,
-        userPhone: userPhone,
-      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -1203,6 +1229,7 @@ exports.loginFacebookNew = (req, res, next) => {
                   imageOther: !!picture ? picture.data.url : "",
                   hasCompany: false,
                   company: null,
+                  phoneVerified: false,
                 });
                 const token = jwt.sign(
                   {
@@ -1423,6 +1450,7 @@ exports.loginGoogle = (req, res, next) => {
                   imageOther: !!picture ? picture : "",
                   hasCompany: false,
                   company: null,
+                  phoneVerified: false,
                 });
                 const token = jwt.sign(
                   {
@@ -1526,7 +1554,63 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
     .catch((err) => {
       if (!err.statusCode) {
         err.statusCode = 501;
-        err.message = "Błąd podczas ususwania konta.";
+        err.message = "Błąd podczas wysyłania kodu do usunięcia konta.";
+      }
+      next(err);
+    });
+};
+
+exports.userSentCodeVerifiedPhone = (req, res, next) => {
+  const userId = req.userId;
+
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id codeVerifiedPhoneDate codeVerifiedPhone name surname email")
+    .then((resultUserDoc) => {
+      if (!!resultUserDoc) {
+        const randomCode = makeid(6);
+        const dateDeleteCompany = new Date(
+          new Date().setMinutes(new Date().getMinutes() + 10)
+        );
+        const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
+          "base64"
+        );
+        resultUserDoc.codeVerifiedPhoneDate = dateDeleteCompany;
+        resultUserDoc.codeVerifiedPhone = hashedCodeToDelete;
+        return resultUserDoc.save();
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((userSavedData) => {
+      const userName = Buffer.from(userSavedData.name, "base64").toString(
+        "ascii"
+      );
+      const userSurname = Buffer.from(userSavedData.surname, "base64").toString(
+        "ascii"
+      );
+      const codeToDelete = Buffer.from(
+        userSavedData.codeVerifiedPhone,
+        "base64"
+      ).toString("ascii");
+      transporter.sendMail({
+        to: userSavedData.email,
+        from: MAIL_INFO,
+        subject: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
+        html: `<h1>Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}</h1>`,
+      });
+      res.status(201).json({
+        message: "Wysłano kod do potwierdzenia telefonu",
+      });
+    })
+
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas wysyłania kodu do potwierdzenia telefonu.";
       }
       next(err);
     });
@@ -1589,13 +1673,18 @@ exports.deleteUserAccount = (req, res, next) => {
                 item.visitCanceled = true;
                 item.save();
                 const findUserReserwations = allUsersReserwations.findIndex(
-                  (reserwation) => reserwation.userId == item.fromUser._id
+                  (reserwation) => {
+                    return (
+                      reserwation.userId.toString() ==
+                      item.toWorkerUserId.toString()
+                    );
+                  }
                 );
                 if (findUserReserwations >= 0) {
                   allUsersReserwations[findUserReserwations].items.push(item);
                 } else {
                   const newUserData = {
-                    userId: item.fromUser._id,
+                    userId: item.toWorkerUserId,
                     items: [item],
                   };
                   allUsersReserwations.push(newUserData);
@@ -1611,7 +1700,7 @@ exports.deleteUserAccount = (req, res, next) => {
         User.findOne({
           _id: userDoc.userId,
         })
-          .select("_id alerts")
+          .select("_id alerts alertActiveCount")
           .then((userReserwationDoc) => {
             if (!!userReserwationDoc) {
               const allUserAlertsToSave = [];
@@ -1622,10 +1711,8 @@ exports.deleteUserAccount = (req, res, next) => {
                   active: true,
                   type: "rezerwation_canceled",
                   creationTime: new Date(),
-                  companyChanged: true,
+                  companyChanged: false,
                 };
-
-                allUserAlertsToSave.push(userAlertToSave);
 
                 io.getIO().emit(`user${userReserwationDoc._id}`, {
                   action: "update-alerts",
@@ -1634,17 +1721,18 @@ exports.deleteUserAccount = (req, res, next) => {
                     active: true,
                     type: "rezerwation_canceled",
                     creationTime: new Date(),
-                    companyChanged: true,
+                    companyChanged: false,
                   },
                 });
-              });
 
+                allUserAlertsToSave.push(userAlertToSave);
+              });
               userReserwationDoc.alerts.unshift(...allUserAlertsToSave);
 
               const countAlertsActiveValid = !!userReserwationDoc.alertActiveCount
                 ? userReserwationDoc.alertActiveCount
                 : 0;
-              userReserwationDoc.userReserwationDoc =
+              userReserwationDoc.alertActiveCount =
                 countAlertsActiveValid + allUserAlertsToSave.length;
 
               userReserwationDoc.save();
@@ -1657,7 +1745,7 @@ exports.deleteUserAccount = (req, res, next) => {
       return CompanyUsersInformations.deleteMany({ userId: userId });
     })
     .then(() => {
-      return User.deleteOne({ _id: userId })
+      return User.findOne({ _id: userId })
         .select("_id email")
         .then((userDoc) => {
           if (!!userDoc) {
@@ -1687,6 +1775,66 @@ exports.deleteUserAccount = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd podczas usuwania użytkownika.";
+      }
+      next(err);
+    });
+};
+
+exports.verifiedUserPhone = (req, res, next) => {
+  const userId = req.userId;
+  const code = req.body.code;
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({ _id: userId })
+    .select(
+      "_id codeVerifiedPhoneDate codeVerifiedPhone name surname email phoneVerified"
+    )
+    .then((userData) => {
+      const codeToVerified = Buffer.from(
+        userData.codeVerifiedPhone,
+        "base64"
+      ).toString("ascii");
+      if (
+        code.toUpperCase() === codeToVerified.toUpperCase() &&
+        userData.codeVerifiedPhoneDate > new Date()
+      ) {
+        return userData;
+      } else {
+        const error = new Error("Błędny kod.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((userData) => {
+      userData.codeVerifiedPhoneDate = null;
+      userData.codeVerifiedPhone = null;
+      userData.codeVerifiedPhone = null;
+      userData.phoneVerified = true;
+      return userData.save();
+    })
+    .then((userDoc) => {
+      transporter.sendMail({
+        to: userDoc.email,
+        from: MAIL_INFO,
+        subject: "Zweryfikowano numer telefonu!",
+        html: "<h1>Numer telefonu został zweryfikowany</h1>",
+      });
+      return true;
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Numer telefonu został zweryfikowany",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas weryfikowania numeru telefonu.";
       }
       next(err);
     });

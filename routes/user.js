@@ -148,6 +148,8 @@ router.post(
 router.patch(
   "/edit-user",
   isAuth,
+  [body("newPhone")],
+  [body("newPassword")],
   [body("password").trim().isLength({ min: 5 })],
   user.edit
 );
@@ -219,10 +221,23 @@ router.post(
 );
 
 router.post(
+  "/user-sent-code-verified-phone",
+  isAuth,
+  user.userSentCodeVerifiedPhone
+);
+
+router.post(
   "/delete-user-account",
   isAuth,
   [body("code")],
   user.deleteUserAccount
+);
+
+router.post(
+  "/verified-user-phone",
+  isAuth,
+  [body("code")],
+  user.verifiedUserPhone
 );
 
 module.exports = router;

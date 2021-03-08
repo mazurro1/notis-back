@@ -863,7 +863,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         User.findOne({
           _id: userDoc.userId,
         })
-          .select("_id alerts")
+          .select("_id alerts alertActiveCount")
           .then((userReserwationDoc) => {
             if (!!userReserwationDoc) {
               const allUserAlertsToSave = [];
@@ -896,7 +896,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               const countAlertsActiveValid = !!userReserwationDoc.alertActiveCount
                 ? userReserwationDoc.alertActiveCount
                 : 0;
-              userReserwationDoc.userReserwationDoc =
+              userReserwationDoc.alertActiveCount =
                 countAlertsActiveValid + allUserAlertsToSave.length;
 
               userReserwationDoc.save();
@@ -3791,7 +3791,9 @@ exports.companyDeleteCompany = (req, res, next) => {
                 item.visitCanceled = true;
                 item.save();
                 const findUserReserwations = allUsersReserwations.findIndex(
-                  (reserwation) => reserwation.userId == item.fromUser._id
+                  (reserwation) =>
+                    reserwation.userId.toString() ==
+                    item.fromUser._id.toString()
                 );
                 if (findUserReserwations >= 0) {
                   allUsersReserwations[findUserReserwations].items.push(item);
@@ -3813,7 +3815,7 @@ exports.companyDeleteCompany = (req, res, next) => {
         User.findOne({
           _id: userDoc.userId,
         })
-          .select("_id alerts")
+          .select("_id alerts alertActiveCount")
           .then((userReserwationDoc) => {
             if (!!userReserwationDoc) {
               const allUserAlertsToSave = [];
@@ -3846,7 +3848,7 @@ exports.companyDeleteCompany = (req, res, next) => {
               const countAlertsActiveValid = !!userReserwationDoc.alertActiveCount
                 ? userReserwationDoc.alertActiveCount
                 : 0;
-              userReserwationDoc.userReserwationDoc =
+              userReserwationDoc.alertActiveCount =
                 countAlertsActiveValid + allUserAlertsToSave.length;
 
               userReserwationDoc.save();
