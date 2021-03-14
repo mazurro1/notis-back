@@ -619,29 +619,13 @@ exports.addReserwation = (req, res, next) => {
 
                               //add user to users info and add reserwation to
 
-                              if (isUserInUsersInformations >= 0) {
-                                const validReserwationCount = companyDoc
-                                  .usersInformation[isUserInUsersInformations]
-                                  .reserwationsCount
-                                  ? companyDoc.usersInformation[
-                                      isUserInUsersInformations
-                                    ].reserwationsCount
-                                  : 0;
-                                companyDoc.usersInformation[
-                                  isUserInUsersInformations
-                                ].reserwationsCount = validReserwationCount + 1;
-                                companyDoc.save();
-                              } else {
-                                const newUserInfo = {
-                                  userId: userId,
-                                  isBlocked: false,
-                                  reserwationsCount: 1,
-                                };
-                                companyDoc.usersInformation.push(newUserInfo);
-                                companyDoc.save();
-                              }
+                              return {
+                                companyDoc: companyDoc,
+                                newReserwation: newReserwation,
+                                isUserInUsersInformations: isUserInUsersInformations,
+                              };
 
-                              return newReserwation.save();
+                              // return newReserwation.save();
                             } else {
                               const error = new Error(
                                 "Podany termin jest zajęty."
@@ -688,6 +672,47 @@ exports.addReserwation = (req, res, next) => {
               });
           } else {
             const error = new Error("Brak firmy.");
+            error.statusCode = 422;
+            throw error;
+          }
+        });
+    })
+    .then((result) => {
+      return Reserwation.findOne({
+        company: result.newReserwation.company,
+        toWorkerUserId: result.newReserwation.toWorkerUserId,
+        fullDate: result.newReserwation.fullDate,
+        visitCanceled: false,
+      })
+        .select("company toWorkerUserId fullDate visitCanceled")
+        .then((resultSearchReserwations) => {
+          if (!!!resultSearchReserwations) {
+            if (result.isUserInUsersInformations >= 0) {
+              const validReserwationCount = result.companyDoc.usersInformation[
+                result.isUserInUsersInformations
+              ].reserwationsCount
+                ? result.companyDoc.usersInformation[
+                    result.isUserInUsersInformations
+                  ].reserwationsCount
+                : 0;
+              result.companyDoc.usersInformation[
+                result.isUserInUsersInformations
+              ].reserwationsCount = validReserwationCount + 1;
+              result.companyDoc.save();
+            } else {
+              const newUserInfo = {
+                userId: userId,
+                isBlocked: false,
+                reserwationsCount: 1,
+              };
+              result.companyDoc.usersInformation.push(newUserInfo);
+              result.companyDoc.save();
+            }
+            return result.newReserwation.save();
+          } else {
+            const error = new Error(
+              "Nie można dokonywać rezerwacji w tym terminie."
+            );
             error.statusCode = 422;
             throw error;
           }
@@ -1480,7 +1505,7 @@ exports.getUserReserwations = (req, res, next) => {
             }
           }
 
-          const splitDateReserwation = itemReserwation.dateStart.split(":");
+          const splitDateReserwation = itemReserwation.dateEnd.split(":");
           const dateReserwation = new Date(
             itemReserwation.dateYear,
             itemReserwation.dateMonth - 1,

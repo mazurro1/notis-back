@@ -27,6 +27,20 @@ const userSchema = new Schema(
       type: Boolean,
       required: false,
     },
+    whiteListVerifiedPhones: [
+      {
+        type: String,
+        required: false,
+      },
+    ],
+    blockUserChangePhoneNumber: {
+      type: Date,
+      required: false,
+    },
+    blockUserSendVerifiedPhoneSms: {
+      type: Date,
+      required: false,
+    },
     password: {
       type: String,
       required: true,

@@ -345,4 +345,11 @@ router.post(
   company.companyDeleteCompany
 );
 
+router.post(
+  "/company-delete-created-company",
+  isAuth,
+  [body("companyId")],
+  company.companyDeleteCreatedCompany
+);
+
 module.exports = router;

@@ -49,8 +49,7 @@ const transporter = nodemailer.createTransport({
 
 function makeid(length) {
   var result = "";
-  var characters =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  var characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   var charactersLength = characters.length;
   for (var i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * charactersLength));
@@ -113,8 +112,10 @@ exports.registrationCompany = (req, res, next) => {
           )
           .then((companyDoc) => {
             if (!companyDoc) {
-              const codeToVerified = Math.floor(
-                10000 + Math.random() * 90000
+              const codeToVerified = makeid(6);
+
+              const codeRandom = Math.floor(
+                1000 + Math.random() * 9000
               ).toString();
 
               const hashedCodeToVerified = Buffer.from(
@@ -131,13 +132,46 @@ exports.registrationCompany = (req, res, next) => {
                 "base64"
               );
 
-              const pathCompanyName = companyName
-                .toLowerCase()
-                .split(" ")
-                .join("-");
-
+              const newOpeningDays = {
+                mon: {
+                  disabled: false,
+                  start: "10:00",
+                  end: "20:00",
+                },
+                tue: {
+                  disabled: false,
+                  start: "10:00",
+                  end: "20:00",
+                },
+                wed: {
+                  disabled: false,
+                  start: "10:00",
+                  end: "20:00",
+                },
+                thu: {
+                  disabled: false,
+                  start: "10:00",
+                  end: "20:00",
+                },
+                fri: {
+                  disabled: false,
+                  start: "10:00",
+                  end: "20:00",
+                },
+                sat: {
+                  disabled: true,
+                  start: "0:00",
+                  end: "0:00",
+                },
+                sun: {
+                  disabled: true,
+                  start: "0:00",
+                  end: "0:00",
+                },
+              };
+              const pathCompanyName = encodeURI(companyName);
               const company = new Company({
-                linkPath: pathCompanyName,
+                linkPath: pathCompanyName + codeRandom,
                 email: companyEmail.toLowerCase(),
                 name: companyName.toLowerCase(),
                 phone: hashedPhoneNumber,
@@ -157,6 +191,7 @@ exports.registrationCompany = (req, res, next) => {
                 reservationEveryTime: 5,
                 reservationMonthTime: 12,
                 companyType: companyIndustries,
+                openingDays: newOpeningDays,
               });
 
               return company.save();
@@ -525,9 +560,7 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
         const isThisWorker = companyData.workers.some(
           (item) => item.email === emailWorker
         );
-        const randomValue = Math.floor(
-          1000000 + Math.random() * 9000000
-        ).toString();
+        const randomValue = makeid(6);
 
         const hashedRandomValue = Buffer.from(randomValue, "utf-8").toString(
           "base64"
@@ -1135,6 +1168,7 @@ exports.allCompanys = (req, res, next) => {
     ...propsFilterCity,
     ...propsFilterFilters,
     ...propsSelectedName,
+    accountVerified: true,
   })
 
     .select(
@@ -1250,6 +1284,7 @@ exports.allCompanysOfType = (req, res, next) => {
     ...propsFilterCity,
     ...propsFilterFilters,
     ...propsSelectedName,
+    accountVerified: true,
   })
     .select(
       "adress city district linkPath name services title opinionsCount opinionsValue mainImageUrl imagesUrl"
@@ -3172,7 +3207,9 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
           resultCompanyDoc[0].ownerData.noConstantWorkingHours,
         constWorkingHours: resultCompanyDoc[0].ownerData.constantWorkingHours,
         daysOff: resultCompanyDoc[0].daysOff,
-        openingDays: resultCompanyDoc[0].openingDays,
+        openingDays: !!resultCompanyDoc[0].openingDays
+          ? resultCompanyDoc[0].openingDays
+          : null,
         reservationEveryTime: resultCompanyDoc[0].reservationEveryTime,
       });
     })
@@ -3257,7 +3294,9 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
         noConstWorkingHours: resultCompanyDoc[0].workers.noConstantWorkingHours,
         constWorkingHours: resultCompanyDoc[0].workers.constantWorkingHours,
         daysOff: resultCompanyDoc[0].daysOff,
-        openingDays: resultCompanyDoc[0].openingDays,
+        openingDays: !!resultCompanyDoc[0].openingDays
+          ? resultCompanyDoc[0].openingDays
+          : null,
         reservationEveryTime: resultCompanyDoc[0].reservationEveryTime,
       });
     })
@@ -3670,7 +3709,7 @@ exports.companySentCodeDeleteCompany = (req, res, next) => {
     .then((resultCompanyDoc) => {
       const randomCode = makeid(10);
       const dateDeleteCompany = new Date(
-        new Date().setMinutes(new Date().getMinutes() + 10)
+        new Date().setMinutes(new Date().getMinutes() + 30)
       );
       const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
         "base64"
@@ -3855,6 +3894,88 @@ exports.companyDeleteCompany = (req, res, next) => {
             }
           });
         return true;
+      });
+    })
+    .then(() => {
+      return CompanyUsersInformations.deleteMany({ companyId: companyId });
+    })
+    .then(() => {
+      return CompanyAvailability.deleteOne({ companyId: companyId });
+    })
+    .then(() => {
+      return Company.findOne({ _id: companyId })
+        .select("email _id")
+        .then((companyData) => {
+          if (!!companyData) {
+            transporter.sendMail({
+              to: companyData.email,
+              from: MAIL_INFO,
+              subject: `Usunięto działalność!`,
+              html: `<h1>Działalność została usunięta</h1>`,
+            });
+            return true;
+          } else {
+            const error = new Error("Błąd podczas usuwania działalności.");
+            error.statusCode = 423;
+            throw error;
+          }
+        });
+    })
+    .then(() => {
+      return Company.deleteOne({ _id: companyId });
+    })
+
+    .then((result) => {
+      res.status(201).json({
+        message: "Usunięto działalność",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danej działalności.";
+      }
+      next(err);
+    });
+};
+
+exports.companyDeleteCreatedCompany = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const userId = req.userId;
+
+  Company.findOne({
+    _id: companyId,
+    accountVerified: false,
+  })
+    .select("_id name email owner workers.user workers._id")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      User.findOne({ _id: resultCompanyDoc.owner }).then((user) => {
+        user.hasCompany = false;
+        user.company = null;
+        user.save();
+      });
+      resultCompanyDoc.workers.forEach((worker) => {
+        User.findOne({ _id: worker.user }).then((user) => {
+          user.hasCompany = false;
+          user.company = null;
+          user.save();
+        });
       });
     })
     .then(() => {

@@ -47,11 +47,11 @@ const s3Bucket = new AWS.S3({
     Bucket: AWS_BUCKET,
   },
 });
+const sns = new AWS.SNS();
 
 function makeid(length) {
   var result = "";
-  var characters =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  var characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   var charactersLength = characters.length;
   for (var i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * charactersLength));
@@ -106,12 +106,10 @@ exports.registration = (req, res, next) => {
           .hash(password, Number(BCRIPT_EXPIRES_IN))
           .then((hashedPassword) => {
             if (hashedPassword) {
-              const codeToVerified = Math.floor(
-                10000 + Math.random() * 90000
-              ).toString();
+              const codeToVerified = makeid(6);
 
               const hashedCodeToVerified = Buffer.from(
-                codeToVerified,
+                codeToVerified.toUpperCase(),
                 "utf-8"
               ).toString("base64");
 
@@ -210,7 +208,7 @@ exports.login = (req, res, next) => {
     email: email,
   })
     .select(
-      "email _id phoneVerified imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified hasCompany alertActiveCount imageOther"
+      "email blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified hasCompany alertActiveCount imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -309,6 +307,8 @@ exports.login = (req, res, next) => {
               stamps: user.stamps,
               favouritesCompanys: user.favouritesCompanys,
               phoneVerified: user.phoneVerified,
+              blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
+              blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
             });
           })
           .catch((err) => {
@@ -350,7 +350,7 @@ exports.sentAgainVerifiedEmail = (req, res, next) => {
           to: user.email,
           from: MAIL_INFO,
           subject: "Tworzenie konta zakończone powodzeniem",
-          html: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified}`,
+          html: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified.toUpperCase()}`,
         });
         res.status(201).json({
           message: "Email został wysłany",
@@ -492,7 +492,7 @@ exports.veryfiedEmail = (req, res, next) => {
           user.codeToVerified,
           "base64"
         ).toString("ascii");
-        if (unhashedCodeToVerified === codeSent) {
+        if (unhashedCodeToVerified.toUpperCase() === codeSent.toUpperCase()) {
           user.codeToVerified = null;
           user.accountVerified = true;
           user.hasCompany = false;
@@ -636,7 +636,7 @@ exports.autoLogin = (req, res, next) => {
     loginToken: token,
   })
     .select(
-      "_id loginToken phoneVerified favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified hasCompany imageUrl hasPhone imageOther"
+      "_id loginToken blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified hasCompany imageUrl hasPhone imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -712,6 +712,8 @@ exports.autoLogin = (req, res, next) => {
           stamps: user.stamps,
           favouritesCompanys: user.favouritesCompanys,
           phoneVerified: user.phoneVerified,
+          blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
+          blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
         });
       } else {
         res.status(422).json({
@@ -745,15 +747,10 @@ exports.edit = (req, res, next) => {
     _id: userId,
   })
     .select(
-      "_id phoneVerified password email loginToken phone name surname accountVerified hasCompany company"
+      "_id phoneVerified blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber password email loginToken phone name surname accountVerified hasCompany company codeVerifiedPhoneDate codeVerifiedPhone whiteListVerifiedPhones"
     )
     .then((user) => {
       if (!!user) {
-        // if (user.email === newEmail) {
-        //   const error = new Error("Email jest taki sam");
-        //   error.statusCode = 422;
-        //   throw error;
-        // }
         return bcrypt
           .compare(password, user.password)
           .then((doMatch) => {
@@ -771,13 +768,48 @@ exports.edit = (req, res, next) => {
                 );
                 user.loginToken = token;
                 if (!!newPhone) {
-                  const hashedPhoneNumber = Buffer.from(
-                    newPhone,
-                    "utf-8"
-                  ).toString("base64");
-                  user.phone = hashedPhoneNumber;
-                  user.hasPhone = true;
-                  user.phoneVerified = false;
+                  const validBlockUserChangePhoneNumber = !!user.blockUserChangePhoneNumber
+                    ? user.blockUserChangePhoneNumber
+                    : null;
+                  if (validBlockUserChangePhoneNumber <= new Date()) {
+                    const hashedPhoneNumber = Buffer.from(
+                      newPhone,
+                      "utf-8"
+                    ).toString("base64");
+
+                    const isPhoneInWhiteList = user.whiteListVerifiedPhones.some(
+                      (item) => item === hashedPhoneNumber
+                    );
+                    if (isPhoneInWhiteList) {
+                      user.phoneVerified = true;
+                    } else {
+                      const randomCode = makeid(6);
+                      const dateVerifiedPhoneCompany = new Date(
+                        new Date().setHours(new Date().getHours() + 1)
+                      );
+                      const hashedCodeToVerifiedPhone = Buffer.from(
+                        randomCode,
+                        "utf-8"
+                      ).toString("base64");
+                      user.phoneVerified = false;
+                      user.codeVerifiedPhoneDate = dateVerifiedPhoneCompany;
+                      user.codeVerifiedPhone = hashedCodeToVerifiedPhone;
+                    }
+                    user.blockUserChangePhoneNumber = new Date(
+                      new Date().setHours(new Date().getHours() + 1)
+                    );
+                    user.blockUserSendVerifiedPhoneSms = new Date(
+                      new Date().setHours(new Date().getHours() + 1)
+                    );
+                    user.phone = hashedPhoneNumber;
+                    user.hasPhone = true;
+                  } else {
+                    const error = new Error(
+                      "Nie można teraz zmienić numeru telefonu"
+                    );
+                    error.statusCode = 423;
+                    throw error;
+                  }
                 }
                 if (!!newPassword) {
                   return bcrypt
@@ -797,7 +829,7 @@ exports.edit = (req, res, next) => {
                       next(err);
                     });
                 }
-                return user;
+                return user.save();
               } else {
                 const error = new Error("Brak nowych danych");
                 error.statusCode = 502;
@@ -809,8 +841,45 @@ exports.edit = (req, res, next) => {
               throw error;
             }
           })
-          .then((resultUser) => {
-            return resultUser.save();
+          .then((userSavedData) => {
+            if (!!!userSavedData.phoneVerified) {
+              const userName = Buffer.from(
+                userSavedData.name,
+                "base64"
+              ).toString("ascii");
+              const userSurname = Buffer.from(
+                userSavedData.surname,
+                "base64"
+              ).toString("ascii");
+              const codeToDelete = Buffer.from(
+                userSavedData.codeVerifiedPhone,
+                "base64"
+              ).toString("ascii");
+
+              // const params = {
+              //   Message: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
+              //   MessageStructure: "string",
+              //   PhoneNumber: "+48515873009",
+              //   MessageAttributes: {
+              //     "AWS.SNS.SMS.SenderID": {
+              //       DataType: "String",
+              //       StringValue: "Nootis",
+              //     },
+              //   },
+              // };
+              // sns.publish(params, function (err, data) {
+              //   if (err) console.log(err, err.stack);
+              //   else console.log(data);
+              // });
+
+              transporter.sendMail({
+                to: userSavedData.email,
+                from: MAIL_INFO,
+                subject: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
+                html: `<h1>Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}</h1>`,
+              });
+            }
+            return userSavedData;
           })
           .then((result) => {
             const userPhone = !!result.phone
@@ -819,7 +888,7 @@ exports.edit = (req, res, next) => {
             transporter.sendMail({
               to: result.email,
               from: MAIL_INFO,
-              subject: "Tworzenie konta zakończone powodzeniem",
+              subject: "Edycja konta zakończone powodzeniem",
               html: `<h1>Edycja konta zakończona pomyślnie</h1>`,
             });
             res.status(201).json({
@@ -828,6 +897,9 @@ exports.edit = (req, res, next) => {
               userPhone: userPhone,
               phoneVerified: result.phoneVerified,
               hasPhone: result.hasPhone,
+              blockUserChangePhoneNumber: result.blockUserChangePhoneNumber,
+              blockUserSendVerifiedPhoneSms:
+                result.blockUserSendVerifiedPhoneSms,
             });
           })
           .catch((err) => {
@@ -870,14 +942,13 @@ exports.sentEmailResetPassword = (req, res, next) => {
     .select("email codeToResetPassword dateToResetPassword")
     .then((user) => {
       if (!!user) {
-        const codeToReset = Math.floor(
-          10000 + Math.random() * 90000
-        ).toString();
-        const hashedResetCode = Buffer.from(codeToReset, "utf-8").toString(
-          "base64"
-        );
+        const codeToReset = makeid(6);
+        const hashedResetCode = Buffer.from(
+          codeToReset.toUpperCase(),
+          "utf-8"
+        ).toString("base64");
         const dateResetPassword = new Date(
-          new Date().setMinutes(new Date().getMinutes() + 10)
+          new Date().setMinutes(new Date().getMinutes() + 30)
         );
         user.codeToResetPassword = hashedResetCode;
         user.dateToResetPassword = dateResetPassword;
@@ -1515,7 +1586,7 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
       if (!!resultUserDoc) {
         const randomCode = makeid(10);
         const dateDeleteCompany = new Date(
-          new Date().setMinutes(new Date().getMinutes() + 10)
+          new Date().setMinutes(new Date().getMinutes() + 30)
         );
         const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
           "base64"
@@ -1566,19 +1637,35 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
   User.findOne({
     _id: userId,
   })
-    .select("_id codeVerifiedPhoneDate codeVerifiedPhone name surname email")
+    .select(
+      "_id blockUserSendVerifiedPhoneSms codeVerifiedPhoneDate codeVerifiedPhone name surname email"
+    )
     .then((resultUserDoc) => {
       if (!!resultUserDoc) {
-        const randomCode = makeid(6);
-        const dateDeleteCompany = new Date(
-          new Date().setMinutes(new Date().getMinutes() + 10)
-        );
-        const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
-          "base64"
-        );
-        resultUserDoc.codeVerifiedPhoneDate = dateDeleteCompany;
-        resultUserDoc.codeVerifiedPhone = hashedCodeToDelete;
-        return resultUserDoc.save();
+        const validBlockUserSendVerifiedPhoneSms = !!resultUserDoc.blockUserSendVerifiedPhoneSms
+          ? resultUserDoc.blockUserSendVerifiedPhoneSms
+          : null;
+        if (validBlockUserSendVerifiedPhoneSms <= new Date()) {
+          const randomCode = makeid(6);
+          const dateDeleteCompany = new Date(
+            new Date().setMinutes(new Date().getMinutes() + 30)
+          );
+          const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
+            "base64"
+          );
+          resultUserDoc.codeVerifiedPhoneDate = dateDeleteCompany;
+          resultUserDoc.codeVerifiedPhone = hashedCodeToDelete;
+          resultUserDoc.blockUserSendVerifiedPhoneSms = new Date(
+            new Date().setHours(new Date().getHours() + 1)
+          );
+          return resultUserDoc.save();
+        } else {
+          const error = new Error(
+            "Nie można wysłać ponownie wiadomość do aktywcji numeru telefonu"
+          );
+          error.statusCode = 423;
+          throw error;
+        }
       } else {
         const error = new Error("Brak użytkownika.");
         error.statusCode = 422;
@@ -1596,6 +1683,23 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
         userSavedData.codeVerifiedPhone,
         "base64"
       ).toString("ascii");
+
+      // const params = {
+      //   Message: `Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}`,
+      //   MessageStructure: "string",
+      //   PhoneNumber: "+48515873009",
+      //   MessageAttributes: {
+      //     "AWS.SNS.SMS.SenderID": {
+      //       DataType: "String",
+      //       StringValue: "Nootis",
+      //     },
+      //   },
+      // };
+      // sns.publish(params, function (err, data) {
+      //   if (err) console.log(err, err.stack);
+      //   else console.log(data);
+      // });
+
       transporter.sendMail({
         to: userSavedData.email,
         from: MAIL_INFO,
@@ -1603,7 +1707,8 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
         html: `<h1>Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}</h1>`,
       });
       res.status(201).json({
-        message: "Wysłano kod do potwierdzenia telefonu",
+        blockUserSendVerifiedPhoneSms:
+          userSavedData.blockUserSendVerifiedPhoneSms,
       });
     })
 
@@ -1792,7 +1897,7 @@ exports.verifiedUserPhone = (req, res, next) => {
   }
   User.findOne({ _id: userId })
     .select(
-      "_id codeVerifiedPhoneDate codeVerifiedPhone name surname email phoneVerified"
+      "_id codeVerifiedPhoneDate codeVerifiedPhone name surname email phoneVerified phone whiteListVerifiedPhones"
     )
     .then((userData) => {
       const codeToVerified = Buffer.from(
@@ -1813,8 +1918,8 @@ exports.verifiedUserPhone = (req, res, next) => {
     .then((userData) => {
       userData.codeVerifiedPhoneDate = null;
       userData.codeVerifiedPhone = null;
-      userData.codeVerifiedPhone = null;
       userData.phoneVerified = true;
+      userData.whiteListVerifiedPhones.push(userData.phone);
       return userData.save();
     })
     .then((userDoc) => {
