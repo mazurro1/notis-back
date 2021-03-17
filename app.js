@@ -1,9 +1,10 @@
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
-const bodyParser = require("body-parser");
 const userRoutes = require("./routes/user");
 const companyRoutes = require("./routes/company");
+const paymentRoutes = require("./routes/payment");
+const coinsRoutes = require("./routes/coins");
 const reserwationRoutes = require("./routes/reserwation");
 const availabilityRoutes = require("./routes/companyAvailability");
 const opinionRoutes = require("./routes/opinion");
@@ -23,14 +24,16 @@ app.use(
     //   "https://api.nootis.pl",
     //   "https://www.nootis.pl",
     //   "https://nootis.pl/",
+    //   "https://dashboard.stripe.com/",
     // ],
     exposedHeaders: "*",
   })
 );
 app.use(express.json({ limit: "2mb" }));
-app.use(bodyParser.json());
 app.use(userRoutes);
 app.use(companyRoutes);
+app.use(paymentRoutes);
+app.use(coinsRoutes);
 app.use(reserwationRoutes);
 app.use(availabilityRoutes);
 app.use(opinionRoutes);

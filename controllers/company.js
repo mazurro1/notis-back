@@ -4020,3 +4020,43 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
       next(err);
     });
 };
+
+exports.companyTransakcjonHistory = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const userId = req.userId;
+
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id payments owner")
+    .populate("payments.coinsId", "-userCreated")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyData) => {
+      res.status(201).json({
+        companyPayments: companyData.payments,
+      });
+    })
+
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danej działalności.";
+      }
+      next(err);
+    });
+};

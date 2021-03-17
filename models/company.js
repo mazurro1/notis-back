@@ -54,6 +54,48 @@ const companySchema = new Schema(
       ref: "Users",
       required: true,
     },
+    payments: [
+      {
+        sessionId: {
+          type: String,
+          required: false,
+        },
+        coinsId: {
+          type: Schema.Types.ObjectId,
+          ref: "Coins",
+          required: true,
+        },
+        status: {
+          type: String,
+          required: false,
+        },
+        buyingUserId: {
+          type: Schema.Types.ObjectId,
+          ref: "Users",
+          required: true,
+        },
+        productName: {
+          type: String,
+          required: true,
+        },
+        productPrice: {
+          type: Number,
+          required: true,
+        },
+        productMonets: {
+          type: Number,
+          required: true,
+        },
+        datePayment: {
+          type: Date,
+          required: false,
+        },
+      },
+    ],
+    monets: {
+      type: String,
+      required: false,
+    },
     maps: {
       lat: {
         type: String,

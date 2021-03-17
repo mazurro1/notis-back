@@ -352,4 +352,11 @@ router.post(
   company.companyDeleteCreatedCompany
 );
 
+router.post(
+  "/company-history-transaction",
+  isAuth,
+  [body("companyId")],
+  company.companyTransakcjonHistory
+);
+
 module.exports = router;
