@@ -2,6 +2,8 @@ const Company = require("../models/company");
 const Opinion = require("../models/opinion");
 const Reserwation = require("../models/reserwation");
 const { validationResult } = require("express-validator");
+const User = require("../models/user");
+const io = require("../socket");
 
 exports.addOpinion = (req, res, next) => {
   const userId = req.userId;
@@ -74,14 +76,76 @@ exports.addOpinion = (req, res, next) => {
         .populate("user", "name")
         .populate({
           path: "reserwationId",
-          select: "serviceName toWorkerUserId",
+          select:
+            "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName",
           populate: {
-            path: "toWorkerUserId",
-            select: "name surname",
+            path: "toWorkerUserId company fromUser",
+            select: "name surname linkPath",
           },
         })
         .execPopulate()
         .then((resultPopulatedSave) => {
+          if (!!resultPopulatedSave.user) {
+            if (!!resultPopulatedSave.user._id) {
+              User.findOne({
+                _id: resultPopulatedSave.user._id,
+              }).then((resultWritingOpinion) => {
+                const userAlertToSave = {
+                  reserwationId: resultPopulatedSave.reserwationId._id,
+                  active: true,
+                  type: "opinion_client",
+                  creationTime: new Date(),
+                  companyChanged: false,
+                };
+
+                io.getIO().emit(`user${resultWritingOpinion._id}`, {
+                  action: "update-alerts",
+                  alertData: {
+                    reserwationId: resultPopulatedSave.reserwationId,
+                    active: true,
+                    type: "opinion_client",
+                    creationTime: new Date(),
+                    companyChanged: false,
+                  },
+                });
+                resultWritingOpinion.alerts.unshift(userAlertToSave);
+                resultWritingOpinion.save();
+              });
+            }
+          }
+          if (!!resultPopulatedSave.reserwationId) {
+            if (!!resultPopulatedSave.reserwationId.toWorkerUserId) {
+              if (!!resultPopulatedSave.reserwationId.toWorkerUserId._id) {
+                User.findOne({
+                  _id: resultPopulatedSave.reserwationId.toWorkerUserId._id,
+                })
+                  .select("_id alerts")
+                  .then((resultToWorkerOpinion) => {
+                    const userAlertToSave = {
+                      reserwationId: resultPopulatedSave.reserwationId._id,
+                      active: true,
+                      type: "opinion_client",
+                      creationTime: new Date(),
+                      companyChanged: false,
+                    };
+
+                    io.getIO().emit(`user${resultToWorkerOpinion._id}`, {
+                      action: "update-alerts",
+                      alertData: {
+                        reserwationId: resultPopulatedSave.reserwationId,
+                        active: true,
+                        type: "opinion_client",
+                        creationTime: new Date(),
+                        companyChanged: false,
+                      },
+                    });
+                    resultToWorkerOpinion.alerts.unshift(userAlertToSave);
+                    resultToWorkerOpinion.save();
+                  });
+              }
+            }
+          }
+
           res.status(201).json({
             opinion: resultPopulatedSave,
           });
@@ -118,8 +182,78 @@ exports.updateEditedOpinion = (req, res, next) => {
     company: opinionData.company,
     _id: opinionData.opinionId,
   })
+    .populate("user", "name")
+    .populate({
+      path: "reserwationId",
+      select:
+        "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName",
+      populate: {
+        path: "toWorkerUserId company fromUser",
+        select: "name surname linkPath",
+      },
+    })
     .then((opinionDoc) => {
       if (!!opinionDoc) {
+        if (!!opinionDoc.user) {
+          if (!!opinionDoc.user._id) {
+            User.findOne({
+              _id: opinionDoc.user._id,
+            }).then((resultWritingOpinion) => {
+              const userAlertToSave = {
+                reserwationId: opinionDoc.reserwationId._id,
+                active: true,
+                type: "opinion_client_edit",
+                creationTime: new Date(),
+                companyChanged: false,
+              };
+
+              io.getIO().emit(`user${resultWritingOpinion._id}`, {
+                action: "update-alerts",
+                alertData: {
+                  reserwationId: opinionDoc.reserwationId,
+                  active: true,
+                  type: "opinion_client_edit",
+                  creationTime: new Date(),
+                  companyChanged: false,
+                },
+              });
+              resultWritingOpinion.alerts.unshift(userAlertToSave);
+              resultWritingOpinion.save();
+            });
+          }
+        }
+        if (!!opinionDoc.reserwationId) {
+          if (!!opinionDoc.reserwationId.toWorkerUserId) {
+            if (!!opinionDoc.reserwationId.toWorkerUserId._id) {
+              User.findOne({
+                _id: opinionDoc.reserwationId.toWorkerUserId._id,
+              })
+                .select("_id alerts")
+                .then((resultToWorkerOpinion) => {
+                  const userAlertToSave = {
+                    reserwationId: opinionDoc.reserwationId._id,
+                    active: true,
+                    type: "opinion_client_edit",
+                    creationTime: new Date(),
+                    companyChanged: false,
+                  };
+
+                  io.getIO().emit(`user${resultToWorkerOpinion._id}`, {
+                    action: "update-alerts",
+                    alertData: {
+                      reserwationId: opinionDoc.reserwationId,
+                      active: true,
+                      type: "opinion_client_edit",
+                      creationTime: new Date(),
+                      companyChanged: false,
+                    },
+                  });
+                  resultToWorkerOpinion.alerts.unshift(userAlertToSave);
+                  resultToWorkerOpinion.save();
+                });
+            }
+          }
+        }
         if (!!!opinionDoc.editedOpinionMessage) {
           opinionDoc.editedOpinionMessage = opinionData.opinionEditedMessage;
           return opinionDoc.save();
@@ -225,16 +359,87 @@ exports.addReplayOpinion = (req, res, next) => {
     .then(() => {
       return Opinion.findOne({
         _id: opinionId,
-      }).then((resultOpinion) => {
-        if (!!resultOpinion) {
-          resultOpinion.replayOpinionMessage = replay;
-          return resultOpinion.save();
-        } else {
-          const error = new Error("Nie znaleziono opinii.");
-          error.statusCode = 403;
-          throw error;
-        }
-      });
+      })
+        .populate("user", "name")
+        .populate({
+          path: "reserwationId",
+          select:
+            "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName",
+          populate: {
+            path: "toWorkerUserId company fromUser",
+            select: "name surname linkPath",
+          },
+        })
+        .then((resultOpinion) => {
+          if (!!resultOpinion) {
+            if (!!resultOpinion.user) {
+              if (!!resultOpinion.user._id) {
+                User.findOne({
+                  _id: resultOpinion.user._id,
+                }).then((resultWritingOpinion) => {
+                  const userAlertToSave = {
+                    reserwationId: resultOpinion.reserwationId._id,
+                    active: true,
+                    type: "opinion_from_company",
+                    creationTime: new Date(),
+                    companyChanged: false,
+                  };
+
+                  io.getIO().emit(`user${resultWritingOpinion._id}`, {
+                    action: "update-alerts",
+                    alertData: {
+                      reserwationId: resultOpinion.reserwationId,
+                      active: true,
+                      type: "opinion_from_company",
+                      creationTime: new Date(),
+                      companyChanged: false,
+                    },
+                  });
+                  resultWritingOpinion.alerts.unshift(userAlertToSave);
+                  resultWritingOpinion.save();
+                });
+              }
+            }
+            if (!!resultOpinion.reserwationId) {
+              if (!!resultOpinion.reserwationId.toWorkerUserId) {
+                if (!!resultOpinion.reserwationId.toWorkerUserId._id) {
+                  User.findOne({
+                    _id: resultOpinion.reserwationId.toWorkerUserId._id,
+                  })
+                    .select("_id alerts")
+                    .then((resultToWorkerOpinion) => {
+                      const userAlertToSave = {
+                        reserwationId: resultOpinion.reserwationId._id,
+                        active: true,
+                        type: "opinion_from_company",
+                        creationTime: new Date(),
+                        companyChanged: false,
+                      };
+
+                      io.getIO().emit(`user${resultToWorkerOpinion._id}`, {
+                        action: "update-alerts",
+                        alertData: {
+                          reserwationId: resultOpinion.reserwationId,
+                          active: true,
+                          type: "opinion_from_company",
+                          creationTime: new Date(),
+                          companyChanged: false,
+                        },
+                      });
+                      resultToWorkerOpinion.alerts.unshift(userAlertToSave);
+                      resultToWorkerOpinion.save();
+                    });
+                }
+              }
+            }
+            resultOpinion.replayOpinionMessage = replay;
+            return resultOpinion.save();
+          } else {
+            const error = new Error("Nie znaleziono opinii.");
+            error.statusCode = 403;
+            throw error;
+          }
+        });
     })
     .then(() => {
       res.status(201).json({

@@ -14,4 +14,12 @@ router.post(
 
 router.post("/update-session-payment", payment.updateOrderProcess);
 
+router.post(
+  "/send-invoice-to-company",
+  isAuth,
+  [body("companyId")],
+  [body("invoiceId")],
+  payment.sendInvoiceToCompany
+);
+
 module.exports = router;

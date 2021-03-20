@@ -15,6 +15,9 @@ router.post(
   [body("companyDiscrict").trim().isLength({ min: 3 })],
   [body("companyAdress").trim().isLength({ min: 3 })],
   [body("companyIndustries")],
+  [body("companyNip")],
+  [body("companyAdressCode")],
+
   company.registrationCompany
 );
 

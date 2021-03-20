@@ -90,6 +90,8 @@ exports.registrationCompany = (req, res, next) => {
   const companyDiscrict = req.body.companyDiscrict;
   const companyAdress = req.body.companyAdress;
   const companyIndustries = req.body.companyIndustries;
+  const companyNip = req.body.companyNip;
+  const companyAdressCode = req.body.companyAdressCode;
   const ownerId = req.userId;
 
   const errors = validationResult(req);
@@ -169,6 +171,7 @@ exports.registrationCompany = (req, res, next) => {
                   end: "0:00",
                 },
               };
+              const actualMonth = new Date().getMonth()
               const pathCompanyName = encodeURI(companyName);
               const company = new Company({
                 linkPath: pathCompanyName + codeRandom,
@@ -192,6 +195,9 @@ exports.registrationCompany = (req, res, next) => {
                 reservationMonthTime: 12,
                 companyType: companyIndustries,
                 openingDays: newOpeningDays,
+                nip: companyNip,
+                code: companyAdressCode,
+                premium: new Date(new Date().setMonth(actualMonth + 3)),
               });
 
               return company.save();
@@ -515,6 +521,7 @@ exports.getCompanyData = (req, res, next) => {
                 mainImageUrl: dataCompany.mainImageUrl,
                 companyStamps: dataCompany.companyStamps,
                 shopStore: dataCompany.shopStore,
+                code: dataCompany.code,
               };
 
               res.status(201).json({
@@ -966,7 +973,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "shopStore companyStamps mainImageUrl imagesUrl workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue"
+      "shopStore companyStamps mainImageUrl imagesUrl workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
     )
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
@@ -1083,6 +1090,7 @@ exports.companyPath = (req, res, next) => {
               mainImageUrl: resultCompanyDoc.mainImageUrl,
               companyStamps: resultCompanyDoc.companyStamps,
               shopStore: resultCompanyDoc.shopStore,
+              code: resultCompanyDoc.code,
             };
 
             res.status(201).json({
@@ -1151,7 +1159,7 @@ exports.allCompanys = (req, res, next) => {
     ? { name: { $regex: new RegExp(validSelectedName, "i") } }
     : {};
 
-  const sortValid = !!sorts ? sorts : null;
+  const sortValid = !!sorts ? sorts : "mostlyRated";
   const propsSort = !!sortValid
     ? sortValid === "aToZ"
       ? { name: 1 }
@@ -1169,10 +1177,14 @@ exports.allCompanys = (req, res, next) => {
     ...propsFilterFilters,
     ...propsSelectedName,
     accountVerified: true,
+    pauseCompany: false,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
   })
 
     .select(
-      "adress city district linkPath name pauseCompany reserationText services title opinionsCount opinionsValue mainImageUrl imagesUrl"
+      "adress city district linkPath name pauseCompany reserationText services title opinionsCount opinionsValue mainImageUrl imagesUrl code"
     )
 
     .skip((page - 1) * 10)
@@ -1194,6 +1206,7 @@ exports.allCompanys = (req, res, next) => {
             linkPath: itemCompany.linkPath,
             name: itemCompany.name,
             services: itemCompany.services,
+            code: itemCompany.code,
             title: itemCompany.title,
             _id: itemCompany._id,
             mainImageUrl: itemCompany.mainImageUrl,
@@ -1252,7 +1265,7 @@ exports.allCompanysOfType = (req, res, next) => {
       }
     : {};
 
-  const sortValid = !!sorts ? sorts : null;
+  const sortValid = !!sorts ? sorts : "mostlyRated";
   const propsSort = !!sortValid
     ? sortValid === "aToZ"
       ? { name: 1 }
@@ -1285,9 +1298,13 @@ exports.allCompanysOfType = (req, res, next) => {
     ...propsFilterFilters,
     ...propsSelectedName,
     accountVerified: true,
+    pauseCompany: false,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
   })
     .select(
-      "adress city district linkPath name services title opinionsCount opinionsValue mainImageUrl imagesUrl"
+      "adress city district linkPath name services title opinionsCount opinionsValue mainImageUrl imagesUrl code"
     )
     .skip((page - 1) * 10)
     .limit(10)
@@ -1308,6 +1325,7 @@ exports.allCompanysOfType = (req, res, next) => {
             linkPath: itemCompany.linkPath,
             name: itemCompany.name,
             services: itemCompany.services,
+            code: itemCompany.code,
             title: itemCompany.title,
             _id: itemCompany._id,
             mainImageUrl: itemCompany.mainImageUrl,
@@ -1726,6 +1744,10 @@ exports.companySettingsPatch = (req, res, next) => {
     .then((companyDoc) => {
       if (!!dataSettings.updateCityInput) {
         companyDoc.city = dataSettings.updateCityInput;
+      }
+
+      if (!!dataSettings.updateCodeInput) {
+        companyDoc.code = dataSettings.updateCodeInput;
       }
 
       if (!!dataSettings.updateDiscrictInput) {
@@ -4030,6 +4052,7 @@ exports.companyTransakcjonHistory = (req, res, next) => {
   })
     .select("_id payments owner")
     .populate("payments.coinsId", "-userCreated")
+    .populate("payments.invoiceId", "")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;

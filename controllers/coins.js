@@ -1,7 +1,7 @@
 const Company = require("../models/company");
 const Coins = require("../models/coins");
 const { validationResult } = require("express-validator");
-const { STRIPE_API_KEY, STRIPE_SECRET_KEY } = process.env;
+const { STRIPE_SECRET_KEY } = process.env;
 const stripeLoader = require("stripe");
 const stripe = new stripeLoader(STRIPE_SECRET_KEY);
 

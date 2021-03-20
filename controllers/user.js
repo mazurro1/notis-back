@@ -214,11 +214,11 @@ exports.login = (req, res, next) => {
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "company",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions monets"
+      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions monets premium"
     )
     .populate(
       "stamps.companyId",
-      "_id linkPath companyStamps services.serviceName services._id name"
+      "_id linkPath companyStamps services.serviceName services._id name "
     )
     .populate(
       "stamps.reserwations",
@@ -428,15 +428,35 @@ exports.getCustomUserPhone = (req, res, next) => {
           User.findOne({
             _id: selectedUserId,
           })
-            .select("phone _id")
+            .select("phone _id whiteListVerifiedPhones phoneVerified")
             .then((user) => {
               if (!!user) {
-                const userPhone = Buffer.from(user.phone, "base64").toString(
-                  "ascii"
-                );
-                res.status(201).json({
-                  userPhone: userPhone,
-                });
+                let selectedPhoneNumber = null;
+                if (!!user.phoneVerified) {
+                  selectedPhoneNumber = user.phone;
+                } else {
+                  if (!!user.whiteListVerifiedPhones) {
+                    if (user.whiteListVerifiedPhones.length > 0) {
+                      selectedPhoneNumber =
+                        user.whiteListVerifiedPhones[
+                          user.whiteListVerifiedPhones.length - 1
+                        ];
+                    }
+                  }
+                }
+                if (!!selectedPhoneNumber) {
+                  const userPhone = Buffer.from(
+                    selectedPhoneNumber,
+                    "base64"
+                  ).toString("ascii");
+                  res.status(201).json({
+                    userPhone: userPhone,
+                  });
+                } else {
+                  res.status(201).json({
+                    userPhone: "None",
+                  });
+                }
               } else {
                 const error = new Error("Brak podanego użytkownika.");
                 error.statusCode = 401;
@@ -650,7 +670,7 @@ exports.autoLogin = (req, res, next) => {
     )
     .populate(
       "company",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions monets"
+      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions monets premium"
     )
     .populate({
       path: "alerts.reserwationId",
@@ -673,19 +693,32 @@ exports.autoLogin = (req, res, next) => {
             validUserActiveCount = user.alertActiveCount;
           }
         }
-
-        const isNotCompanyStamps = user.stamps.some(
-          (stamp) => stamp.companyId === null
-        );
+        const isNotCompanyStamps = user.stamps.some((stamp) => {
+          const isInReserwationsStampsCanceled = stamp.reserwations.some(
+            (itemStamp) => itemStamp.visitCanceled
+          );
+          return stamp.companyId === null || isInReserwationsStampsCanceled;
+        });
         const isNotCompanyFavourites = user.favouritesCompanys.some(
           (fav) => fav === null
         );
         if (isNotCompanyStamps || isNotCompanyFavourites) {
           if (isNotCompanyStamps) {
-            const filterStampsUser = user.stamps.filter(
-              (stamp) => stamp.companyId !== null
-            );
-            user.stamps = filterStampsUser;
+            const newUserStamps = [];
+            user.stamps.forEach((stamp) => {
+              if (stamp.companyId !== null) {
+                const filterCompanyNoActiveStamps = stamp.reserwations.filter(
+                  (itemStamp) => !itemStamp.visitCanceled
+                );
+                stamp.reserwations = filterCompanyNoActiveStamps;
+                newUserStamps.push({
+                  _id: stamp._id,
+                  reserwations: filterCompanyNoActiveStamps,
+                  companyId: stamp.companyId,
+                });
+              }
+            });
+            user.stamps = newUserStamps;
           }
           if (isNotCompanyFavourites) {
             const filterFavUser = user.favouritesCompanys.filter(

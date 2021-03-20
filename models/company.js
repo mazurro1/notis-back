@@ -19,6 +19,14 @@ const companySchema = new Schema(
       type: String,
       required: true,
     },
+    nip: {
+      type: String,
+      required: true,
+    },
+    code: {
+      type: String,
+      required: true,
+    },
     city: {
       type: String,
       required: true,
@@ -90,10 +98,19 @@ const companySchema = new Schema(
           type: Date,
           required: false,
         },
+        invoiceId: {
+          type: Schema.Types.ObjectId,
+          ref: "Invoices",
+          required: false,
+        },
       },
     ],
     monets: {
       type: String,
+      required: false,
+    },
+    premium: {
+      type: Date,
       required: false,
     },
     maps: {
