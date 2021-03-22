@@ -18,6 +18,7 @@ const {
 } = process.env;
 const AWS = require("aws-sdk");
 const stripeLoader = require("stripe");
+const company = require("../models/company");
 const stripe = new stripeLoader(STRIPE_SECRET_KEY);
 
 const transporter = nodemailer.createTransport({
@@ -45,48 +46,42 @@ const s3Bucket = new AWS.S3({
 exports.newOrderProcess = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
-  const coinsId = req.body.coinsId;
+  const coinsIds = req.body.coinsIds;
 
   Company.findOne({
     _id: companyId,
   })
-    .select("_id payments email")
+    .select("_id payments email customerStripeId name")
     .then((companyDoc) => {
       if (!!companyDoc) {
-        return Coins.findOne({
-          _id: coinsId,
+        return Coins.find({
+          _id: { $in: coinsIds },
         }).then((coinsDoc) => {
           if (!!coinsDoc) {
-            return stripe.checkout.sessions
-              .create({
-                payment_method_types: ["card", "p24"],
-                metadata: { companyId: companyId },
-                line_items: [
-                  {
-                    price: coinsDoc.priceId,
-                    quantity: 1,
+            if (!!companyDoc.customerStripeId) {
+              return {
+                companyDoc: companyDoc,
+                coinsDoc: coinsDoc,
+              };
+            } else {
+              return stripe.customers
+                .create({
+                  email: companyDoc.email,
+                  name: companyDoc.name,
+                  metadata: {
+                    companyId: companyDoc._id.toString(),
                   },
-                ],
-                mode: "payment",
-                success_url: `${SITE_FRONT}`,
-                cancel_url: `${SITE_FRONT}/404`,
-                customer_email: companyDoc.email,
-              })
-              .then((session) => {
-                const paymentItem = {
-                  sessionId: session.id,
-                  coinsId: coinsDoc._id,
-                  status: "in_progress",
-                  buyingUserId: userId,
-                  productName: coinsDoc.name,
-                  productPrice: coinsDoc.price,
-                  productMonets: coinsDoc.countCoins,
-                  datePayment: new Date(),
-                };
-                companyDoc.payments.unshift(paymentItem);
-                companyDoc.save();
-                return paymentItem;
-              });
+                })
+                .then((customerInfo) => {
+                  console.log(customerInfo);
+                  companyDoc.customerStripeId = customerInfo.id;
+                  companyDoc.save();
+                  return {
+                    companyDoc: companyDoc,
+                    coinsDoc: coinsDoc,
+                  };
+                });
+            }
           } else {
             const error = new Error("Brak wybranej oferty.");
             error.statusCode = 412;
@@ -98,6 +93,61 @@ exports.newOrderProcess = (req, res, next) => {
         error.statusCode = 412;
         throw error;
       }
+    })
+    .then(({ companyDoc, coinsDoc }) => {
+      const customerIdToSession = !!companyDoc.customerStripeId
+        ? { customer: companyDoc.customerStripeId }
+        : { customer_email: companyDoc.email };
+
+      let allCountSMS = 0;
+      let allCountPremium = 0;
+
+      const mapItems = coinsDoc.map((item) => {
+        if (!!item.coundSMS) {
+          allCountSMS = Number(allCountSMS) + Number(item.countSMS);
+        }
+        if (!!item.countPremium) {
+          allCountPremium = Number(allCountPremium) + Number(item.countPremium);
+        }
+        return {
+          price: item.priceId,
+          quantity: 1,
+        };
+      });
+
+      const mapItemsPayments = coinsDoc.map((item) => {
+        return {
+          coinsId: item._id,
+          name: item.name,
+          price: item.price,
+          sms: !!item.countSMS ? item.countSMS : null,
+          premium: !!item.countPremium ? item.countPremium : null,
+        };
+      });
+
+      return stripe.checkout.sessions
+        .create({
+          payment_method_types: ["card", "p24"],
+          metadata: { companyId: companyId },
+          line_items: mapItems,
+          mode: "payment",
+          success_url: `${SITE_FRONT}`,
+          cancel_url: `${SITE_FRONT}/404`,
+          ...customerIdToSession,
+        })
+        .then((session) => {
+          const paymentItem = {
+            sessionId: session.id,
+            coinsId: coinsDoc._id,
+            status: "in_progress",
+            buyingUserId: userId,
+            productsInfo: mapItemsPayments,
+            datePayment: new Date(),
+          };
+          companyDoc.payments.unshift(paymentItem);
+          companyDoc.save();
+          return paymentItem;
+        });
     })
     .then((sessionPayment) => {
       res.status(200).json({
@@ -119,39 +169,68 @@ exports.updateOrderProcess = async (req, res, next) => {
   Company.findOne({
     _id: event.data.object.metadata.companyId,
   })
-    .select("_id payments monets email name city district adress")
+    .select("_id payments sms email name city district adress code nip premium")
     .then((companyDoc) => {
       if (!!companyDoc) {
         const findIndexPayment = companyDoc.payments.findIndex(
           (item) => item.sessionId === event.data.object.id
         );
         if (findIndexPayment >= 0) {
-          return Coins.findOne({
-            _id: companyDoc.payments[findIndexPayment].coinsId,
+          const mapProductsIds = companyDoc.payments[
+            findIndexPayment
+          ].productsInfo.map((itemPayment) => itemPayment.coinsId);
+          return Coins.find({
+            _id: { $in: mapProductsIds },
           }).then((coinsDoc) => {
-            if (!!coinsDoc) {
+            if (coinsDoc.length > 0) {
               if (event.data.object.payment_status === "paid") {
                 companyDoc.payments[findIndexPayment].status =
                   event.data.object.payment_status;
 
-                let companyOldMonets = 0;
-                if (!!companyDoc.monets) {
-                  companyOldMonets = Buffer.from(
-                    companyDoc.monets,
-                    "base64"
-                  ).toString("ascii");
+                let allCountPremium = 0;
+                let allCountSMS = 0;
+
+                coinsDoc.forEach((coinsItem) => {
+                  if (!!coinsItem.countPremium) {
+                    allCountPremium =
+                      Number(allCountPremium) + Number(coinsItem.countPremium);
+                  }
+                  if (!!coinsItem.countSMS) {
+                    allCountSMS =
+                      Number(allCountSMS) + Number(coinsItem.countSMS);
+                  }
+                });
+
+                let companyOldSMS = 0;
+                if (!!allCountSMS) {
+                  if (!!companyDoc.sms) {
+                    companyOldSMS = Buffer.from(
+                      companyDoc.sms,
+                      "base64"
+                    ).toString("ascii");
+                  }
+                  const newCompanySMS = `${
+                    Number(companyOldSMS) + Number(allCountSMS)
+                  }`;
+
+                  const hashedSMS = Buffer.from(
+                    newCompanySMS,
+                    "utf-8"
+                  ).toString("base64");
+
+                  companyDoc.sms = hashedSMS;
                 }
-                const newCompanyMonets = `${
-                  Number(companyOldMonets) + Number(coinsDoc.countCoins)
-                }`;
-
-                const hashedMonets = Buffer.from(
-                  newCompanyMonets,
-                  "utf-8"
-                ).toString("base64");
-
-                companyDoc.monets = hashedMonets;
-
+                if (!!allCountPremium) {
+                  const oldDatePremium = !!companyDoc.premium
+                    ? new Date(companyDoc.premium)
+                    : new Date();
+                  const newPremiumDate = new Date(
+                    oldDatePremium.setMonth(
+                      oldDatePremium.getMonth() + Number(allCountPremium)
+                    )
+                  );
+                  companyDoc.premium = newPremiumDate;
+                }
                 return companyDoc.save();
               } else {
                 companyDoc.payments[findIndexPayment].status =
@@ -229,6 +308,16 @@ exports.updateOrderProcess = async (req, res, next) => {
           resultNewInvoice.resultCompanyDoc.adress,
           "base64"
         ).toString("ascii");
+
+        const mapBoughtItems = resultNewInvoice.selectedPaymentItem.productsInfo.map(
+          (boughtItem) => {
+            return {
+              name: boughtItem.name,
+              count: 1,
+              price: boughtItem.price,
+            };
+          }
+        );
         const invoiceData = {
           dealer: {
             name: "FROFRONT Hubert Mazur",
@@ -248,13 +337,7 @@ exports.updateOrderProcess = async (req, res, next) => {
               ? resultNewInvoice.resultCompanyDoc.nip
               : "000000000",
           },
-          items: [
-            {
-              name: resultNewInvoice.selectedPaymentItem.productName,
-              count: 1,
-              price: resultNewInvoice.selectedPaymentItem.productPrice,
-            },
-          ],
+          items: mapBoughtItems,
         };
         const newInvoice = createInvoice(
           invoiceData,

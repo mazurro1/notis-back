@@ -8,7 +8,7 @@ router.post(
   "/payment-session",
   isAuth,
   [body("companyId")],
-  [body("coinsPriceId")],
+  [body("coinsIds")],
   payment.newOrderProcess
 );
 

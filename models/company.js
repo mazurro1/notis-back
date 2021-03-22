@@ -62,16 +62,15 @@ const companySchema = new Schema(
       ref: "Users",
       required: true,
     },
+    customerStripeId: {
+      type: String,
+      required: false,
+    },
     payments: [
       {
         sessionId: {
           type: String,
           required: false,
-        },
-        coinsId: {
-          type: Schema.Types.ObjectId,
-          ref: "Coins",
-          required: true,
         },
         status: {
           type: String,
@@ -82,18 +81,31 @@ const companySchema = new Schema(
           ref: "Users",
           required: true,
         },
-        productName: {
-          type: String,
-          required: true,
-        },
-        productPrice: {
-          type: Number,
-          required: true,
-        },
-        productMonets: {
-          type: Number,
-          required: true,
-        },
+        productsInfo: [
+          {
+            coinsId: {
+              type: Schema.Types.ObjectId,
+              ref: "Coins",
+              required: true,
+            },
+            name: {
+              type: String,
+              required: true,
+            },
+            price: {
+              type: Number,
+              required: true,
+            },
+            sms: {
+              type: Number,
+              required: false,
+            },
+            premium: {
+              type: Number,
+              required: false,
+            },
+          },
+        ],
         datePayment: {
           type: Date,
           required: false,
@@ -105,7 +117,7 @@ const companySchema = new Schema(
         },
       },
     ],
-    monets: {
+    sms: {
       type: String,
       required: false,
     },

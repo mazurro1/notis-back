@@ -171,7 +171,7 @@ exports.registrationCompany = (req, res, next) => {
                   end: "0:00",
                 },
               };
-              const actualMonth = new Date().getMonth()
+              const actualMonth = new Date().getMonth();
               const pathCompanyName = encodeURI(companyName);
               const company = new Company({
                 linkPath: pathCompanyName + codeRandom,
@@ -522,6 +522,7 @@ exports.getCompanyData = (req, res, next) => {
                 companyStamps: dataCompany.companyStamps,
                 shopStore: dataCompany.shopStore,
                 code: dataCompany.code,
+                premium: dataCompany.premium,
               };
 
               res.status(201).json({
@@ -973,7 +974,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "shopStore companyStamps mainImageUrl imagesUrl workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
+      "premium shopStore companyStamps mainImageUrl imagesUrl workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
     )
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
@@ -1085,7 +1086,7 @@ exports.companyPath = (req, res, next) => {
                 ? resultCompanyDoc.opinionsValue
                 : 0,
               opinions: companyOpinions,
-
+              premium: resultCompanyDoc.premium,
               imagesUrl: resultCompanyDoc.imagesUrl,
               mainImageUrl: resultCompanyDoc.mainImageUrl,
               companyStamps: resultCompanyDoc.companyStamps,

@@ -11,9 +11,10 @@ exports.addCoins = (req, res, next) => {
   const productId = req.body.productId;
   const priceId = req.body.priceId;
   const price = req.body.price;
-  const countCoins = req.body.countCoins;
+  const countSMS = req.body.countSMS;
   const name = req.body.name;
   const description = req.body.description;
+  const disabled = req.body.disabled;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -32,10 +33,11 @@ exports.addCoins = (req, res, next) => {
           productId: productId,
           priceId: priceId,
           price: price,
-          countCoins: countCoins,
+          countSMS: countSMS,
           name: name,
           description: description,
           userCreated: userCreated,
+          disabled: disabled,
         });
         return newCoins.save();
       } else {

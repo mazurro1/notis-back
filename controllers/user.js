@@ -214,7 +214,7 @@ exports.login = (req, res, next) => {
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "company",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions monets premium"
+      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .populate(
       "stamps.companyId",
@@ -670,7 +670,7 @@ exports.autoLogin = (req, res, next) => {
     )
     .populate(
       "company",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions monets premium"
+      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .populate({
       path: "alerts.reserwationId",

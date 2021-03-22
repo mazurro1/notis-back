@@ -7,7 +7,7 @@ const isAuth = require("../middleware/is-auth");
 router.post(
   "/add-coins",
   // isAuth,
-  // [body("countCoins")],
+  // [body("countSMS")],
   // [body("price")],
   coins.addCoins
 );

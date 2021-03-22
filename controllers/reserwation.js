@@ -61,9 +61,15 @@ exports.addReserwation = (req, res, next) => {
     visitCanceled: false,
   })
     .then((allReserwations) => {
-      return Company.findOne({ _id: companyId, pauseCompany: false })
+      return Company.findOne({
+        _id: companyId,
+        pauseCompany: false,
+        premium: {
+          $gte: new Date().toISOString(),
+        },
+      })
         .select(
-          "openingDays ownerData workers owner daysOff reservationMonthTime services usersInformation promotions happyHoursConst companyStamps"
+          "openingDays ownerData workers owner daysOff reservationMonthTime services usersInformation promotions happyHoursConst companyStamps premium"
         )
         .then((companyDoc) => {
           if (!!companyDoc) {
@@ -671,7 +677,9 @@ exports.addReserwation = (req, res, next) => {
                 }
               });
           } else {
-            const error = new Error("Brak firmy.");
+            const error = new Error(
+              "Brak firmy lub konto firmowe jest nieaktywne."
+            );
             error.statusCode = 422;
             throw error;
           }
@@ -922,6 +930,9 @@ exports.addReserwationWorker = (req, res, next) => {
 
   Company.findOne({
     _id: companyId,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
   })
     .select("_id workers.permissions workers.user owner")
     .then((resultCompanyDoc) => {
@@ -943,7 +954,9 @@ exports.addReserwationWorker = (req, res, next) => {
           throw error;
         }
       } else {
-        const error = new Error("Brak wybranej firmy.");
+        const error = new Error(
+          "Brak wybranej firmy lub konto firmowe jest nieaktywne."
+        );
         error.statusCode = 403;
         throw error;
       }

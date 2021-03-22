@@ -11,7 +11,7 @@ const paymentSchema = new Schema(
       type: Number,
       required: false,
     },
-    countCoins: {
+    countSMS: {
       type: Number,
       required: true,
     },

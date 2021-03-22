@@ -19,9 +19,13 @@ const coinsSchema = new Schema(
       type: Number,
       required: false,
     },
-    countCoins: {
+    countSMS: {
       type: Number,
-      required: true,
+      required: false,
+    },
+    countPremium: {
+      type: Number,
+      required: false,
     },
     promotionPrice: {
       type: Number,
