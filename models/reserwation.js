@@ -57,7 +57,7 @@ const reserwationSchema = new Schema({
 
   costReserwation: {
     type: Number,
-    required: true,
+    required: false,
   },
 
   extraCost: {
@@ -72,7 +72,7 @@ const reserwationSchema = new Schema({
 
   timeReserwation: {
     type: String,
-    required: true,
+    required: false,
   },
 
   workerReserwation: {
@@ -84,6 +84,7 @@ const reserwationSchema = new Schema({
     type: Boolean,
     required: false,
   },
+
   visitCanceled: {
     type: Boolean,
     required: false,
@@ -120,6 +121,18 @@ const reserwationSchema = new Schema({
   opinionId: {
     type: Schema.Types.ObjectId,
     ref: "Opinions",
+    required: false,
+  },
+  isDraft: {
+    type: Boolean,
+    required: false,
+  },
+  sendSMSReserwation: {
+    type: Boolean,
+    required: false,
+  },
+  sendSMSNotifaction: {
+    type: Boolean,
     required: false,
   },
 });

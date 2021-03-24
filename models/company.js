@@ -121,6 +121,14 @@ const companySchema = new Schema(
       type: String,
       required: false,
     },
+    smsReserwationAvaible: {
+      type: Boolean,
+      required: false,
+    },
+    smsNotifactionAvaible: {
+      type: Boolean,
+      required: false,
+    },
     premium: {
       type: Date,
       required: false,

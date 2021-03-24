@@ -198,6 +198,8 @@ exports.registrationCompany = (req, res, next) => {
                 nip: companyNip,
                 code: companyAdressCode,
                 premium: new Date(new Date().setMonth(actualMonth + 3)),
+                smsReserwationAvaible: false,
+                smsNotifactionAvaible: false,
               });
 
               return company.save();
@@ -431,6 +433,13 @@ exports.getCompanyData = (req, res, next) => {
                 "base64"
               ).toString("ascii");
 
+              let unhashedSMS = 0;
+              if (!!companyDoc.sms) {
+                unhashedSMS = Buffer.from(companyDoc.sms, "base64").toString(
+                  "ascii"
+                );
+              }
+
               const mapedWorkers = [];
               dataCompany.workers.forEach((item) => {
                 const unhashedName = Buffer.from(
@@ -523,6 +532,13 @@ exports.getCompanyData = (req, res, next) => {
                 shopStore: dataCompany.shopStore,
                 code: dataCompany.code,
                 premium: dataCompany.premium,
+                sms: Number(unhashedSMS),
+                smsReserwationAvaible: !!dataCompany.smsReserwationAvaible
+                  ? dataCompany.smsReserwationAvaible
+                  : false,
+                smsNotifactionAvaible: !!dataCompany.smsNotifactionAvaible
+                  ? dataCompany.smsNotifactionAvaible
+                  : false,
               };
 
               res.status(201).json({
@@ -974,7 +990,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "premium shopStore companyStamps mainImageUrl imagesUrl workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
+      "premium shopStore companyStamps mainImageUrl imagesUrl workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name daysOff openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
     )
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
@@ -1092,6 +1108,7 @@ exports.companyPath = (req, res, next) => {
               companyStamps: resultCompanyDoc.companyStamps,
               shopStore: resultCompanyDoc.shopStore,
               code: resultCompanyDoc.code,
+              daysOff: resultCompanyDoc.daysOff,
             };
 
             res.status(201).json({
@@ -3677,6 +3694,7 @@ exports.companyStatistics = (req, res, next) => {
         dateYear: year,
         workerReserwation: false,
         dateMonth: { $in: months },
+        isDraft: { $in: [false, null] },
       })
         .select(
           "company serviceId dateYear dateMonth dateDay costReserwation visitNotFinished visitCanceled visitChanged activePromotion activeHappyHour activeStamp fullDate toWorkerUserId dateEnd"
@@ -4080,6 +4098,58 @@ exports.companyTransakcjonHistory = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Brak danej działalności.";
+      }
+      next(err);
+    });
+};
+
+exports.companySMSUpdate = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const smsReserwationAvaible = req.body.smsReserwationAvaible;
+  const smsNotifactionAvaible = req.body.smsNotifactionAvaible;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner smsReserwationAvaible smsNotifactionAvaible")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      companyDoc.smsReserwationAvaible = smsReserwationAvaible;
+      companyDoc.smsNotifactionAvaible = smsNotifactionAvaible;
+      return companyDoc.save();
+    })
+
+    .then(() => {
+      res.status(201).json({
+        message: "Pomyślnie zaktualizowano ustawienia sms",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas aktualizacji ustawień sms.";
       }
       next(err);
     });

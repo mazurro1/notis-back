@@ -362,4 +362,13 @@ router.post(
   company.companyTransakcjonHistory
 );
 
+router.patch(
+  "/company-sms-update",
+  isAuth,
+  [body("companyId")],
+  [body("smsReserwationAvaible")],
+  [body("smsNotifactionAvaible")],
+  company.companySMSUpdate
+);
+
 module.exports = router;
