@@ -2,6 +2,7 @@ const User = require("../models/user");
 const Company = require("../models/company");
 const Reserwation = require("../models/reserwation");
 const CompanyUsersInformations = require("../models/companyUsersInformations");
+const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
@@ -138,6 +139,8 @@ exports.registration = (req, res, next) => {
                 hasPhone: true,
                 hasCompany: false,
                 phoneVerified: false,
+                stamps: [],
+                alerts: [],
               });
               const token = jwt.sign(
                 {
@@ -567,11 +570,33 @@ exports.resetAllerts = (req, res, next) => {
     .where({ "alerts.active": true })
     .then((user) => {
       if (!!user) {
+        const bulkArrayToUpdate = [];
         user.alerts.forEach((alert, index) => {
-          user.alerts[index].active = false;
+          bulkArrayToUpdate.push({
+            updateOne: {
+              filter: {
+                _id: user._id,
+                "alerts._id": alert._id,
+              },
+              update: {
+                $set: {
+                  "alerts.$.active": false,
+                  alertActiveCount: 0,
+                },
+              },
+            },
+          });
         });
-        user.alertActiveCount = 0;
-        return user.save();
+        return User.bulkWrite(bulkArrayToUpdate)
+          .then(() => {
+            return true;
+          })
+          .catch((err) => {
+            console.log(err);
+            const error = new Error("Błąd podczas aktualizacji powiadomień.");
+            error.statusCode = 422;
+            throw error;
+          });
       } else {
         return true;
       }
@@ -896,7 +921,7 @@ exports.edit = (req, res, next) => {
               //   MessageAttributes: {
               //     "AWS.SNS.SMS.SenderID": {
               //       DataType: "String",
-              //       StringValue: "Nootis",
+              //       StringValue: "Meetsy",
               //     },
               //   },
               // };
@@ -1013,7 +1038,7 @@ exports.sentEmailResetPassword = (req, res, next) => {
       transporter.sendMail({
         to: result.email,
         from: MAIL_INFO,
-        subject: "Kod z kodem resetującym hasło an nootise",
+        subject: "Kod z kodem resetującym hasło na Meetsy",
         html: `<h1>Kod resetujący hasło</h1> ${codeToResetPassword}.
         <h2>Data wygaśnięcia kodu: ${showDate}</h2>`,
       });
@@ -1334,6 +1359,8 @@ exports.loginFacebookNew = (req, res, next) => {
                   hasCompany: false,
                   company: null,
                   phoneVerified: false,
+                  stamps: [],
+                  alerts: [],
                 });
                 const token = jwt.sign(
                   {
@@ -1395,25 +1422,17 @@ exports.addCompanyFavourites = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  User.findOne({
-    _id: userId,
-  })
-    .select("_id favouritesCompanys")
-    .then((userDoc) => {
-      if (!!userDoc) {
-        const isInFavourites = userDoc.favouritesCompanys.some(
-          (item) => item == companyId
-        );
-        if (!isInFavourites) {
-          userDoc.favouritesCompanys.push(companyId);
-        }
-        return userDoc.save();
-      } else {
-        const error = new Error("Brak użytkownika.");
-        error.statusCode = 422;
-        throw error;
-      }
-    })
+
+  User.updateOne(
+    {
+      _id: userId,
+    },
+    {
+      $addToSet: {
+        favouritesCompanys: companyId,
+      },
+    }
+  )
     .then(() => {
       res.status(201).json({
         message: "Dodano do ulubionych",
@@ -1438,64 +1457,17 @@ exports.deleteCompanyFavourites = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  User.findOne({
-    _id: userId,
-  })
-    .select("_id favouritesCompanys")
-    .then((userDoc) => {
-      if (!!userDoc) {
-        const filterUserFavourites = userDoc.favouritesCompanys.filter(
-          (item) => item != companyId
-        );
-        userDoc.favouritesCompanys = filterUserFavourites;
-        return userDoc.save();
-      } else {
-        const error = new Error("Brak użytkownika.");
-        error.statusCode = 422;
-        throw error;
-      }
-    })
-    .then(() => {
-      res.status(201).json({
-        message: "Usunięto z ulubionych",
-      });
-    })
-    .catch((err) => {
-      if (!err.statusCode) {
-        err.statusCode = 501;
-        err.message = "Błąd podczas pobierania danych.";
-      }
-      next(err);
-    });
-};
 
-exports.loginFacebookCustom = (req, res, next) => {
-  const userId = req.userId;
-  const companyId = req.body.companyId;
-
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    const error = new Error("Validation faild entered data is incorrect.");
-    error.statusCode = 422;
-    throw error;
-  }
-  User.findOne({
-    _id: userId,
-  })
-    .select("_id favouritesCompanys")
-    .then((userDoc) => {
-      if (!!userDoc) {
-        const filterUserFavourites = userDoc.favouritesCompanys.filter(
-          (item) => item != companyId
-        );
-        userDoc.favouritesCompanys = filterUserFavourites;
-        return userDoc.save();
-      } else {
-        const error = new Error("Brak użytkownika.");
-        error.statusCode = 422;
-        throw error;
-      }
-    })
+  User.updateOne(
+    {
+      _id: userId,
+    },
+    {
+      $pull: {
+        favouritesCompanys: companyId,
+      },
+    }
+  )
     .then(() => {
       res.status(201).json({
         message: "Usunięto z ulubionych",
@@ -1555,6 +1527,8 @@ exports.loginGoogle = (req, res, next) => {
                   hasCompany: false,
                   company: null,
                   phoneVerified: false,
+                  stamps: [],
+                  alerts: [],
                 });
                 const token = jwt.sign(
                   {
@@ -1724,7 +1698,7 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
       //   MessageAttributes: {
       //     "AWS.SNS.SMS.SenderID": {
       //       DataType: "String",
-      //       StringValue: "Nootis",
+      //       StringValue: "Meetsy",
       //     },
       //   },
       // };
@@ -1782,102 +1756,184 @@ exports.deleteUserAccount = (req, res, next) => {
       }
     })
     .then(() => {
-      const actualDay = new Date();
-      return Reserwation.find({
-        fromUser: userId,
-        visitNotFinished: false,
-        visitCanceled: false,
-      })
-        .select(
-          "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName"
-        )
-        .populate({
-          path: "company fromUser",
-          select: "name surname linkPath",
-        })
-        .then((allWorkerReserwations) => {
-          const allUsersReserwations = [];
-          if (!!allWorkerReserwations) {
-            allWorkerReserwations.forEach((item) => {
-              const splitDateStart = item.dateStart.split(":");
-              const reserwationDate = new Date(
-                item.dateYear,
-                item.dateMonth - 1,
-                item.dateDay,
-                Number(splitDateStart[0]),
-                Number(splitDateStart[1])
-              );
-              if (reserwationDate > actualDay) {
-                item.visitCanceled = true;
-                item.save();
-                const findUserReserwations = allUsersReserwations.findIndex(
-                  (reserwation) => {
-                    return (
-                      reserwation.userId.toString() ==
-                      item.toWorkerUserId.toString()
-                    );
-                  }
-                );
-                if (findUserReserwations >= 0) {
-                  allUsersReserwations[findUserReserwations].items.push(item);
-                } else {
-                  const newUserData = {
-                    userId: item.toWorkerUserId,
-                    items: [item],
-                  };
-                  allUsersReserwations.push(newUserData);
-                }
-              }
-            });
-            return allUsersReserwations;
-          }
-        });
-    })
-    .then((result) => {
-      result.forEach((userDoc) => {
-        User.findOne({
-          _id: userDoc.userId,
-        })
-          .select("_id alerts alertActiveCount")
-          .then((userReserwationDoc) => {
-            if (!!userReserwationDoc) {
-              const allUserAlertsToSave = [];
-
-              userDoc.items.forEach((itemReserwation) => {
-                const userAlertToSave = {
-                  reserwationId: itemReserwation._id,
-                  active: true,
-                  type: "rezerwation_canceled",
-                  creationTime: new Date(),
-                  companyChanged: false,
-                };
-
-                io.getIO().emit(`user${userReserwationDoc._id}`, {
-                  action: "update-alerts",
-                  alertData: {
-                    reserwationId: itemReserwation,
-                    active: true,
-                    type: "rezerwation_canceled",
-                    creationTime: new Date(),
-                    companyChanged: false,
+      return Reserwation.aggregate([
+        {
+          $match: {
+            fromUser: mongoose.Types.ObjectId(userId),
+            isDraft: { $in: [false, null] },
+            visitNotFinished: false,
+            visitCanceled: false,
+            fullDate: {
+              $gte: new Date(),
+            },
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            localField: "toWorkerUserId",
+            foreignField: "_id",
+            as: "toWorkerUserId",
+          },
+        },
+        { $unwind: "$toWorkerUserId" },
+        {
+          $lookup: {
+            from: "users",
+            localField: "fromUser",
+            foreignField: "_id",
+            as: "fromUser",
+          },
+        },
+        { $unwind: "$fromUser" },
+        {
+          $lookup: {
+            from: "companys",
+            localField: "company",
+            foreignField: "_id",
+            as: "company",
+          },
+        },
+        { $unwind: "$company" },
+        {
+          $sort: { fullDate: 1 },
+        },
+        {
+          $project: {
+            _id: 1,
+            fromUser: {
+              name: 1,
+              surname: 1,
+              _id: 1,
+            },
+            company: {
+              name: 1,
+              _id: 1,
+              linkPath: 1,
+            },
+            toWorkerUserId: {
+              name: 1,
+              _id: 1,
+              surname: 1,
+            },
+            dateYear: 1,
+            dateMonth: 1,
+            dateDay: 1,
+            dateStart: 1,
+            dateEnd: 1,
+            serviceName: 1,
+            visitNotFinished: 1,
+            visitCanceled: 1,
+            visitChanged: 1,
+            workerReserwation: 1,
+            fullDate: 1,
+          },
+        },
+      ]).then((allWorkerReserwations) => {
+        const allUsersReserwations = [];
+        const bulkArrayToUpdate = [];
+        if (!!allWorkerReserwations) {
+          allWorkerReserwations.forEach((item) => {
+            bulkArrayToUpdate.push({
+              updateOne: {
+                filter: { _id: item._id },
+                update: {
+                  $set: {
+                    visitCanceled: true,
                   },
-                });
+                },
+              },
+            });
 
-                allUserAlertsToSave.push(userAlertToSave);
-              });
-              userReserwationDoc.alerts.unshift(...allUserAlertsToSave);
-
-              const countAlertsActiveValid = !!userReserwationDoc.alertActiveCount
-                ? userReserwationDoc.alertActiveCount
-                : 0;
-              userReserwationDoc.alertActiveCount =
-                countAlertsActiveValid + allUserAlertsToSave.length;
-
-              userReserwationDoc.save();
+            const findUserReserwations = allUsersReserwations.findIndex(
+              (reserwation) => {
+                return (
+                  reserwation.userId.toString() ==
+                  item.toWorkerUserId.toString()
+                );
+              }
+            );
+            if (findUserReserwations >= 0) {
+              allUsersReserwations[findUserReserwations].items.push(item);
+            } else {
+              const newUserData = {
+                userId: item.toWorkerUserId,
+                items: [item],
+              };
+              allUsersReserwations.push(newUserData);
             }
           });
-        return true;
+        }
+        return Reserwation.bulkWrite(bulkArrayToUpdate)
+          .then(() => {
+            return allUsersReserwations;
+          })
+          .catch((err) => {
+            if (!err.statusCode) {
+              err.statusCode = 501;
+              err.message = "Błąd podczas aktualizacji rezerwacji.";
+            }
+            next(err);
+          });
       });
+    })
+    .then((result) => {
+      const bulkArrayToUpdate = [];
+      result.forEach((userDoc) => {
+        const allUserAlertsToSave = [];
+
+        userDoc.items.forEach((itemReserwation) => {
+          const userAlertToSave = {
+            reserwationId: itemReserwation._id,
+            active: true,
+            type: "rezerwation_canceled",
+            creationTime: new Date(),
+            companyChanged: false,
+          };
+
+          io.getIO().emit(`user${userDoc.userId._id}`, {
+            action: "update-alerts",
+            alertData: {
+              reserwationId: itemReserwation,
+              active: true,
+              type: "rezerwation_canceled",
+              creationTime: new Date(),
+              companyChanged: false,
+            },
+          });
+
+          allUserAlertsToSave.unshift(userAlertToSave);
+        });
+
+        bulkArrayToUpdate.push({
+          updateOne: {
+            filter: {
+              _id: userDoc.userId._id,
+            },
+            update: {
+              $inc: { alertActiveCount: allUserAlertsToSave.length },
+              $push: {
+                alerts: {
+                  $each: allUserAlertsToSave,
+                  $position: 0,
+                },
+              },
+            },
+          },
+        });
+      });
+
+      return User.bulkWrite(bulkArrayToUpdate)
+        .then(() => {
+          return true;
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas wysyłania powiadomień.";
+          }
+          next(err);
+        });
     })
     .then(() => {
       return CompanyUsersInformations.deleteMany({ userId: userId });

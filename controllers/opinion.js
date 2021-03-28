@@ -85,11 +85,46 @@ exports.addOpinion = (req, res, next) => {
         })
         .execPopulate()
         .then((resultPopulatedSave) => {
+          const bulkArrayToUpdate = [];
           if (!!resultPopulatedSave.user) {
             if (!!resultPopulatedSave.user._id) {
-              User.findOne({
-                _id: resultPopulatedSave.user._id,
-              }).then((resultWritingOpinion) => {
+              const userAlertToSave = {
+                reserwationId: resultPopulatedSave.reserwationId._id,
+                active: true,
+                type: "opinion_client",
+                creationTime: new Date(),
+                companyChanged: false,
+              };
+
+              io.getIO().emit(`user${resultPopulatedSave.user._id}`, {
+                action: "update-alerts",
+                alertData: {
+                  reserwationId: resultPopulatedSave.reserwationId,
+                  active: true,
+                  type: "opinion_client",
+                  creationTime: new Date(),
+                  companyChanged: false,
+                },
+              });
+              bulkArrayToUpdate.push({
+                updateOne: {
+                  filter: { _id: resultPopulatedSave.user._id },
+                  update: {
+                    $inc: { alertActiveCount: 1 },
+                    $push: {
+                      alerts: {
+                        $each: [userAlertToSave],
+                        $position: 0,
+                      },
+                    },
+                  },
+                },
+              });
+            }
+          }
+          if (!!resultPopulatedSave.reserwationId) {
+            if (!!resultPopulatedSave.reserwationId.toWorkerUserId) {
+              if (!!resultPopulatedSave.reserwationId.toWorkerUserId._id) {
                 const userAlertToSave = {
                   reserwationId: resultPopulatedSave.reserwationId._id,
                   active: true,
@@ -98,57 +133,53 @@ exports.addOpinion = (req, res, next) => {
                   companyChanged: false,
                 };
 
-                io.getIO().emit(`user${resultWritingOpinion._id}`, {
-                  action: "update-alerts",
-                  alertData: {
-                    reserwationId: resultPopulatedSave.reserwationId,
-                    active: true,
-                    type: "opinion_client",
-                    creationTime: new Date(),
-                    companyChanged: false,
-                  },
-                });
-                resultWritingOpinion.alerts.unshift(userAlertToSave);
-                resultWritingOpinion.save();
-              });
-            }
-          }
-          if (!!resultPopulatedSave.reserwationId) {
-            if (!!resultPopulatedSave.reserwationId.toWorkerUserId) {
-              if (!!resultPopulatedSave.reserwationId.toWorkerUserId._id) {
-                User.findOne({
-                  _id: resultPopulatedSave.reserwationId.toWorkerUserId._id,
-                })
-                  .select("_id alerts")
-                  .then((resultToWorkerOpinion) => {
-                    const userAlertToSave = {
-                      reserwationId: resultPopulatedSave.reserwationId._id,
+                io.getIO().emit(
+                  `user${resultPopulatedSave.reserwationId.toWorkerUserId._id}`,
+                  {
+                    action: "update-alerts",
+                    alertData: {
+                      reserwationId: resultPopulatedSave.reserwationId,
                       active: true,
                       type: "opinion_client",
                       creationTime: new Date(),
                       companyChanged: false,
-                    };
+                    },
+                  }
+                );
 
-                    io.getIO().emit(`user${resultToWorkerOpinion._id}`, {
-                      action: "update-alerts",
-                      alertData: {
-                        reserwationId: resultPopulatedSave.reserwationId,
-                        active: true,
-                        type: "opinion_client",
-                        creationTime: new Date(),
-                        companyChanged: false,
+                bulkArrayToUpdate.push({
+                  updateOne: {
+                    filter: {
+                      _id: resultPopulatedSave.reserwationId.toWorkerUserId,
+                    },
+                    update: {
+                      $inc: { alertActiveCount: 1 },
+                      $push: {
+                        alerts: {
+                          $each: [userAlertToSave],
+                          $position: 0,
+                        },
                       },
-                    });
-                    resultToWorkerOpinion.alerts.unshift(userAlertToSave);
-                    resultToWorkerOpinion.save();
-                  });
+                    },
+                  },
+                });
               }
             }
           }
 
-          res.status(201).json({
-            opinion: resultPopulatedSave,
-          });
+          User.bulkWrite(bulkArrayToUpdate)
+            .then(() => {
+              res.status(201).json({
+                opinion: resultPopulatedSave,
+              });
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas pobierania danych.";
+              }
+              next(err);
+            });
         })
         .catch((err) => {
           if (!err.statusCode) {
@@ -194,11 +225,49 @@ exports.updateEditedOpinion = (req, res, next) => {
     })
     .then((opinionDoc) => {
       if (!!opinionDoc) {
+        const bulkArrayToUpdate = [];
         if (!!opinionDoc.user) {
           if (!!opinionDoc.user._id) {
-            User.findOne({
-              _id: opinionDoc.user._id,
-            }).then((resultWritingOpinion) => {
+            const userAlertToSave = {
+              reserwationId: opinionDoc.reserwationId._id,
+              active: true,
+              type: "opinion_client_edit",
+              creationTime: new Date(),
+              companyChanged: false,
+            };
+
+            io.getIO().emit(`user${opinionDoc.user._id}`, {
+              action: "update-alerts",
+              alertData: {
+                reserwationId: opinionDoc.reserwationId,
+                active: true,
+                type: "opinion_client_edit",
+                creationTime: new Date(),
+                companyChanged: false,
+              },
+            });
+
+            bulkArrayToUpdate.push({
+              updateOne: {
+                filter: {
+                  _id: opinionDoc.user._id,
+                },
+                update: {
+                  $inc: { alertActiveCount: 1 },
+                  $push: {
+                    alerts: {
+                      $each: [userAlertToSave],
+                      $position: 0,
+                    },
+                  },
+                },
+              },
+            });
+          }
+        }
+        if (!!opinionDoc.reserwationId) {
+          if (!!opinionDoc.reserwationId.toWorkerUserId) {
+            if (!!opinionDoc.reserwationId.toWorkerUserId._id) {
               const userAlertToSave = {
                 reserwationId: opinionDoc.reserwationId._id,
                 active: true,
@@ -207,56 +276,53 @@ exports.updateEditedOpinion = (req, res, next) => {
                 companyChanged: false,
               };
 
-              io.getIO().emit(`user${resultWritingOpinion._id}`, {
-                action: "update-alerts",
-                alertData: {
-                  reserwationId: opinionDoc.reserwationId,
-                  active: true,
-                  type: "opinion_client_edit",
-                  creationTime: new Date(),
-                  companyChanged: false,
-                },
-              });
-              resultWritingOpinion.alerts.unshift(userAlertToSave);
-              resultWritingOpinion.save();
-            });
-          }
-        }
-        if (!!opinionDoc.reserwationId) {
-          if (!!opinionDoc.reserwationId.toWorkerUserId) {
-            if (!!opinionDoc.reserwationId.toWorkerUserId._id) {
-              User.findOne({
-                _id: opinionDoc.reserwationId.toWorkerUserId._id,
-              })
-                .select("_id alerts")
-                .then((resultToWorkerOpinion) => {
-                  const userAlertToSave = {
-                    reserwationId: opinionDoc.reserwationId._id,
+              io.getIO().emit(
+                `user${opinionDoc.reserwationId.toWorkerUserId._id}`,
+                {
+                  action: "update-alerts",
+                  alertData: {
+                    reserwationId: opinionDoc.reserwationId,
                     active: true,
                     type: "opinion_client_edit",
                     creationTime: new Date(),
                     companyChanged: false,
-                  };
+                  },
+                }
+              );
 
-                  io.getIO().emit(`user${resultToWorkerOpinion._id}`, {
-                    action: "update-alerts",
-                    alertData: {
-                      reserwationId: opinionDoc.reserwationId,
-                      active: true,
-                      type: "opinion_client_edit",
-                      creationTime: new Date(),
-                      companyChanged: false,
+              bulkArrayToUpdate.push({
+                updateOne: {
+                  filter: {
+                    _id: opinionDoc.reserwationId.toWorkerUserId._id,
+                  },
+                  update: {
+                    $inc: { alertActiveCount: 1 },
+                    $push: {
+                      alerts: {
+                        $each: [userAlertToSave],
+                        $position: 0,
+                      },
                     },
-                  });
-                  resultToWorkerOpinion.alerts.unshift(userAlertToSave);
-                  resultToWorkerOpinion.save();
-                });
+                  },
+                },
+              });
             }
           }
         }
         if (!!!opinionDoc.editedOpinionMessage) {
-          opinionDoc.editedOpinionMessage = opinionData.opinionEditedMessage;
-          return opinionDoc.save();
+          return User.bulkWrite(bulkArrayToUpdate)
+            .then(() => {
+              opinionDoc.editedOpinionMessage =
+                opinionData.opinionEditedMessage;
+              return opinionDoc.save();
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas pobierania danych.";
+              }
+              next(err);
+            });
         } else {
           const error = new Error("Edytowana opinia została już dodana.");
           error.statusCode = 412;
@@ -372,11 +438,48 @@ exports.addReplayOpinion = (req, res, next) => {
         })
         .then((resultOpinion) => {
           if (!!resultOpinion) {
+            const bulkArrayToUpdate = [];
             if (!!resultOpinion.user) {
               if (!!resultOpinion.user._id) {
-                User.findOne({
-                  _id: resultOpinion.user._id,
-                }).then((resultWritingOpinion) => {
+                const userAlertToSave = {
+                  reserwationId: resultOpinion.reserwationId._id,
+                  active: true,
+                  type: "opinion_from_company",
+                  creationTime: new Date(),
+                  companyChanged: false,
+                };
+
+                io.getIO().emit(`user${resultOpinion.user._id}`, {
+                  action: "update-alerts",
+                  alertData: {
+                    reserwationId: resultOpinion.reserwationId,
+                    active: true,
+                    type: "opinion_from_company",
+                    creationTime: new Date(),
+                    companyChanged: false,
+                  },
+                });
+                bulkArrayToUpdate.push({
+                  updateOne: {
+                    filter: {
+                      _id: resultOpinion.user._id,
+                    },
+                    update: {
+                      $inc: { alertActiveCount: 1 },
+                      $push: {
+                        alerts: {
+                          $each: [userAlertToSave],
+                          $position: 0,
+                        },
+                      },
+                    },
+                  },
+                });
+              }
+            }
+            if (!!resultOpinion.reserwationId) {
+              if (!!resultOpinion.reserwationId.toWorkerUserId) {
+                if (!!resultOpinion.reserwationId.toWorkerUserId._id) {
                   const userAlertToSave = {
                     reserwationId: resultOpinion.reserwationId._id,
                     active: true,
@@ -385,55 +488,52 @@ exports.addReplayOpinion = (req, res, next) => {
                     companyChanged: false,
                   };
 
-                  io.getIO().emit(`user${resultWritingOpinion._id}`, {
-                    action: "update-alerts",
-                    alertData: {
-                      reserwationId: resultOpinion.reserwationId,
-                      active: true,
-                      type: "opinion_from_company",
-                      creationTime: new Date(),
-                      companyChanged: false,
-                    },
-                  });
-                  resultWritingOpinion.alerts.unshift(userAlertToSave);
-                  resultWritingOpinion.save();
-                });
-              }
-            }
-            if (!!resultOpinion.reserwationId) {
-              if (!!resultOpinion.reserwationId.toWorkerUserId) {
-                if (!!resultOpinion.reserwationId.toWorkerUserId._id) {
-                  User.findOne({
-                    _id: resultOpinion.reserwationId.toWorkerUserId._id,
-                  })
-                    .select("_id alerts")
-                    .then((resultToWorkerOpinion) => {
-                      const userAlertToSave = {
-                        reserwationId: resultOpinion.reserwationId._id,
+                  io.getIO().emit(
+                    `user${resultOpinion.reserwationId.toWorkerUserId._id}`,
+                    {
+                      action: "update-alerts",
+                      alertData: {
+                        reserwationId: resultOpinion.reserwationId,
                         active: true,
                         type: "opinion_from_company",
                         creationTime: new Date(),
                         companyChanged: false,
-                      };
+                      },
+                    }
+                  );
 
-                      io.getIO().emit(`user${resultToWorkerOpinion._id}`, {
-                        action: "update-alerts",
-                        alertData: {
-                          reserwationId: resultOpinion.reserwationId,
-                          active: true,
-                          type: "opinion_from_company",
-                          creationTime: new Date(),
-                          companyChanged: false,
+                  bulkArrayToUpdate.push({
+                    updateOne: {
+                      filter: {
+                        _id: resultOpinion.reserwationId.toWorkerUserId._id,
+                      },
+                      update: {
+                        $inc: { alertActiveCount: 1 },
+                        $push: {
+                          alerts: {
+                            $each: [userAlertToSave],
+                            $position: 0,
+                          },
                         },
-                      });
-                      resultToWorkerOpinion.alerts.unshift(userAlertToSave);
-                      resultToWorkerOpinion.save();
-                    });
+                      },
+                    },
+                  });
                 }
               }
             }
-            resultOpinion.replayOpinionMessage = replay;
-            return resultOpinion.save();
+
+            return User.bulkWrite(bulkArrayToUpdate)
+              .then(() => {
+                resultOpinion.replayOpinionMessage = replay;
+                return resultOpinion.save();
+              })
+              .catch((err) => {
+                if (!err.statusCode) {
+                  err.statusCode = 501;
+                  err.message = "Błąd podczas pobierania danych.";
+                }
+                next(err);
+              });
           } else {
             const error = new Error("Nie znaleziono opinii.");
             error.statusCode = 403;

@@ -129,6 +129,10 @@ const companySchema = new Schema(
       type: Boolean,
       required: false,
     },
+    smsCanceledAvaible: {
+      type: Boolean,
+      required: false,
+    },
     premium: {
       type: Date,
       required: false,
@@ -445,32 +449,6 @@ const companySchema = new Schema(
         ],
       },
     ],
-    reservations: [
-      {
-        userIdWhoReserved: {
-          type: Schema.Types.ObjectId,
-          ref: "Users",
-          required: false,
-        },
-        userIdWhoDoService: {
-          type: Schema.Types.ObjectId,
-          ref: "Users",
-          required: false,
-        },
-        dateFrom: {
-          type: String,
-          required: false,
-        },
-        dateTo: {
-          type: String,
-          required: false,
-        },
-        visitMade: {
-          type: Boolean,
-          required: false,
-        },
-      },
-    ],
     services: [
       {
         serviceCategory: {
@@ -543,23 +521,6 @@ const companySchema = new Schema(
       type: String,
       required: false,
     },
-    reports: [
-      {
-        userWhoReport: {
-          type: Schema.Types.ObjectId,
-          ref: "Users",
-          required: false,
-        },
-        reportText: {
-          type: String,
-          required: false,
-        },
-        reportDate: {
-          type: String,
-          required: false,
-        },
-      },
-    ],
     mainImageUrl: {
       type: String,
       required: false,
