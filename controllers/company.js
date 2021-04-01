@@ -109,11 +109,9 @@ exports.registrationCompany = (req, res, next) => {
     .then((companyNameDoc) => {
       if (!!!companyNameDoc) {
         return Company.findOne({ email: companyEmail })
-          .select(
-            "-name -phone -adress -owner -workers -messages -messangerPageId -messangerAppId -messangerHtmlRef"
-          )
+          .select("_id email")
           .then((companyDoc) => {
-            if (!companyDoc) {
+            if (!!!companyDoc) {
               const codeToVerified = makeid(6);
 
               const codeRandom = Math.floor(
@@ -201,6 +199,7 @@ exports.registrationCompany = (req, res, next) => {
                 smsReserwationAvaible: false,
                 smsNotifactionAvaible: false,
                 smsCanceledAvaible: false,
+                sms: 0,
               });
 
               return company.save();
@@ -434,11 +433,9 @@ exports.getCompanyData = (req, res, next) => {
                 "base64"
               ).toString("ascii");
 
-              let unhashedSMS = 0;
+              let validCompanySMS = 0;
               if (!!companyDoc.sms) {
-                unhashedSMS = Buffer.from(companyDoc.sms, "base64").toString(
-                  "ascii"
-                );
+                validCompanySMS = companyDoc.sms;
               }
 
               const mapedWorkers = [];
@@ -532,7 +529,7 @@ exports.getCompanyData = (req, res, next) => {
                 shopStore: dataCompany.shopStore,
                 code: dataCompany.code,
                 premium: dataCompany.premium,
-                sms: Number(unhashedSMS),
+                sms: validCompanySMS,
                 smsReserwationAvaible: !!dataCompany.smsReserwationAvaible
                   ? dataCompany.smsReserwationAvaible
                   : false,
@@ -744,7 +741,7 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
     _id: companyId,
   })
     .select("name workers email _id owner email")
-    .populate("workers.item.user", "name surname email")
+    .populate("workers.user", "name surname email")
     .then((companyDoc) => {
       if (!!companyDoc) {
         const unhashedCodeFromClient = Buffer.from(
@@ -752,9 +749,6 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
           "base64"
         ).toString("ascii");
 
-        const indexSelectWorker = companyDoc.workers.findIndex(
-          (item) => item.email === unhashedWorkerEmail
-        );
         const selectWorker = companyDoc.workers.find(
           (item) => item.email === unhashedWorkerEmail
         );
@@ -764,11 +758,27 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
             "base64"
           ).toString("ascii");
           if (unhashedCodeFromBase === unhashedCodeFromClient) {
-            selectWorker.active = true;
-            selectWorker.codeToActive = null;
-            selectWorker.servicesCategory = [];
-            companyDoc.workers[indexSelectWorker] = selectWorker;
-            return companyDoc.save();
+            return Company.updateOne(
+              {
+                _id: companyId,
+                "workers.email": unhashedWorkerEmail,
+              },
+              {
+                $set: {
+                  "workers.$.active": true,
+                  "workers.$.codeToActive": null,
+                  "workers.$.servicesCategory": [],
+                },
+              }
+            )
+              .then(() => {
+                return companyDoc;
+              })
+              .catch(() => {
+                const error = new Error("Błąd podczas dodawania pracownika.");
+                error.statusCode = 501;
+                throw error;
+              });
           } else {
             const error = new Error("Zły kod aktywacji.");
             error.statusCode = 501;
@@ -786,7 +796,7 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
       }
     })
     .then((result) => {
-      User.findOne({
+      return User.findOne({
         email: unhashedWorkerEmail,
       })
         .select("email company hasCompany")
@@ -804,7 +814,13 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
           }
         });
     })
-    .then(() => {
+    .then((userDoc) => {
+      transporter.sendMail({
+        to: userDoc.email,
+        from: MAIL_INFO,
+        subject: `Potwierdzenie dodania do pracy`,
+        html: `<h1>Dodano do pracy!</h1>`,
+      });
       res.status(201).json({
         message: "Użytkownik został dodany do firmy",
       });
@@ -1352,11 +1368,9 @@ exports.allCompanys = (req, res, next) => {
       $gte: new Date().toISOString(),
     },
   })
-
     .select(
       "adress city district linkPath name pauseCompany reserationText services title opinionsCount opinionsValue mainImageUrl imagesUrl code"
     )
-
     .skip((page - 1) * 10)
     .limit(10)
     .sort(propsSort)
@@ -1866,9 +1880,7 @@ exports.companySettingsPatch = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select(
-      "_id workers.permissions workers.user owner city district adress phone name companyType pauseCompany reservationMonthTime reservationEveryTime"
-    )
+    .select("_id workers.permissions workers.user owner name")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -1989,7 +2001,9 @@ exports.companyWorkersSaveProps = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers owner ownerData")
+    .select(
+      "_id workers._id workers.specialization workers.constantWorkingHours workers.servicesCategory workers.permissions owner ownerData.specialization ownerData.constantWorkingHours ownerData.servicesCategory ownerData.permissions"
+    )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2131,10 +2145,31 @@ exports.companyWorkersNoConstData = (req, res, next) => {
     {
       $match: {
         _id: mongoose.Types.ObjectId(companyId),
-        "workers._id": mongoose.Types.ObjectId(workerId),
       },
     },
-    { $unwind: "$workers" },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        workers: {
+          $filter: {
+            input: "$workers",
+            as: "workerFirstFilter",
+            cond: {
+              $and: [
+                {
+                  $eq: [
+                    "$$workerFirstFilter._id",
+                    mongoose.Types.ObjectId(workerId),
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+    { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
     {
       $project: {
         _id: 1,
@@ -2160,22 +2195,18 @@ exports.companyWorkersNoConstData = (req, res, next) => {
     },
   ])
     .then((resultCompanyDoc) => {
-      if (!!resultCompanyDoc) {
-        const findWorkerResultId = resultCompanyDoc.findIndex((item) => {
-          return item.workers._id == workerId;
-        });
-        if (findWorkerResultId >= 0) {
-          let hasPermission =
-            resultCompanyDoc[findWorkerResultId].owner == userId;
+      if (resultCompanyDoc.length > 0) {
+        const companyDoc = resultCompanyDoc[0];
+        if (!!companyDoc.workers._id) {
+          let hasPermission = companyDoc.owner == userId;
           if (!hasPermission) {
-            hasPermission = resultCompanyDoc[
-              findWorkerResultId
-            ].workers.permissions.some((perm) => perm === 4);
+            hasPermission = companyDoc.workers.permissions.some(
+              (perm) => perm === 4
+            );
           }
           if (hasPermission) {
             return {
-              resultCompanyDoc: resultCompanyDoc,
-              findWorkerResultId: findWorkerResultId,
+              workerNoConstHours: companyDoc.workers.noConstantWorkingHours,
             };
           } else {
             const error = new Error("Brak dostępu.");
@@ -2193,11 +2224,9 @@ exports.companyWorkersNoConstData = (req, res, next) => {
         throw error;
       }
     })
-    .then((result) => {
+    .then(({ workerNoConstHours }) => {
       res.status(201).json({
-        noConstWorkingHours:
-          result.resultCompanyDoc[result.findWorkerResultId].workers
-            .noConstantWorkingHours,
+        noConstWorkingHours: workerNoConstHours,
       });
     })
     .catch((err) => {
@@ -2248,21 +2277,12 @@ exports.companyOwnerNoConstData = (req, res, next) => {
             },
           },
         },
-        workers: {
-          _id: 1,
-          permissions: 1,
-        },
       },
     },
   ])
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc[0].owner == userId;
-        if (!hasPermission) {
-          hasPermission = resultCompanyDoc[0].workers.permissions.some(
-            (perm) => perm === 4
-          );
-        }
         if (hasPermission) {
           return resultCompanyDoc;
         } else {
@@ -2296,6 +2316,13 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
   const workerId = req.body.workerId;
   const companyId = req.body.companyId;
   const newDate = req.body.newDate;
+  const dateStart = new Date(newDate.start);
+  const dateEnd = new Date(newDate.start);
+  const dayMinus = new Date(dateStart.setDate(dateStart.getDate() - 1));
+  const dayPlus = new Date(dateEnd.setDate(dateEnd.getDate() + 1));
+
+  const validIsOwner = workerId === "owner" ? userId : workerId;
+  let bulkArrayToUpdate = [];
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -2303,12 +2330,86 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  Company.findOne({
-    _id: companyId,
-  })
-    .select("_id workers owner ownerData")
-    .then((resultCompanyDoc) => {
-      if (!!resultCompanyDoc) {
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(companyId),
+        premium: {
+          $gte: new Date(),
+        },
+      },
+    },
+    { $unwind: "$ownerData" },
+    {
+      $project: {
+        ownerData: 1,
+        workers: {
+          $filter: {
+            input: "$workers",
+            as: "workerFirstFilter",
+            cond: {
+              $and: [
+                {
+                  $eq: [
+                    "$$workerFirstFilter._id",
+                    mongoose.Types.ObjectId(validIsOwner),
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        owner: 1,
+        premium: 1,
+        _id: 1,
+      },
+    },
+    { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        ownerData: {
+          _id: 1,
+          user: 1,
+          noConstantWorkingHours: {
+            $filter: {
+              input: "$ownerData.noConstantWorkingHours",
+              as: "itemOwner",
+              cond: {
+                $and: [
+                  { $gte: ["$$itemOwner.start", dayMinus] },
+                  { $lte: ["$$itemOwner.start", dayPlus] },
+                ],
+              },
+            },
+          },
+        },
+        workers: {
+          _id: 1,
+          user: 1,
+          permissions: 1,
+          noConstantWorkingHours: {
+            $filter: {
+              input: "$workers.noConstantWorkingHours",
+              as: "item",
+              cond: {
+                $and: [
+                  { $gte: ["$$item.start", dayMinus] },
+                  { $lte: ["$$item.start", dayPlus] },
+                ],
+              },
+            },
+          },
+        },
+        owner: 1,
+        premium: 1,
+        pauseCompany: 1,
+        _id: 1,
+      },
+    },
+  ])
+    .then((companyDoc) => {
+      if (companyDoc.length > 0) {
+        const resultCompanyDoc = companyDoc[0];
         let hasPermission = resultCompanyDoc.owner == userId;
         if (!hasPermission) {
           const selectedWorker = resultCompanyDoc.workers.find(
@@ -2335,103 +2436,190 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
     })
     .then((companyDoc) => {
       if (workerId === "owner") {
-        const selectedOtherDays = companyDoc.ownerData.noConstantWorkingHours.filter(
-          (item) => item.fullDate !== newDate.fullDate
+        const selectedOtherDaysOwner = companyDoc.ownerData.noConstantWorkingHours.find(
+          (item) => item.fullDate === newDate.fullDate
         );
-        companyDoc.ownerData.noConstantWorkingHours = selectedOtherDays;
+        if (!!selectedOtherDaysOwner) {
+          bulkArrayToUpdate.push({
+            updateOne: {
+              filter: {
+                _id: companyId,
+              },
+              update: {
+                $pull: {
+                  "ownerData.noConstantWorkingHours": {
+                    _id: selectedOtherDaysOwner._id,
+                  },
+                },
+              },
+            },
+          });
+        }
       } else {
-        const selectedWorkerIndex = companyDoc.workers.findIndex(
-          (item) => item._id == workerId
-        );
-        if (selectedWorkerIndex >= 0) {
-          const selectedOtherDays = companyDoc.workers[
-            selectedWorkerIndex
-          ].noConstantWorkingHours.filter(
-            (item) => item.fullDate !== newDate.fullDate
+        if (!!companyDoc.workers._id) {
+          const selectedOtherDays = companyDoc.workers.noConstantWorkingHours.find(
+            (item) => item.fullDate === newDate.fullDate
           );
-          companyDoc.workers[
-            selectedWorkerIndex
-          ].noConstantWorkingHours = selectedOtherDays;
-          return companyDoc.save();
+          if (!!selectedOtherDays) {
+            bulkArrayToUpdate.push({
+              updateOne: {
+                filter: {
+                  _id: companyId,
+                  "workers._id": workerId,
+                },
+                update: {
+                  $pull: {
+                    "workers.$.noConstantWorkingHours": {
+                      _id: selectedOtherDays._id,
+                    },
+                  },
+                },
+              },
+            });
+          }
+          return companyDoc;
         }
       }
-
       return companyDoc;
     })
-    .then((companyDoc) => {
+    .then(() => {
       if (workerId === "owner") {
-        companyDoc.ownerData.noConstantWorkingHours.push(newDate);
-        return companyDoc.save();
+        bulkArrayToUpdate.push({
+          updateOne: {
+            filter: {
+              _id: companyId,
+            },
+            update: {
+              $addToSet: {
+                "ownerData.noConstantWorkingHours": newDate,
+              },
+            },
+          },
+        });
       } else {
-        const selectedWorkerIndex = companyDoc.workers.findIndex(
-          (item) => item._id == workerId
-        );
-
-        if (selectedWorkerIndex >= 0) {
-          companyDoc.workers[selectedWorkerIndex].noConstantWorkingHours.push(
-            newDate
-          );
-          return companyDoc.save();
-        } else {
-          const error = new Error("Brak podanego pracownika");
-          error.statusCode = 422;
-          throw error;
-        }
+        bulkArrayToUpdate.push({
+          updateOne: {
+            filter: {
+              _id: companyId,
+              "workers._id": workerId,
+            },
+            update: {
+              $addToSet: {
+                "workers.$.noConstantWorkingHours": newDate,
+              },
+            },
+          },
+        });
       }
+      return Company.bulkWrite(bulkArrayToUpdate)
+        .then(() => {
+          return true;
+        })
+        .catch((err) => {
+          console.log(err);
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas aktualizacji noConstHours.";
+          }
+          next(err);
+        });
     })
-    .then((companySaved) => {
-      if (workerId === "owner") {
-        const newItemOwner = companySaved.ownerData.noConstantWorkingHours.find(
-          (item) => {
-            return (
-              new Date(item.start).getTime() ===
-              new Date(newDate.start).getTime()
-            );
-          }
-        );
-        if (!!newItemOwner) {
+    .then(() => {
+      return Company.aggregate([
+        {
+          $match: {
+            _id: mongoose.Types.ObjectId(companyId),
+            premium: {
+              $gte: new Date(),
+            },
+          },
+        },
+        { $unwind: "$ownerData" },
+        {
+          $project: {
+            ownerData: 1,
+            workers: {
+              $filter: {
+                input: "$workers",
+                as: "workerFirstFilter",
+                cond: {
+                  $and: [
+                    {
+                      $eq: [
+                        "$$workerFirstFilter._id",
+                        mongoose.Types.ObjectId(validIsOwner),
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            owner: 1,
+            premium: 1,
+            _id: 1,
+          },
+        },
+        { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            ownerData: {
+              _id: 1,
+              user: 1,
+              noConstantWorkingHours: {
+                $filter: {
+                  input: "$ownerData.noConstantWorkingHours",
+                  as: "itemOwner",
+                  cond: {
+                    $and: [{ $eq: ["$$itemOwner.fullDate", newDate.fullDate] }],
+                  },
+                },
+              },
+            },
+            workers: {
+              _id: 1,
+              user: 1,
+              permissions: 1,
+              noConstantWorkingHours: {
+                $filter: {
+                  input: "$workers.noConstantWorkingHours",
+                  as: "itemWorker",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$itemWorker.fullDate", newDate.fullDate] },
+                    ],
+                  },
+                },
+              },
+            },
+            owner: 1,
+            premium: 1,
+            pauseCompany: 1,
+            _id: 1,
+          },
+        },
+      ]).then((resultSavedNoConst) => {
+        const savedNoConst = resultSavedNoConst[0];
+        bulkArrayToUpdate = [];
+        if (workerId === "owner") {
+          const findSelectedNoConstHoursOwner = savedNoConst.ownerData.noConstantWorkingHours.find(
+            (hour) => hour.fullDate === newDate.fullDate
+          );
           res.status(201).json({
-            noConstantDay: newItemOwner,
+            noConstantDay: !!findSelectedNoConstHoursOwner
+              ? findSelectedNoConstHoursOwner
+              : [],
           });
         } else {
-          const error = new Error(
-            "Błąd podczas pobierania zapisanego dnia pracownika"
+          const findSelectedNoConstHours = savedNoConst.workers.noConstantWorkingHours.find(
+            (hour) => hour.fullDate === newDate.fullDate
           );
-          error.statusCode = 422;
-          throw error;
-        }
-      } else {
-        const selectedWorkerIndex = companySaved.workers.findIndex(
-          (item) => item._id == workerId
-        );
-        if (selectedWorkerIndex >= 0) {
-          const newItem = companySaved.workers[
-            selectedWorkerIndex
-          ].noConstantWorkingHours.find((item) => {
-            return (
-              new Date(item.start).getTime() ===
-              new Date(newDate.start).getTime()
-            );
+          res.status(201).json({
+            noConstantDay: !!findSelectedNoConstHours
+              ? findSelectedNoConstHours
+              : [],
           });
-          if (!!newItem) {
-            res.status(201).json({
-              noConstantDay: newItem,
-            });
-          } else {
-            const error = new Error(
-              "Błąd podczas pobierania zapisanego dnia pracownika"
-            );
-            error.statusCode = 422;
-            throw error;
-          }
-        } else {
-          const error = new Error(
-            "Błąd podczas pobierania zapisanego dnia pracownika"
-          );
-          error.statusCode = 422;
-          throw error;
         }
-      }
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -2457,7 +2645,7 @@ exports.companyWorkersDeleteNoConstData = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers owner ownerData.noConstantWorkingHours")
+    .select("_id owner workers.permissions")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2484,35 +2672,55 @@ exports.companyWorkersDeleteNoConstData = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyDoc) => {
-      if (workerId === "owner") {
-        const selectedOtherDays = companyDoc.ownerData.noConstantWorkingHours.filter(
-          (item) => item._id != noConstDateId
-        );
-        companyDoc.ownerData.noConstantWorkingHours = selectedOtherDays;
-        return companyDoc.save();
-      } else {
-        const selectedWorkerIndex = companyDoc.workers.findIndex(
-          (item) => item._id == workerId
-        );
-        if (selectedWorkerIndex >= 0) {
-          const selectedOtherDays = companyDoc.workers[
-            selectedWorkerIndex
-          ].noConstantWorkingHours.filter((item) => item._id != noConstDateId);
-          companyDoc.workers[
-            selectedWorkerIndex
-          ].noConstantWorkingHours = selectedOtherDays;
-          return companyDoc.save();
-        } else {
-          return companyDoc;
-        }
-      }
-    })
-
     .then(() => {
-      res.status(201).json({
-        message: "Pomyślnie usunięto dzień pracy pracownika",
-      });
+      if (workerId === "owner") {
+        return Company.updateOne(
+          {
+            _id: companyId,
+          },
+          {
+            $pull: {
+              "ownerData.noConstantWorkingHours": {
+                _id: noConstDateId,
+              },
+            },
+          }
+        )
+          .then(() => {
+            res.status(201).json({
+              message: "Pomyślnie usunięto dzień pracy pracownika",
+            });
+          })
+          .catch(() => {
+            const error = new Error("Błąd podczas dodawania pracownika.");
+            error.statusCode = 501;
+            throw error;
+          });
+      } else {
+        return Company.updateOne(
+          {
+            _id: companyId,
+            "workers._id": workerId,
+          },
+          {
+            $pull: {
+              "workers.$.noConstantWorkingHours": {
+                _id: noConstDateId,
+              },
+            },
+          }
+        )
+          .then(() => {
+            res.status(201).json({
+              message: "Pomyślnie usunięto dzień pracy pracownika",
+            });
+          })
+          .catch(() => {
+            const error = new Error("Błąd podczas dodawania pracownika.");
+            error.statusCode = 501;
+            throw error;
+          });
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -2804,7 +3012,7 @@ exports.companyDeleteConstDateHappyHour = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions workers.user owner happyHoursConst")
+    .select("_id workers.permissions workers.user owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2831,17 +3039,32 @@ exports.companyDeleteConstDateHappyHour = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyDoc) => {
-      const filterHappyHours = companyDoc.happyHoursConst.filter(
-        (item) => item._id != happyHourId
-      );
-      companyDoc.happyHoursConst = filterHappyHours;
-      return companyDoc.save();
-    })
     .then(() => {
-      res.status(201).json({
-        message: "Usunięto happy hour",
-      });
+      return Company.updateOne(
+        {
+          _id: companyId,
+          "happyHoursConst._id": happyHourId,
+        },
+        {
+          $pull: {
+            happyHoursConst: {
+              _id: happyHourId,
+            },
+          },
+        }
+      )
+        .then(() => {
+          res.status(201).json({
+            message: "Usunięto happy hour",
+          });
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych.";
+          }
+          next(err);
+        });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -3004,7 +3227,7 @@ exports.companyDeletePromotion = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions workers.user owner promotions")
+    .select("_id workers.permissions workers.user owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -3031,17 +3254,32 @@ exports.companyDeletePromotion = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyDoc) => {
-      const filterPromotions = companyDoc.promotions.filter(
-        (item) => item._id != promotionId
-      );
-      companyDoc.promotions = filterPromotions;
-      return companyDoc.save();
-    })
     .then(() => {
-      res.status(201).json({
-        message: "Usunięto promocję",
-      });
+      return Company.updateOne(
+        {
+          _id: companyId,
+          "promotions._id": promotionId,
+        },
+        {
+          $pull: {
+            promotions: {
+              _id: promotionId,
+            },
+          },
+        }
+      )
+        .then(() => {
+          res.status(201).json({
+            message: "Usunięto promocję",
+          });
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych.";
+          }
+          next(err);
+        });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -3347,18 +3585,14 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
     {
       $match: {
         _id: mongoose.Types.ObjectId(companyId),
-        owner: mongoose.Types.ObjectId(userId),
       },
     },
     { $unwind: "$ownerData" },
     {
       $project: {
-        _id: 1,
-        owner: 1,
-        daysOff: 1,
-        openingDays: 1,
-        reservationEveryTime: 1,
         ownerData: {
+          _id: 1,
+          user: 1,
           permissions: 1,
           constantWorkingHours: 1,
           noConstantWorkingHours: {
@@ -3374,9 +3608,26 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
             },
           },
         },
+        _id: 1,
+        owner: 1,
+        daysOff: {
+          $filter: {
+            input: "$daysOff",
+            as: "itemDayOff",
+            cond: {
+              $and: [
+                { $eq: ["$$itemDayOff.month", month] },
+                { $eq: ["$$itemDayOff.year", year] },
+              ],
+            },
+          },
+        },
+        openingDays: 1,
+        reservationEveryTime: 1,
       },
     },
   ])
+
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc[0].owner == userId;
@@ -3393,17 +3644,24 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultCompanyDoc) => {
-      res.status(201).json({
-        noConstWorkingHours:
-          resultCompanyDoc[0].ownerData.noConstantWorkingHours,
-        constWorkingHours: resultCompanyDoc[0].ownerData.constantWorkingHours,
-        daysOff: resultCompanyDoc[0].daysOff,
-        openingDays: !!resultCompanyDoc[0].openingDays
-          ? resultCompanyDoc[0].openingDays
-          : null,
-        reservationEveryTime: resultCompanyDoc[0].reservationEveryTime,
-      });
+    .then((companyDoc) => {
+      if (companyDoc.length > 0) {
+        const resultCompanyDoc = companyDoc[0];
+        res.status(201).json({
+          noConstWorkingHours:
+            resultCompanyDoc.ownerData.noConstantWorkingHours,
+          constWorkingHours: resultCompanyDoc.ownerData.constantWorkingHours,
+          daysOff: resultCompanyDoc.daysOff,
+          openingDays: !!resultCompanyDoc.openingDays
+            ? resultCompanyDoc.openingDays
+            : null,
+          reservationEveryTime: resultCompanyDoc.reservationEveryTime,
+        });
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -3426,19 +3684,55 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
+
   Company.aggregate([
     {
       $match: {
         _id: mongoose.Types.ObjectId(companyId),
-        "workers.user": mongoose.Types.ObjectId(userId),
       },
     },
-    { $unwind: "$workers" },
     {
       $project: {
         _id: 1,
         owner: 1,
         daysOff: 1,
+        openingDays: 1,
+        reservationEveryTime: 1,
+        workers: {
+          $filter: {
+            input: "$workers",
+            as: "workerFirstFilter",
+            cond: {
+              $and: [
+                {
+                  $eq: [
+                    "$$workerFirstFilter.user",
+                    mongoose.Types.ObjectId(userId),
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+    { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        daysOff: {
+          $filter: {
+            input: "$daysOff",
+            as: "itemDayOff",
+            cond: {
+              $and: [
+                { $eq: ["$$itemDayOff.month", month] },
+                { $eq: ["$$itemDayOff.year", year] },
+              ],
+            },
+          },
+        },
         openingDays: 1,
         reservationEveryTime: 1,
         workers: {
@@ -3481,16 +3775,23 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultCompanyDoc) => {
-      res.status(201).json({
-        noConstWorkingHours: resultCompanyDoc[0].workers.noConstantWorkingHours,
-        constWorkingHours: resultCompanyDoc[0].workers.constantWorkingHours,
-        daysOff: resultCompanyDoc[0].daysOff,
-        openingDays: !!resultCompanyDoc[0].openingDays
-          ? resultCompanyDoc[0].openingDays
-          : null,
-        reservationEveryTime: resultCompanyDoc[0].reservationEveryTime,
-      });
+    .then((companyDoc) => {
+      if (companyDoc.length > 0) {
+        const resultCompanyDoc = companyDoc[0];
+        res.status(201).json({
+          noConstWorkingHours: resultCompanyDoc.workers.noConstantWorkingHours,
+          constWorkingHours: resultCompanyDoc.workers.constantWorkingHours,
+          daysOff: resultCompanyDoc.daysOff,
+          openingDays: !!resultCompanyDoc.openingDays
+            ? resultCompanyDoc.openingDays
+            : null,
+          reservationEveryTime: resultCompanyDoc.reservationEveryTime,
+        });
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -3572,7 +3873,7 @@ exports.companyDeleteStamp = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id owner companyStamps")
+    .select("_id owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -3589,16 +3890,29 @@ exports.companyDeleteStamp = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultCompanyDoc) => {
-      const filterStamps = resultCompanyDoc.companyStamps.filter(
-        (item) => item._id != stampId
-      );
-      resultCompanyDoc.companyStamps = filterStamps;
-      return resultCompanyDoc.save();
+    .then(() => {
+      return Company.updateOne(
+        {
+          _id: companyId,
+        },
+        {
+          $pull: {
+            companyStamps: { _id: stampId },
+          },
+        }
+      )
+        .then(() => {
+          return true;
+        })
+        .catch(() => {
+          const error = new Error("Błąd podczas usuwania stamp-a.");
+          error.statusCode = 501;
+          throw error;
+        });
     })
-    .then((resultSave) => {
+    .then(() => {
       res.status(201).json({
-        newCompanyStamps: resultSave.companyStamps,
+        message: "Usunięto stamp",
       });
     })
     .catch((err) => {
@@ -3628,7 +3942,7 @@ exports.companyUpdateStamp = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id owner companyStamps")
+    .select("_id owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -3645,28 +3959,24 @@ exports.companyUpdateStamp = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultCompanyDoc) => {
-      const findIndexStamp = resultCompanyDoc.companyStamps.findIndex(
-        (item) => item._id == stampId
-      );
-      if (findIndexStamp >= 0) {
-        resultCompanyDoc.companyStamps[findIndexStamp].disabled = disabledStamp;
-        resultCompanyDoc.companyStamps[
-          findIndexStamp
-        ].promotionPercent = promotionPercent;
-        resultCompanyDoc.companyStamps[
-          findIndexStamp
-        ].countStampsToActive = stampCount;
-        resultCompanyDoc.companyStamps[
-          findIndexStamp
-        ].servicesId = selectedServicesIds;
-      }
-
-      return resultCompanyDoc.save();
-    })
-    .then((resultSave) => {
-      res.status(201).json({
-        newCompanyStamps: resultSave.companyStamps,
+    .then(() => {
+      return Company.updateOne(
+        {
+          _id: companyId,
+          "companyStamps._id": stampId,
+        },
+        {
+          $set: {
+            "companyStamps.$.disabled": disabledStamp,
+            "companyStamps.$.promotionPercent": promotionPercent,
+            "companyStamps.$.countStampsToActive": stampCount,
+            "companyStamps.$.servicesId": selectedServicesIds,
+          },
+        }
+      ).then(() => {
+        res.status(201).json({
+          message: "Zaktualizowano stamp",
+        });
       });
     })
     .catch((err) => {
@@ -4006,12 +4316,6 @@ exports.companyDeleteCompany = (req, res, next) => {
             },
           },
         });
-
-        User.findOne({ _id: worker.user }).then((user) => {
-          user.hasCompany = false;
-          user.company = null;
-          user.save();
-        });
       });
 
       return User.bulkWrite(bulkArrayToUpdate)
@@ -4334,18 +4638,48 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
       }
     })
     .then((resultCompanyDoc) => {
-      User.findOne({ _id: resultCompanyDoc.owner }).then((user) => {
-        user.hasCompany = false;
-        user.company = null;
-        user.save();
+      const bulkArrayToUpdate = [];
+
+      bulkArrayToUpdate.push({
+        updateOne: {
+          filter: {
+            _id: resultCompanyDoc.owner,
+          },
+          update: {
+            $set: {
+              hasCompany: false,
+              company: null,
+            },
+          },
+        },
       });
       resultCompanyDoc.workers.forEach((worker) => {
-        User.findOne({ _id: worker.user }).then((user) => {
-          user.hasCompany = false;
-          user.company = null;
-          user.save();
+        bulkArrayToUpdate.push({
+          updateOne: {
+            filter: {
+              _id: worker.user,
+            },
+            update: {
+              $set: {
+                hasCompany: false,
+                company: null,
+              },
+            },
+          },
         });
       });
+
+      return User.bulkWrite(bulkArrayToUpdate)
+        .then(() => {
+          return true;
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas usuwania uprawnień użytkownikom.";
+          }
+          next(err);
+        });
     })
     .then(() => {
       return CompanyUsersInformations.deleteMany({ companyId: companyId });

@@ -128,10 +128,12 @@ const reserwationSchema = new Schema(
       type: Boolean,
       required: false,
     },
+
     sendSMSReserwation: {
       type: Boolean,
       required: false,
     },
+
     sendSMSNotifaction: {
       type: Boolean,
       required: false,

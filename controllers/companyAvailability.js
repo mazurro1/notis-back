@@ -67,7 +67,7 @@ exports.addCompanyAvailability = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions workers.user owner promotions")
+    .select("_id workers.permissions workers.user owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -146,7 +146,7 @@ exports.deleteCompanyAvailability = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions workers.user owner promotions")
+    .select("_id workers.permissions workers.user owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -174,26 +174,28 @@ exports.deleteCompanyAvailability = (req, res, next) => {
       }
     })
     .then(() => {
-      return CompanyAvailability.findOne({
-        companyId: companyId,
-      }).then((companyAvailabilityDoc) => {
-        if (!!!companyAvailabilityDoc) {
-          const error = new Error("Brak przedmiotów w magazynie.");
-          error.statusCode = 422;
-          throw error;
-        } else {
-          const filterItems = companyAvailabilityDoc.items.filter(
-            (item) => item._id != itemId
-          );
-          companyAvailabilityDoc.items = filterItems;
-          return companyAvailabilityDoc.save();
+      return CompanyAvailability.updateOne(
+        {
+          companyId: companyId,
+        },
+        {
+          $pull: {
+            items: { _id: itemId },
+          },
         }
-      });
-    })
-    .then((resultSave) => {
-      res.status(201).json({
-        message: "Usunięto przedmiot",
-      });
+      )
+        .then(() => {
+          res.status(201).json({
+            message: "Usunięto przedmiot",
+          });
+        })
+        .catch(() => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych firmowych.";
+          }
+          next(err);
+        });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -221,7 +223,7 @@ exports.editCompanyAvailability = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions workers.user owner promotions")
+    .select("_id workers.permissions workers.user owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -249,28 +251,21 @@ exports.editCompanyAvailability = (req, res, next) => {
       }
     })
     .then(() => {
-      return CompanyAvailability.findOne({
-        companyId: companyId,
-      }).then((companyAvailabilityDoc) => {
-        if (!!!companyAvailabilityDoc) {
-          const error = new Error("Brak przedmiotów w magazynie.");
-          error.statusCode = 422;
-          throw error;
-        } else {
-          const indexItemEdited = companyAvailabilityDoc.items.findIndex(
-            (item) => item._id == itemId
-          );
-          if (indexItemEdited >= 0) {
-            companyAvailabilityDoc.items[indexItemEdited].itemName = itemName;
-            companyAvailabilityDoc.items[indexItemEdited].itemCount = itemCount;
-          }
-          return companyAvailabilityDoc.save();
+      return CompanyAvailability.updateOne(
+        {
+          companyId: companyId,
+          "items._id": itemId,
+        },
+        {
+          $set: {
+            "items.$.itemName": itemName,
+            "items.$.itemCount": itemCount,
+          },
         }
-      });
-    })
-    .then((resultSave) => {
-      res.status(201).json({
-        message: "Zaktualizowano przedmiot",
+      ).then(() => {
+        res.status(201).json({
+          message: "Zaktualizowano przedmiot",
+        });
       });
     })
     .catch((err) => {

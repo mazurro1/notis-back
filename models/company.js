@@ -118,8 +118,9 @@ const companySchema = new Schema(
       },
     ],
     sms: {
-      type: String,
+      type: Number,
       required: false,
+      min: 0,
     },
     smsReserwationAvaible: {
       type: Boolean,

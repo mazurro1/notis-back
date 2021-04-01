@@ -1324,10 +1324,30 @@ exports.loginFacebookNew = (req, res, next) => {
     .select("email _id loginToken")
     .then((userDoc) => {
       if (!!userDoc) {
-        res.redirect(
-          303,
-          `${SITE_FRONT}/login-facebook?${userDoc.loginToken}&${userDoc._id}&false`
+        const token = jwt.sign(
+          {
+            email: userDoc.email,
+            userId: userDoc._id.toString(),
+          },
+          TOKEN_PASSWORD,
+          {
+            expiresIn: BCRIPT_EXPIRES_IN,
+          }
         );
+        userDoc.loginToken = token;
+        return userDoc
+          .save()
+          .then((resultSaved) => {
+            res.redirect(
+              303,
+              `${SITE_FRONT}/login-facebook?${resultSaved.loginToken}&${resultSaved._id}&false`
+            );
+          })
+          .catch(() => {
+            const error = new Error("Coś poszło nie tak.");
+            error.statusCode = 422;
+            throw error;
+          });
       } else {
         const splitUserName = name.split(" ");
         const randomPassword = makeid(10);
@@ -1492,10 +1512,30 @@ exports.loginGoogle = (req, res, next) => {
     .select("email _id loginToken")
     .then((userDoc) => {
       if (!!userDoc) {
-        res.redirect(
-          303,
-          `${SITE_FRONT}/login-google?${userDoc.loginToken}&${userDoc._id}&false`
+        const token = jwt.sign(
+          {
+            email: userDoc.email,
+            userId: userDoc._id.toString(),
+          },
+          TOKEN_PASSWORD,
+          {
+            expiresIn: BCRIPT_EXPIRES_IN,
+          }
         );
+        userDoc.loginToken = token;
+        return userDoc
+          .save()
+          .then((resultSaved) => {
+            res.redirect(
+              303,
+              `${SITE_FRONT}/login-google?${resultSaved.loginToken}&${resultSaved._id}&false`
+            );
+          })
+          .catch(() => {
+            const error = new Error("Coś poszło nie tak.");
+            error.statusCode = 422;
+            throw error;
+          });
       } else {
         const splitUserName = name.split(" ");
         const randomPassword = makeid(10);
@@ -1691,21 +1731,22 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
         "base64"
       ).toString("ascii");
 
-      // const params = {
-      //   Message: `Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}`,
-      //   MessageStructure: "string",
-      //   PhoneNumber: "+48515873009",
-      //   MessageAttributes: {
-      //     "AWS.SNS.SMS.SenderID": {
-      //       DataType: "String",
-      //       StringValue: "Meetsy",
-      //     },
-      //   },
-      // };
-      // sns.publish(params, function (err, data) {
-      //   if (err) console.log(err, err.stack);
-      //   else console.log(data);
-      // });
+      const params = {
+        Message: `Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}`,
+        MessageStructure: "string",
+        PhoneNumber: "+48515873009",
+        MessageAttributes: {
+          "AWS.SNS.SMS.SenderID": {
+            DataType: "String",
+            StringValue: "Meetsy",
+          },
+        },
+      };
+      /*
+      sns.publish(params, function (err, data) {
+        if (err) console.log(err, err.stack);
+        else console.log(data);
+      });*/
 
       transporter.sendMail({
         to: userSavedData.email,

@@ -20,6 +20,7 @@ const AWS = require("aws-sdk");
 const stripeLoader = require("stripe");
 const company = require("../models/company");
 const stripe = new stripeLoader(STRIPE_SECRET_KEY);
+const mongoose = require("mongoose");
 
 const transporter = nodemailer.createTransport({
   host: MAIL_HOST,
@@ -73,7 +74,6 @@ exports.newOrderProcess = (req, res, next) => {
                   },
                 })
                 .then((customerInfo) => {
-                  console.log(customerInfo);
                   companyDoc.customerStripeId = customerInfo.id;
                   companyDoc.save();
                   return {
@@ -144,15 +144,33 @@ exports.newOrderProcess = (req, res, next) => {
             productsInfo: mapItemsPayments,
             datePayment: new Date(),
           };
-          companyDoc.payments.unshift(paymentItem);
-          companyDoc.save();
-          return paymentItem;
+
+          return Company.updateOne(
+            {
+              _id: companyDoc._id,
+            },
+            {
+              $push: {
+                payments: {
+                  $each: [paymentItem],
+                  $position: 0,
+                },
+              },
+            }
+          )
+            .then(() => {
+              res.status(200).json({
+                paymentItem: paymentItem,
+              });
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas tworzenia sesji.";
+              }
+              next(err);
+            });
         });
-    })
-    .then((sessionPayment) => {
-      res.status(200).json({
-        paymentItem: sessionPayment,
-      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -165,13 +183,39 @@ exports.newOrderProcess = (req, res, next) => {
 
 exports.updateOrderProcess = async (req, res, next) => {
   const event = req.body;
-
-  Company.findOne({
-    _id: event.data.object.metadata.companyId,
-  })
-    .select("_id payments sms email name city district adress code nip premium")
-    .then((companyDoc) => {
-      if (!!companyDoc) {
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(event.data.object.metadata.companyId),
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        email: 1,
+        name: 1,
+        city: 1,
+        district: 1,
+        adress: 1,
+        code: 1,
+        nip: 1,
+        payments: {
+          $filter: {
+            input: "$payments",
+            as: "paymentsItem",
+            cond: {
+              $and: [
+                { $eq: ["$$paymentsItem.sessionId", event.data.object.id] },
+              ],
+            },
+          },
+        },
+      },
+    },
+  ])
+    .then((companyQuery) => {
+      if (companyQuery.length > 0) {
+        const companyDoc = companyQuery[0];
         const findIndexPayment = companyDoc.payments.findIndex(
           (item) => item.sessionId === event.data.object.id
         );
@@ -184,11 +228,24 @@ exports.updateOrderProcess = async (req, res, next) => {
           }).then((coinsDoc) => {
             if (coinsDoc.length > 0) {
               if (event.data.object.payment_status === "paid") {
-                companyDoc.payments[findIndexPayment].status =
-                  event.data.object.payment_status;
+                const bulkArrayToUpdate = [];
 
                 let allCountPremium = 0;
                 let allCountSMS = 0;
+
+                bulkArrayToUpdate.push({
+                  updateOne: {
+                    filter: {
+                      _id: companyDoc._id,
+                      "payments.sessionId": event.data.object.id,
+                    },
+                    update: {
+                      $set: {
+                        "payments.$.status": event.data.object.payment_status,
+                      },
+                    },
+                  },
+                });
 
                 coinsDoc.forEach((coinsItem) => {
                   if (!!coinsItem.countPremium) {
@@ -201,41 +258,61 @@ exports.updateOrderProcess = async (req, res, next) => {
                   }
                 });
 
-                let companyOldSMS = 0;
                 if (!!allCountSMS) {
-                  if (!!companyDoc.sms) {
-                    companyOldSMS = Buffer.from(
-                      companyDoc.sms,
-                      "base64"
-                    ).toString("ascii");
-                  }
-                  const newCompanySMS = `${
-                    Number(companyOldSMS) + Number(allCountSMS)
-                  }`;
-
-                  const hashedSMS = Buffer.from(
-                    newCompanySMS,
-                    "utf-8"
-                  ).toString("base64");
-
-                  companyDoc.sms = hashedSMS;
+                  bulkArrayToUpdate.push({
+                    updateOne: {
+                      filter: {
+                        _id: companyDoc._id,
+                      },
+                      update: {
+                        $inc: { sms: allCountSMS },
+                      },
+                    },
+                  });
                 }
                 if (!!allCountPremium) {
-                  const oldDatePremium = !!companyDoc.premium
-                    ? new Date(companyDoc.premium)
-                    : new Date();
-                  const newPremiumDate = new Date(
-                    oldDatePremium.setMonth(
-                      oldDatePremium.getMonth() + Number(allCountPremium)
-                    )
-                  );
-                  companyDoc.premium = newPremiumDate;
+                  const oneWeek =
+                    Number(allCountPremium) * 30 * 24 * 60 * 60 * 1000;
+                  bulkArrayToUpdate.push({
+                    updateMany: {
+                      filter: {
+                        _id: companyDoc._id,
+                        premium: { $exists: true },
+                      },
+                      update: [
+                        {
+                          $set: {
+                            premium: { $add: ["$premium", oneWeek] },
+                          },
+                        },
+                      ],
+                    },
+                  });
                 }
-                return companyDoc.save();
+
+                return Company.bulkWrite(bulkArrayToUpdate)
+                  .then(() => {
+                    return companyDoc;
+                  })
+                  .catch(() => {
+                    const error = new Error(
+                      "Błąd podczas dodawania przedmiotów firmie."
+                    );
+                    error.statusCode = 422;
+                    throw error;
+                  });
               } else {
-                companyDoc.payments[findIndexPayment].status =
-                  event.data.object.payment_status;
-                companyDoc.save();
+                Company.updateOne(
+                  {
+                    _id: event.data.object.metadata.companyId,
+                    "payments.sessionId": event.data.object.id,
+                  },
+                  {
+                    $set: {
+                      "payments.$.status": event.data.object.payment_status,
+                    },
+                  }
+                ).then(() => {});
                 const error = new Error("Transakcja została odrzucona.");
                 error.statusCode = 444;
                 throw error;
@@ -285,21 +362,32 @@ exports.updateOrderProcess = async (req, res, next) => {
             invoiceNumber: countAllInvoices + 1,
           });
           newInvoiceItem.save();
+
           activeInvoice = newInvoiceItem;
         }
         if (findIndexPayment >= 0) {
           selectedPaymentItem = resultCompanyDoc.payments[findIndexPayment];
           resultCompanyDoc.payments[findIndexPayment].invoiceId =
             activeInvoice._id;
+
+          return Company.updateOne(
+            {
+              _id: resultCompanyDoc._id,
+              "payments.sessionId": event.data.object.id,
+            },
+            {
+              $set: { "payments.$.invoiceId": activeInvoice._id },
+            }
+          ).then(() => {
+            return {
+              newInvoice: activeInvoice,
+              resultCompanyDoc: resultCompanyDoc,
+              dateInvoice: dateInvoice,
+              findIndexPayment: findIndexPayment,
+              selectedPaymentItem: selectedPaymentItem,
+            };
+          });
         }
-        resultCompanyDoc.save();
-        return {
-          newInvoice: activeInvoice,
-          resultCompanyDoc: resultCompanyDoc,
-          dateInvoice: dateInvoice,
-          findIndexPayment: findIndexPayment,
-          selectedPaymentItem: selectedPaymentItem,
-        };
       });
     })
     .then((resultNewInvoice) => {
@@ -399,13 +487,11 @@ exports.updateOrderProcess = async (req, res, next) => {
             ],
           });
         } else {
-          console.log(err);
           const error = new Error("Błąd podczas pobierania faktury.");
           error.statusCode = 425;
           throw error;
         }
       });
-
       res.json({ received: true });
     })
     .catch((err) => {

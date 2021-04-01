@@ -291,27 +291,23 @@ exports.deleteSelectedUsersInformationsMessage = (req, res, next) => {
       }
     })
     .then(() => {
-      CompanyUsersInformations.findOne({
-        companyId: companyId,
-        userId: selectedUserId,
-      })
-        .then((resultCompanyUserInformation) => {
-          resultCompanyUserInformation.messages.pull({ _id: messageId });
-          return resultCompanyUserInformation.save();
-        })
+      return CompanyUsersInformations.updateOne(
+        {
+          companyId: companyId,
+          userId: selectedUserId,
+        },
+        {
+          $pull: {
+            messages: { _id: messageId },
+          },
+        }
+      )
         .then(() => {
           res.status(200).json({
             message: "Wiadomość usunięta",
           });
         })
-        .catch((err) => {
-          if (!err.statusCode) {
-            err.statusCode = 501;
-            err.message = "Błąd podczas pobierania danych firmowych.";
-          }
-          next(err);
-        })
-        .catch((err) => {
+        .catch(() => {
           if (!err.statusCode) {
             err.statusCode = 501;
             err.message = "Błąd podczas pobierania danych firmowych.";
@@ -319,11 +315,10 @@ exports.deleteSelectedUsersInformationsMessage = (req, res, next) => {
           next(err);
         });
     })
-
     .catch((err) => {
       if (!err.statusCode) {
         err.statusCode = 501;
-        err.message = "Błąd podczas pobierania danych.";
+        err.message = "Błąd podczas pobierania danych firmowych.";
       }
       next(err);
     });
