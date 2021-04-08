@@ -11,6 +11,7 @@ const AWS = require("aws-sdk");
 const getImgBuffer = require("../getImgBuffer");
 require("dotenv").config();
 const io = require("../socket");
+const bcrypt = require("bcryptjs");
 
 const {
   AWS_ACCESS_KEY_ID_APP,
@@ -199,6 +200,7 @@ exports.registrationCompany = (req, res, next) => {
                 smsReserwationAvaible: false,
                 smsNotifactionAvaible: false,
                 smsCanceledAvaible: false,
+                smsChangedAvaible: false,
                 sms: 0,
               });
 
@@ -210,23 +212,28 @@ exports.registrationCompany = (req, res, next) => {
             }
           })
           .then((result) => {
-            return User.findOne({
-              _id: ownerId,
-              company: null,
-              hasCompany: false,
-            })
-              .select("_id company hasCompany email")
-              .then((user) => {
-                if (!!user) {
-                  user.company = result._id.toString();
-                  user.hasCompany = true;
-                  user.save();
-                  return result;
-                } else {
-                  const error = new Error("Brak użytkownika.");
-                  error.statusCode = 502;
-                  throw error;
-                }
+            return User.updateOne(
+              {
+                _id: ownerId,
+                company: null,
+                hasCompany: false,
+              },
+              {
+                $set: {
+                  company: result._id.toString(),
+                  hasCompany: true,
+                },
+              }
+            )
+              .then(() => {
+                return result;
+              })
+              .catch(() => {
+                const error = new Error(
+                  "Błąd podczas dodawania admina do firmy."
+                );
+                error.statusCode = 422;
+                throw error;
               });
           })
           .then((result) => {
@@ -539,6 +546,9 @@ exports.getCompanyData = (req, res, next) => {
                 smsCanceledAvaible: !!dataCompany.smsCanceledAvaible
                   ? dataCompany.smsCanceledAvaible
                   : false,
+                smsChangedAvaible: !!dataCompany.smsChangedAvaible
+                  ? dataCompany.smsChangedAvaible
+                  : false,
               };
 
               res.status(201).json({
@@ -573,8 +583,7 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("name workers email owner")
-    .populate("workers.item.user", "name surname email")
+    .select("name workers._id workers.email email owner")
     .populate("owner", "name surname email")
     .then((companyData) => {
       if (
@@ -607,8 +616,26 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
                   codeToActive: hashedRandomValue,
                   specialization: "",
                 };
-                companyData.workers.push(newWorker);
-                return companyData.save();
+                return Company.updateOne(
+                  {
+                    _id: companyId,
+                  },
+                  {
+                    $addToSet: {
+                      workers: newWorker,
+                    },
+                  }
+                )
+                  .then(() => {
+                    return companyData;
+                  })
+                  .catch(() => {
+                    const error = new Error(
+                      "Błąd podczas dodawania użytkownika do firmy."
+                    );
+                    error.statusCode = 501;
+                    throw error;
+                  });
               } else {
                 const error = new Error("Brak użytkownika.");
                 error.statusCode = 501;
@@ -633,13 +660,13 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
               });
             })
             .catch((err) => {
-              res.status(501).json({
+              res.status(422).json({
                 message: "Brak użytkwonika",
               });
             });
         } else {
           const error = new Error("Wysłano już email do aktywacji.");
-          error.statusCode = 501;
+          error.statusCode = 441;
           throw error;
         }
       } else {
@@ -767,7 +794,6 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
                 $set: {
                   "workers.$.active": true,
                   "workers.$.codeToActive": null,
-                  "workers.$.servicesCategory": [],
                 },
               }
             )
@@ -838,6 +864,8 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
   const workerUserId = req.body.workerUserId;
+  const password = req.body.password;
+
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -853,23 +881,60 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
     .then((companyDoc) => {
       if (!!companyDoc) {
         if (companyDoc.owner == userId) {
-          return Company.updateOne(
-            {
-              _id: companyId,
-            },
-            {
-              $pull: {
-                workers: { user: workerUserId },
-              },
-            }
-          )
-            .then(() => {
-              return companyDoc;
-            })
-            .catch(() => {
-              const error = new Error("Nie można usunąć pracownika.");
-              error.statusCode = 501;
-              throw error;
+          return User.findOne({
+            _id: companyDoc.owner,
+          })
+            .select("_id password")
+            .then((user) => {
+              if (!!user) {
+                return bcrypt
+                  .compare(password, user.password)
+                  .then((doMatch) => {
+                    if (doMatch) {
+                      User.findOne({
+                        _id: workerUserId,
+                      })
+                        .select("_id email")
+                        .then((userWorkerDoc) => {
+                          transporter.sendMail({
+                            to: userWorkerDoc.email,
+                            from: MAIL_INFO,
+                            subject: `Usunięto z firmy ${companyDoc.name}`,
+                            html: `<h1>Konto zostało usunięte z firmy</h1>`,
+                          });
+                          return Company.updateOne(
+                            {
+                              _id: companyId,
+                            },
+                            {
+                              $pull: {
+                                workers: { user: workerUserId },
+                              },
+                            }
+                          )
+                            .then(() => {
+                              return companyDoc;
+                            })
+                            .catch(() => {
+                              const error = new Error(
+                                "Nie można usunąć pracownika."
+                              );
+                              error.statusCode = 501;
+                              throw error;
+                            });
+                        })
+                        .catch(() => {
+                          const error = new Error("Nie znaleziono pracownika.");
+                          error.statusCode = 420;
+                          throw error;
+                        });
+                    } else {
+                      const error = new Error("Błędne hasło.");
+                      error.statusCode = 441;
+                      throw error;
+                    }
+                  });
+              }
             });
         } else {
           const error = new Error("Brak uprawnień.");
@@ -1574,16 +1639,25 @@ exports.companyUsersInformationsBlock = (req, res, next) => {
             (item) => item.userId == selectedUserId
           );
           if (selectUserInformation >= 0) {
-            resultCompanyDoc.usersInformation[
-              selectUserInformation
-            ].isBlocked = isBlocked;
+            Company.updateOne(
+              {
+                _id: companyId,
+                "usersInformation.userId": selectedUserId,
+              },
+              {
+                $set: {
+                  "usersInformation.$.isBlocked": isBlocked,
+                },
+              }
+            ).then(() => {});
           } else {
             resultCompanyDoc.usersInformation.push({
               userId: selectedUserId,
               isBlocked: true,
             });
+            return resultCompanyDoc.save();
           }
-          return resultCompanyDoc.save();
+          return resultCompanyDoc;
         } else {
           const error = new Error("Brak dostępu.");
           error.statusCode = 401;
@@ -2745,7 +2819,9 @@ exports.companyTekstsUpdate = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id owner title reserationText")
+    .select(
+      "_id owner title reserationText linkFacebook linkInstagram linkiWebsite"
+    )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -3116,23 +3192,32 @@ exports.companyUpdateConstDateHappyHour = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyDoc) => {
-      const findIndexHappyHour = companyDoc.happyHoursConst.findIndex(
-        (item) => item._id == constDate._id
-      );
-      if (findIndexHappyHour >= 0) {
-        companyDoc.happyHoursConst[findIndexHappyHour].disabled =
-          constDate.disabled;
-        companyDoc.happyHoursConst[findIndexHappyHour].dayWeekIndex =
-          constDate.dayWeekIndex;
-        companyDoc.happyHoursConst[findIndexHappyHour].start = constDate.start;
-        companyDoc.happyHoursConst[findIndexHappyHour].end = constDate.end;
-        companyDoc.happyHoursConst[findIndexHappyHour].promotionPercent =
-          constDate.promotionPercent;
-        companyDoc.happyHoursConst[findIndexHappyHour].servicesInPromotion =
-          constDate.servicesInPromotion;
-      }
-      return companyDoc.save();
+    .then(() => {
+      return Company.updateOne(
+        {
+          _id: companyId,
+          "happyHoursConst._id": constDate._id,
+        },
+        {
+          $set: {
+            "happyHoursConst.$.disabled": constDate.disabled,
+            "happyHoursConst.$.dayWeekIndex": constDate.dayWeekIndex,
+            "happyHoursConst.$.start": constDate.start,
+            "happyHoursConst.$.end": constDate.end,
+            "happyHoursConst.$.promotionPercent": constDate.promotionPercent,
+            "happyHoursConst.$.servicesInPromotion":
+              constDate.servicesInPromotion,
+          },
+        }
+      )
+        .then(() => {
+          return true;
+        })
+        .catch(() => {
+          const error = new Error("Błąd podczas aktualizacji happy hours.");
+          error.statusCode = 403;
+          throw error;
+        });
     })
     .then(() => {
       res.status(201).json({
@@ -3304,7 +3389,7 @@ exports.companyUpdatePromotion = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions workers.user owner promotions")
+    .select("_id workers.permissions workers.user owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -3331,23 +3416,32 @@ exports.companyUpdatePromotion = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyDoc) => {
-      const findIndexHappyHour = companyDoc.promotions.findIndex(
-        (item) => item._id == promotionDate._id
-      );
-      if (findIndexHappyHour >= 0) {
-        companyDoc.promotions[findIndexHappyHour].disabled =
-          promotionDate.disabled;
-        companyDoc.promotions[findIndexHappyHour].dayWeekIndex =
-          promotionDate.dayWeekIndex;
-        companyDoc.promotions[findIndexHappyHour].start = promotionDate.start;
-        companyDoc.promotions[findIndexHappyHour].end = promotionDate.end;
-        companyDoc.promotions[findIndexHappyHour].promotionPercent =
-          promotionDate.promotionPercent;
-        companyDoc.promotions[findIndexHappyHour].servicesInPromotion =
-          promotionDate.servicesInPromotion;
-      }
-      return companyDoc.save();
+    .then(() => {
+      return Company.updateOne(
+        {
+          _id: companyId,
+          "promotions._id": promotionDate._id,
+        },
+        {
+          $set: {
+            "promotions.$.disabled": promotionDate.disabled,
+            "promotions.$.dayWeekIndex": promotionDate.dayWeekIndex,
+            "promotions.$.start": promotionDate.start,
+            "promotions.$.end": promotionDate.end,
+            "promotions.$.promotionPercent": promotionDate.promotionPercent,
+            "promotions.$.servicesInPromotion":
+              promotionDate.servicesInPromotion,
+          },
+        }
+      )
+        .then(() => {
+          return true;
+        })
+        .catch(() => {
+          const error = new Error("Błąd podczas aktualizacji promocji.");
+          error.statusCode = 403;
+          throw error;
+        });
     })
     .then(() => {
       res.status(201).json({
@@ -4255,7 +4349,7 @@ exports.companyDeleteCompany = (req, res, next) => {
     _id: companyId,
   })
     .select(
-      "_id name codeDeleteDate codeDelete email owner workers.user workers._id"
+      "_id name codeDeleteDate codeDelete email owner workers.user workers._id pauseCompany"
     )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
@@ -4282,7 +4376,8 @@ exports.companyDeleteCompany = (req, res, next) => {
         codeToDelete.toUpperCase() === code.toUpperCase() &&
         resultCompanyDoc.codeDeleteDate > new Date()
       ) {
-        return resultCompanyDoc;
+        resultCompanyDoc.pauseCompany = true;
+        return resultCompanyDoc.save();
       } else {
         const error = new Error("Nieprawidłowy kod");
         error.statusCode = 422;
@@ -4771,6 +4866,7 @@ exports.companySMSUpdate = (req, res, next) => {
   const smsReserwationAvaible = req.body.smsReserwationAvaible;
   const smsNotifactionAvaible = req.body.smsNotifactionAvaible;
   const smsCanceledAvaible = req.body.smsCanceledAvaible;
+  const smsChangedAvaible = req.body.smsChangedAvaible;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -4782,7 +4878,7 @@ exports.companySMSUpdate = (req, res, next) => {
     _id: companyId,
   })
     .select(
-      "_id owner smsReserwationAvaible smsNotifactionAvaible smsCanceledAvaible"
+      "_id owner smsReserwationAvaible smsNotifactionAvaible smsCanceledAvaible smsChangedAvaible"
     )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
@@ -4804,6 +4900,7 @@ exports.companySMSUpdate = (req, res, next) => {
       companyDoc.smsReserwationAvaible = smsReserwationAvaible;
       companyDoc.smsNotifactionAvaible = smsNotifactionAvaible;
       companyDoc.smsCanceledAvaible = smsCanceledAvaible;
+      companyDoc.smsChangedAvaible = smsChangedAvaible;
       return companyDoc.save();
     })
 

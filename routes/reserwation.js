@@ -93,6 +93,8 @@ router.patch(
   [body("noFinished")],
   [body("newTimeStart")],
   [body("newTimeEnd")],
+  [body("workerSelectedUserId")],
+  [body("dateReserwation")],
   reserwation.updateWorkerReserwation
 );
 

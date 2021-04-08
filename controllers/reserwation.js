@@ -2411,11 +2411,14 @@ exports.getWorkerReserwationsAll = (req, res, next) => {
     .populate("company", "name linkPath services.serviceColor services._id")
     .then((reserwationsDoc) => {
       return Company.findOne({ _id: companyId })
-        .select("owner workers.user")
+        .select(
+          "owner workers.user openingDays workers._id workers.servicesCategory workers.active ownerData._id ownerData.user ownerData.servicesCategory"
+        )
         .populate("workers.user", "_id name surname")
+        .populate("owner", "_id name surname")
         .then((resultCompany) => {
           if (!!resultCompany) {
-            let isActiveWorker = userId == resultCompany.owner;
+            let isActiveWorker = userId == resultCompany.owner._id;
             if (!!!isActiveWorker) {
               const isWorkerInWorkers = resultCompany.workers.some(
                 (worker) => worker.user._id == userId
@@ -2619,6 +2622,8 @@ exports.updateWorkerReserwation = (req, res, next) => {
   const noFinished = req.body.noFinished;
   const newTimeStart = req.body.newTimeStart;
   const newTimeEnd = req.body.newTimeEnd;
+  const workerSelectedUserId = req.body.workerSelectedUserId;
+  const dateReserwation = req.body.dateReserwation;
 
   const errors = validationResult(req);
 
@@ -2656,6 +2661,26 @@ exports.updateWorkerReserwation = (req, res, next) => {
             isActiveWorker = isWorkerInWorkers;
           }
           if (isActiveWorker) {
+            if (!!dateReserwation) {
+              const validDateStartReserwation = !!newTimeStart
+                ? newTimeStart
+                : reserwationsDoc.dateStart;
+              const splitDateStartReserwation = validDateStartReserwation.split(
+                ":"
+              );
+              const splitNewDateReserwation = dateReserwation.split("-");
+              const newDateReserwationToSave = new Date(
+                Number(splitNewDateReserwation[2]),
+                Number(splitNewDateReserwation[1]) - 1,
+                Number(splitNewDateReserwation[0]),
+                Number(splitDateStartReserwation[0]),
+                Number(splitDateStartReserwation[1])
+              );
+              reserwationsDoc.fullDate = newDateReserwationToSave;
+              reserwationsDoc.dateYear = Number(splitNewDateReserwation[2]);
+              reserwationsDoc.dateMonth = Number(splitNewDateReserwation[1]);
+              reserwationsDoc.dateDay = Number(splitNewDateReserwation[0]);
+            }
             if (!!newTimeStart) {
               reserwationsDoc.dateStart = newTimeStart;
             }
@@ -2671,6 +2696,9 @@ exports.updateWorkerReserwation = (req, res, next) => {
             if (noFinished !== null) {
               reserwationsDoc.visitNotFinished = noFinished;
             }
+            if (!!workerSelectedUserId) {
+              reserwationsDoc.toWorkerUserId = workerSelectedUserId;
+            }
             return Reserwation.updateOne(
               {
                 _id: reserwationsDoc._id,
@@ -2680,8 +2708,15 @@ exports.updateWorkerReserwation = (req, res, next) => {
                   dateStart: reserwationsDoc.dateStart,
                   dateEnd: reserwationsDoc.dateEnd,
                   visitCanceled: reserwationsDoc.visitCanceled,
-                  visitChanged: reserwationsDoc.visitChanged,
+                  visitChanged: !!reserwationsDoc.visitNotFinished
+                    ? false
+                    : reserwationsDoc.visitChanged,
                   visitNotFinished: reserwationsDoc.visitNotFinished,
+                  toWorkerUserId: reserwationsDoc.toWorkerUserId,
+                  fullDate: reserwationsDoc.fullDate,
+                  dateYear: reserwationsDoc.dateYear,
+                  dateMonth: reserwationsDoc.dateMonth,
+                  dateDay: reserwationsDoc.dateDay,
                 },
               }
             )
@@ -2717,14 +2752,12 @@ exports.updateWorkerReserwation = (req, res, next) => {
       return User.find({
         _id: { $in: [resultReserwation.fromUser, workerUserId] },
       })
-        .select(
-          "_id alerts alertActiveCount whiteListVerifiedPhones phone phoneVerified"
-        )
+        .select("_id whiteListVerifiedPhones phone phoneVerified email")
         .then((allUsers) => {
           return Company.findOne({
             _id: resultReserwation.company._id,
           })
-            .select("_id smsCanceledAvaible")
+            .select("_id smsCanceledAvaible smsChangedAvaible")
             .then((companyDoc) => {
               if (!!companyDoc) {
                 if (!!allUsers) {
@@ -2778,12 +2811,14 @@ exports.updateWorkerReserwation = (req, res, next) => {
                             });
                           }
                         );
-
                       if (
-                        !!companyDoc.smsCanceledAvaible &&
+                        !!!resultReserwation.visitNotFinished &&
+                        !!companyDoc.smsChangedAvaible &&
                         resultReserwation.fromUser.toString() ==
                           userResult._id.toString() &&
-                        !!!resultReserwation.workerReserwation
+                        !!!resultReserwation.workerReserwation &&
+                        !!!resultReserwation.visitCanceled &&
+                        !!resultReserwation.visitChanged
                       ) {
                         Company.updateOne(
                           {
@@ -2823,7 +2858,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
                               ).toString("ascii");
 
                               const params = {
-                                Message: `Odwołano rezerwację w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
+                                Message: `Dokonano zmianę rezerwacji w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
                                 MessageStructure: "string",
                                 PhoneNumber: `+48${userPhone}`,
                                 MessageAttributes: {
@@ -2856,15 +2891,124 @@ exports.updateWorkerReserwation = (req, res, next) => {
                           .catch(() => {});
                       }
                       if (
+                        !!!resultReserwation.visitNotFinished &&
+                        !!companyDoc.smsCanceledAvaible &&
                         resultReserwation.fromUser.toString() ==
                           userResult._id.toString() &&
-                        !!!resultReserwation.workerReserwation
+                        !!!resultReserwation.workerReserwation &&
+                        !!resultReserwation.visitCanceled &&
+                        !!!resultReserwation.visitChanged
+                      ) {
+                        Company.updateOne(
+                          {
+                            _id: resultReserwation.company._id,
+                            sms: { $gt: 0 },
+                          },
+                          {
+                            $inc: {
+                              sms: -1,
+                            },
+                          },
+                          { upsert: true, safe: true },
+                          null
+                        )
+                          .then(() => {
+                            let selectedPhoneNumber = null;
+                            if (!!userResult.phoneVerified) {
+                              selectedPhoneNumber = userResult.phone;
+                            } else {
+                              if (!!userResult.whiteListVerifiedPhones) {
+                                if (
+                                  userResult.whiteListVerifiedPhones.length > 0
+                                ) {
+                                  selectedPhoneNumber =
+                                    userResult.whiteListVerifiedPhones[
+                                      userResult.whiteListVerifiedPhones
+                                        .length - 1
+                                    ];
+                                }
+                              }
+                            }
+
+                            if (!!selectedPhoneNumber) {
+                              const userPhone = Buffer.from(
+                                selectedPhoneNumber,
+                                "base64"
+                              ).toString("ascii");
+
+                              const params = {
+                                Message: `Rezerwacja została odwołana w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
+                                MessageStructure: "string",
+                                PhoneNumber: `+48${userPhone}`,
+                                MessageAttributes: {
+                                  "AWS.SNS.SMS.SenderID": {
+                                    DataType: "String",
+                                    StringValue: "Meetsy",
+                                  },
+                                },
+                              };
+
+                              // sns.publish(params, function (err, data) {
+                              //   if (err) console.log(err, err.stack);
+                              // });
+
+                              Reserwation.updateOne(
+                                {
+                                  _id: resultReserwation._id,
+                                  sendSMSCanceled: false,
+                                },
+                                {
+                                  $set: {
+                                    sendSMSCanceled: true,
+                                  },
+                                }
+                              )
+                                .then(() => {})
+                                .catch(() => {});
+                            }
+                          })
+                          .catch(() => {});
+                      }
+                      
+                      if (
+                        !!!resultReserwation.visitNotFinished &&
+                        resultReserwation.fromUser.toString() ==
+                          userResult._id.toString() &&
+                        !!!resultReserwation.workerReserwation &&
+                        !!!resultReserwation.visitCanceled &&
+                        !!resultReserwation.visitChanged
                       ) {
                         transporter.sendMail({
-                          to: userEmail,
+                          to: userResult.email,
                           from: MAIL_INFO,
-                          subject: `Odwołano / zmieniono rezerwację`,
-                          html: `<h1>Odwołano / zmieniono rezerwację w firmie: ${resultReserwation.company.name}</h1>
+                          subject: `Zmieniono rezerwację`,
+                          html: `<h1>Zmieniono rezerwację w firmie: ${resultReserwation.company.name}</h1>
+                        <h4>
+                          Nazwa usługi: ${resultReserwation.serviceName}
+                        </h4>
+                        <h4>
+                          Termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}
+                        </h4>
+                        <h4>
+                          Godzina: ${resultReserwation.dateStart}
+                        </h4>
+                        `,
+                        });
+                      }
+
+                      if (
+                        !!!resultReserwation.visitNotFinished &&
+                        resultReserwation.fromUser.toString() ==
+                          userResult._id.toString() &&
+                        !!!resultReserwation.workerReserwation &&
+                        !!resultReserwation.visitCanceled &&
+                        !!!resultReserwation.visitChanged
+                      ) {
+                        transporter.sendMail({
+                          to: userResult.email,
+                          from: MAIL_INFO,
+                          subject: `Odwołano rezerwację`,
+                          html: `<h1>Odwołano rezerwację w firmie: ${resultReserwation.company.name}</h1>
                         <h4>
                           Nazwa usługi: ${resultReserwation.serviceName}
                         </h4>

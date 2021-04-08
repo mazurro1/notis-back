@@ -134,6 +134,10 @@ const companySchema = new Schema(
       type: Boolean,
       required: false,
     },
+    smsChangedAvaible: {
+      type: Boolean,
+      required: false,
+    },
     premium: {
       type: Date,
       required: false,

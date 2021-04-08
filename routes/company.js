@@ -71,6 +71,8 @@ router.post(
   isAuth,
   [body("companyId").trim().isLength({ min: 5 })],
   [body("workerUserId")],
+  [body("password")],
+
   company.deleteWorkerFromCompany
 );
 
@@ -369,6 +371,7 @@ router.patch(
   [body("smsReserwationAvaible")],
   [body("smsNotifactionAvaible")],
   [body("smsCanceledAvaible")],
+  [body("smsChangedAvaible")],
   company.companySMSUpdate
 );
 
