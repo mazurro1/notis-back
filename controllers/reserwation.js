@@ -2969,7 +2969,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
                           })
                           .catch(() => {});
                       }
-                      
+
                       if (
                         !!!resultReserwation.visitNotFinished &&
                         resultReserwation.fromUser.toString() ==
@@ -3079,78 +3079,63 @@ exports.getCompanyReserwations = (req, res, next) => {
     throw error;
   }
 
-  Reserwation.find({
-    company: companyId,
-  })
-    .populate("fromUser", "name surname")
-    .select("company fromUser")
-    .then((reserwationsDoc) => {
-      return Company.findOne({ _id: companyId })
-        .populate("workers.user", "_id name surname")
-        .select(
-          "owner workers.permission workers._id workers.user usersInformation _id"
-        )
-        .then((resultCompany) => {
-          if (!!resultCompany) {
-            let isActiveWorker = userId == resultCompany.owner;
-            if (!!!isActiveWorker) {
-              const isWorkerInWorkers = resultCompany.workers.some(
-                (worker) => worker.user._id == userId
-              );
-              isActiveWorker = isWorkerInWorkers;
-            }
+  Company.findOne({ _id: companyId })
+    .populate("workers.user", "_id name surname")
+    .select(
+      "owner workers.permission workers._id workers.user usersInformation _id"
+    )
+    .populate("usersInformation.userId", "_id name surname")
+    .then((resultCompany) => {
+      if (!!resultCompany) {
+        let isActiveWorker = userId == resultCompany.owner;
+        if (!!!isActiveWorker) {
+          const isWorkerInWorkers = resultCompany.workers.some(
+            (worker) => worker.user._id == userId
+          );
+          isActiveWorker = isWorkerInWorkers;
+        }
 
-            if (isActiveWorker) {
-              const arrayWithUsersReserwations = [];
-              reserwationsDoc.forEach((reserwation) => {
-                if (!!reserwation.fromUser) {
-                  const findIndexInArray = arrayWithUsersReserwations.findIndex(
-                    (findUser) =>
-                      findUser.userId._id == reserwation.fromUser._id
-                  );
-                  if (findIndexInArray < 0) {
-                    const newItemResUser = {
-                      userId: reserwation.fromUser,
-                      isBlocked: false,
-                      reserwationsCount: 0,
-                      informations: null,
-                      reserwations: null,
-                    };
-                    arrayWithUsersReserwations.push(newItemResUser);
-                  }
-                }
-              });
-              resultCompany.usersInformation.forEach((companyUserInfo) => {
-                const findIndexInReserwations = arrayWithUsersReserwations.findIndex(
-                  (findUser) => {
-                    return (
-                      companyUserInfo.userId.toString() ==
-                      findUser.userId._id.toString()
-                    );
-                  }
-                );
-                if (findIndexInReserwations >= 0) {
-                  arrayWithUsersReserwations[
-                    findIndexInReserwations
-                  ].isBlocked = companyUserInfo.isBlocked;
-                  arrayWithUsersReserwations[
-                    findIndexInReserwations
-                  ].reserwationsCount = companyUserInfo.reserwationsCount;
-                }
-              });
+        if (isActiveWorker) {
+          const arrayWithUsersReserwations = [];
+          const bulkArrayToUpdate = [];
 
-              return arrayWithUsersReserwations;
+          resultCompany.usersInformation.forEach((item) => {
+            if (!!item.userId) {
+              arrayWithUsersReserwations.push(item);
             } else {
-              const error = new Error("Brak uprawnień.");
-              error.statusCode = 401;
-              throw error;
+              bulkArrayToUpdate.push({
+                updateOne: {
+                  filter: {
+                    _id: companyId,
+                    "usersInformation._id": item._id,
+                  },
+                  update: {
+                    $pull: {
+                      usersInformation: {
+                        _id: item._id,
+                      },
+                    },
+                  },
+                },
+              });
             }
-          } else {
-            const error = new Error("Brak podanej firmy.");
-            error.statusCode = 422;
-            throw error;
-          }
-        });
+          });
+
+          Company.bulkWrite(bulkArrayToUpdate)
+            .then(() => {})
+            .catch(() => {});
+
+          return arrayWithUsersReserwations;
+        } else {
+          const error = new Error("Brak uprawnień.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak podanej firmy.");
+        error.statusCode = 422;
+        throw error;
+      }
     })
     .then((resultUsers) => {
       res.status(201).json({

@@ -38,6 +38,8 @@ const s3Bucket = new AWS.S3({
   },
 });
 
+const sns = new AWS.SNS();
+
 const transporter = nodemailer.createTransport({
   host: MAIL_HOST,
   port: Number(MAIL_PORT),
@@ -4907,6 +4909,182 @@ exports.companySMSUpdate = (req, res, next) => {
     .then(() => {
       res.status(201).json({
         message: "Pomyślnie zaktualizowano ustawienia sms",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas aktualizacji ustawień sms.";
+      }
+      next(err);
+    });
+};
+
+exports.companySMSSendClients = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const allClients = req.body.allClients;
+  const selectedClients = req.body.selectedClients;
+  const textMessage = req.body.textMessage;
+
+  const mapSelectedClients = selectedClients.map((item) =>
+    mongoose.Types.ObjectId(item)
+  );
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  const extraQueryToSelectIdsUsers =
+    selectedClients.length > 0 && !!!allClients
+      ? {
+          $in: ["$$userInfo.userId", mapSelectedClients],
+        }
+      : {};
+
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(companyId),
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        name: 1,
+        usersInformationUsersInfo: 1,
+        usersInformation: {
+          $filter: {
+            input: "$usersInformation",
+            as: "userInfo",
+            cond: {
+              $and: [
+                { ...extraQueryToSelectIdsUsers },
+                {
+                  $eq: ["$$userInfo.isBlocked", false],
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "usersInformation.userId",
+        foreignField: "_id",
+        as: "usersInformationUsersInfo",
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        name: 1,
+        usersInformationUsersInfo: {
+          _id: 1,
+          phone: 1,
+          phoneVerified: 1,
+          whiteListVerifiedPhones: 1,
+        },
+        usersInformation: {
+          _id: 1,
+          phone: 1,
+          isBlocked: 1,
+          userId: 1,
+        },
+      },
+    },
+  ])
+    .then((companyDocQuery) => {
+      const resultCompanyDoc = companyDocQuery[0];
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (hasPermission) {
+          return resultCompanyDoc;
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((companyDoc) => {
+      const lengthCompanyClients = companyDoc.usersInformationUsersInfo.length;
+      return Company.updateOne(
+        {
+          _id: companyId,
+          sms: { $gte: lengthCompanyClients },
+        },
+        {
+          $inc: {
+            sms: -lengthCompanyClients,
+          },
+        },
+        { upsert: true, safe: true },
+        null
+      )
+        .then(() => {
+          companyDoc.usersInformationUsersInfo.forEach((userInfo) => {
+            let selectedPhoneNumber = null;
+            if (!!userInfo.phoneVerified) {
+              selectedPhoneNumber = userInfo.phone;
+            } else {
+              if (!!userInfo.whiteListVerifiedPhones) {
+                if (userInfo.whiteListVerifiedPhones.length > 0) {
+                  selectedPhoneNumber =
+                    userInfo.whiteListVerifiedPhones[
+                      userInfo.whiteListVerifiedPhones.length - 1
+                    ];
+                }
+              }
+            }
+            if (!!selectedPhoneNumber) {
+              const userPhone = Buffer.from(
+                selectedPhoneNumber,
+                "base64"
+              ).toString("ascii");
+
+              const validComapnyName =
+                companyDoc.name.length > 32
+                  ? companyDoc.name.slice(0, 32)
+                  : companyDoc.name;
+              const params = {
+                Message: `${textMessage} - ${validComapnyName.toUpperCase()}`,
+                MessageStructure: "string",
+                PhoneNumber: `+48${userPhone}`,
+                MessageAttributes: {
+                  "AWS.SNS.SMS.SenderID": {
+                    DataType: "String",
+                    StringValue: "Meetsy",
+                  },
+                },
+              };
+              // sns.publish(params, function (err, data) {
+              //   if (err) console.log(err, err.stack);
+              // });
+            }
+          });
+          return lengthCompanyClients;
+        })
+        .catch((err) => {
+          const error = new Error("Brak odpowiedniej ilosci sms.");
+          error.statusCode = 441;
+          throw error;
+        });
+    })
+    .then((countMessages) => {
+      res.status(201).json({
+        countMessages: countMessages,
       });
     })
     .catch((err) => {

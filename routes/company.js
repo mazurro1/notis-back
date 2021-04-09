@@ -375,4 +375,14 @@ router.patch(
   company.companySMSUpdate
 );
 
+router.patch(
+  "/company-sms-send-clients",
+  isAuth,
+  [body("companyId")],
+  [body("allClients")],
+  [body("selectedClients")],
+  [body("textMessage")],
+  company.companySMSSendClients
+);
+
 module.exports = router;
