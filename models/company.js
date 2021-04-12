@@ -138,6 +138,26 @@ const companySchema = new Schema(
       type: Boolean,
       required: false,
     },
+    raportSMS: [
+      {
+        year: {
+          type: Number,
+          required: false,
+        },
+        month: {
+          type: Number,
+          required: false,
+        },
+        count: {
+          type: Number,
+          required: false,
+        },
+        isAdd: {
+          type: Boolean,
+          required: false,
+        },
+      },
+    ],
     premium: {
       type: Date,
       required: false,

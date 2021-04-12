@@ -267,6 +267,14 @@ exports.updateOrderProcess = async (req, res, next) => {
                       update: {
                         $inc: { sms: allCountSMS },
                       },
+                      $addToSet: {
+                        raportSMS: {
+                          year: new Date().getFullYear(),
+                          month: new Date().getMonth() + 1,
+                          count: allCountSMS,
+                          isAdd: true,
+                        },
+                      },
                     },
                   });
                 }

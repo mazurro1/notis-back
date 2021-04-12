@@ -100,6 +100,16 @@ router.post(
 );
 
 router.post(
+  "/all-map-marks",
+  [body("type").trim()],
+  [body("sorts")],
+  [body("filters")],
+  [body("localization")],
+  [body("selectedName")],
+  company.allMapMarks
+);
+
+router.post(
   "/company-users-informations-block",
   isAuth,
   [body("companyId")],
@@ -384,5 +394,9 @@ router.patch(
   [body("textMessage")],
   company.companySMSSendClients
 );
+
+router.post("/get-geolocation", [body("address")], company.getGeolocation);
+
+router.post("/company-marker", [body("companyId")], company.getCompanyMarker);
 
 module.exports = router;

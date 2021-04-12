@@ -1207,6 +1207,14 @@ exports.addReserwation = (req, res, next) => {
                               $inc: {
                                 sms: -1,
                               },
+                              $addToSet: {
+                                raportSMS: {
+                                  year: new Date().getFullYear(),
+                                  month: new Date().getMonth() + 1,
+                                  count: 1,
+                                  isAdd: false,
+                                },
+                              },
                             },
                             { upsert: true, safe: true },
                             null
@@ -2829,6 +2837,14 @@ exports.updateWorkerReserwation = (req, res, next) => {
                             $inc: {
                               sms: -1,
                             },
+                            $addToSet: {
+                              raportSMS: {
+                                year: new Date().getFullYear(),
+                                month: new Date().getMonth() + 1,
+                                count: 1,
+                                isAdd: false,
+                              },
+                            },
                           },
                           { upsert: true, safe: true },
                           null
@@ -2907,6 +2923,14 @@ exports.updateWorkerReserwation = (req, res, next) => {
                           {
                             $inc: {
                               sms: -1,
+                            },
+                            $addToSet: {
+                              raportSMS: {
+                                year: new Date().getFullYear(),
+                                month: new Date().getMonth() + 1,
+                                count: 1,
+                                isAdd: false,
+                              },
                             },
                           },
                           { upsert: true, safe: true },

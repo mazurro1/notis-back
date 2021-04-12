@@ -2,6 +2,7 @@ const Company = require("../models/company");
 const CompanyUsersInformations = require("../models/companyUsersInformations");
 const CompanyAvailability = require("../models/companyAvailability");
 const Reserwation = require("../models/reserwation");
+const Geolocations = require("../models/geolocation");
 const Opinion = require("../models/opinion");
 const mongoose = require("mongoose");
 const User = require("../models/user");
@@ -12,6 +13,7 @@ const getImgBuffer = require("../getImgBuffer");
 require("dotenv").config();
 const io = require("../socket");
 const bcrypt = require("bcryptjs");
+const rp = require("request-promise");
 
 const {
   AWS_ACCESS_KEY_ID_APP,
@@ -24,6 +26,7 @@ const {
   MAIL_PORT,
   MAIL_INFO,
   MAIL_PASSWORD,
+  GOOGLE_API_KEY,
 } = process.env;
 
 AWS.config.update({
@@ -58,6 +61,44 @@ function makeid(length) {
     result += characters.charAt(Math.floor(Math.random() * charactersLength));
   }
   return result;
+}
+
+function convertString(phrase) {
+  var maxLength = 100;
+  var str = phrase.toLowerCase();
+  var charMap = {
+    ó: "o",
+    ę: "e",
+    ą: "a",
+    ś: "s",
+    ł: "l",
+    ż: "z",
+    ź: "z",
+    ć: "c",
+    ń: "n",
+  };
+
+  var rx = /(ó|ę|ą|ś|ł|ż|ź|ć|ń)/g;
+
+  // if any non-english charr exists,replace it with proper char
+  if (rx.test(str)) {
+    str = str.replace(rx, function (m, key, index) {
+      return charMap[key];
+    });
+  }
+
+  // if there are other invalid chars, convert them into blank spaces
+  str = str.replace(/[^a-z\d\s-]/gi, "");
+  // convert multiple spaces and hyphens into one space
+  str = str.replace(/[\s-]+/g, " ");
+  // trim string
+  str.replace(/^\s+|\s+$/g, "");
+  // cut string
+  str = str.substring(0, str.length <= maxLength ? str.length : maxLength);
+  // add hyphens
+  str = str.replace(/\s/g, "-");
+
+  return str;
 }
 
 const imageUpload = (path, buffer) => {
@@ -174,39 +215,103 @@ exports.registrationCompany = (req, res, next) => {
               };
               const actualMonth = new Date().getMonth();
               const pathCompanyName = encodeURI(companyName);
-              const company = new Company({
-                linkPath: pathCompanyName + codeRandom,
-                email: companyEmail.toLowerCase(),
-                name: companyName.toLowerCase(),
-                phone: hashedPhoneNumber,
-                city: companyCity,
-                district: companyDiscrict,
-                adress: hashedAdress,
-                accountVerified: false,
-                codeToVerified: hashedCodeToVerified,
-                owner: ownerId,
-                ownerData: {
-                  specialization: "Admin",
-                },
-                pauseCompany: true,
-                allDataVerified: false,
-                messangerAvaible: false,
-                title: "",
-                reservationEveryTime: 5,
-                reservationMonthTime: 12,
-                companyType: companyIndustries,
-                openingDays: newOpeningDays,
-                nip: companyNip,
-                code: companyAdressCode,
-                premium: new Date(new Date().setMonth(actualMonth + 3)),
-                smsReserwationAvaible: false,
-                smsNotifactionAvaible: false,
-                smsCanceledAvaible: false,
-                smsChangedAvaible: false,
-                sms: 0,
-              });
+              const adress = `${companyAdressCode} ${companyCity} ${companyAdress}`;
 
-              return company.save();
+              return Geolocations.findOne({
+                adress: convertString(adress.toLowerCase().trim()),
+              })
+                .then((geolocationData) => {
+                  if (!!geolocationData) {
+                    return {
+                      adress: geolocationData.adress,
+                      lat: geolocationData.lat,
+                      long: geolocationData.long,
+                    };
+                  } else {
+                    const url =
+                      "https://maps.googleapis.com/maps/api/geocode/json?address=" +
+                      adress +
+                      "&key=" +
+                      GOOGLE_API_KEY;
+
+                    return rp(url)
+                      .then((resultRp) => {
+                        if (!!resultRp) {
+                          const resultReq = JSON.parse(resultRp);
+                          const newgeolocation = new Geolocations({
+                            adress: convertString(adress.toLowerCase().trim()),
+                            lat: resultReq.results[0].geometry.location.lat,
+                            long: resultReq.results[0].geometry.location.lng,
+                          });
+                          newgeolocation.save();
+                          return {
+                            adress: adress.toLowerCase().trim(),
+                            lat: resultReq.results[0].geometry.location.lat,
+                            long: resultReq.results[0].geometry.location.lng,
+                          };
+                        } else {
+                          const error = new Error(
+                            "Błąd podczas pobierania geolokalizacji"
+                          );
+                          error.statusCode = 421;
+                          throw error;
+                        }
+                      })
+                      .catch((err) => {
+                        const error = new Error(
+                          "Nie znaleziono danej geolokalizacji"
+                        );
+                        error.statusCode = 442;
+                        throw error;
+                      });
+                  }
+                })
+                .then((resultGeolocation) => {
+                  const company = new Company({
+                    linkPath: pathCompanyName + codeRandom,
+                    email: companyEmail.toLowerCase(),
+                    name: companyName.toLowerCase(),
+                    phone: hashedPhoneNumber,
+                    city: companyCity,
+                    district: companyDiscrict,
+                    adress: hashedAdress,
+                    accountVerified: false,
+                    codeToVerified: hashedCodeToVerified,
+                    owner: ownerId,
+                    ownerData: {
+                      specialization: "Admin",
+                    },
+                    pauseCompany: true,
+                    allDataVerified: false,
+                    messangerAvaible: false,
+                    title: "",
+                    reservationEveryTime: 5,
+                    reservationMonthTime: 12,
+                    companyType: companyIndustries,
+                    openingDays: newOpeningDays,
+                    nip: companyNip,
+                    code: companyAdressCode,
+                    premium: new Date(new Date().setMonth(actualMonth + 3)),
+                    smsReserwationAvaible: false,
+                    smsNotifactionAvaible: false,
+                    smsCanceledAvaible: false,
+                    smsChangedAvaible: false,
+                    sms: 0,
+                    raportSMS: [],
+                    maps: {
+                      lat: resultGeolocation.lat,
+                      long: resultGeolocation.long,
+                    },
+                  });
+                  return company.save();
+                })
+                .catch((err) => {
+                  if (!err.statusCode) {
+                    err.statusCode = 501;
+                    err.message = "Błąd podczas pobierania geolokalizacji.";
+                  }
+                  next(err);
+                });
             } else {
               const error = new Error("Email zajęty.");
               error.statusCode = 500;
@@ -1608,6 +1713,149 @@ exports.allCompanysOfType = (req, res, next) => {
     });
 };
 
+exports.allMapMarks = (req, res, next) => {
+  const type = req.body.type;
+  const sorts = req.body.sorts;
+  const filters = req.body.filters;
+  const localization = req.body.localization;
+  const selectedName = req.body.selectedName;
+
+  const localizationValid = !!localization ? localization.value : null;
+  const localizationValidMaps = !!localization
+    ? convertString(localization.value.toLowerCase().trim())
+    : "polska";
+  const filtersValid = !!filters ? filters.value : null;
+  const regexFilterCity = new RegExp(
+    ["^", localizationValid, "$"].join(""),
+    "i"
+  );
+
+  const propsFilterCity = !!localizationValid
+    ? { city: { $in: [regexFilterCity] } }
+    : {};
+
+  const propsFilterFilters = !!filtersValid
+    ? {
+        "services.serviceName": {
+          $regex: new RegExp(filtersValid, "i"),
+        },
+      }
+    : {};
+
+  const sortValid = !!sorts ? sorts : "mostlyRated";
+  const propsSort = !!sortValid
+    ? sortValid === "aToZ"
+      ? { name: 1 }
+      : sortValid === "zToA"
+      ? { name: -1 }
+      : sortValid === "mostlyRated"
+      ? { opinionsCount: -1 }
+      : sortValid === ""
+      ? { opinionsValue: -1 }
+      : {}
+    : {};
+
+  const validSelectedName = !!selectedName ? selectedName : null;
+
+  const propsSelectedName = !!validSelectedName
+    ? { name: { $regex: new RegExp(validSelectedName, "i") } }
+    : {};
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.find({
+    companyType: type,
+    ...propsFilterCity,
+    ...propsFilterFilters,
+    ...propsSelectedName,
+    accountVerified: true,
+    pauseCompany: false,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select("maps name _id")
+    .sort(propsSort)
+    .then((resultCompanyDoc) => {
+      return Geolocations.findOne({
+        adress: localizationValidMaps,
+      })
+        .then((geolocationData) => {
+          if (!!geolocationData) {
+            return {
+              adress: geolocationData.adress,
+              lat: geolocationData.lat,
+              long: geolocationData.long,
+            };
+          } else {
+            const url =
+              "https://maps.googleapis.com/maps/api/geocode/json?address=" +
+              localizationValidMaps +
+              "&key=" +
+              GOOGLE_API_KEY;
+
+            return rp(url)
+              .then((resultRp) => {
+                if (!!resultRp) {
+                  const resultReq = JSON.parse(resultRp);
+                  const newgeolocation = new Geolocations({
+                    adress: localizationValidMaps.toLowerCase().trim(),
+                    lat: resultReq.results[0].geometry.location.lat,
+                    long: resultReq.results[0].geometry.location.lng,
+                  });
+                  newgeolocation.save();
+                  return {
+                    adress: localizationValidMaps.toLowerCase().trim(),
+                    lat: resultReq.results[0].geometry.location.lat,
+                    long: resultReq.results[0].geometry.location.lng,
+                  };
+                } else {
+                  const error = new Error(
+                    "Błąd podczas pobierania geolokalizacji"
+                  );
+                  error.statusCode = 421;
+                  throw error;
+                }
+              })
+              .catch((err) => {
+                console.log(err);
+                const error = new Error(
+                  "Błąd podczas pobierania geolokalizacji"
+                );
+                error.statusCode = 420;
+                throw error;
+              });
+          }
+        })
+        .then((resultGeolocation) => {
+          res.status(201).json({
+            mapMarks: resultCompanyDoc,
+            geolocation: resultGeolocation,
+          });
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania geolokalizacji.";
+          }
+          next(err);
+        });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania danych.";
+      }
+      next(err);
+    });
+};
+
 exports.companyUsersInformationsBlock = (req, res, next) => {
   const userId = req.userId;
   const selectedUserId = req.body.selectedUserId;
@@ -1956,7 +2204,9 @@ exports.companySettingsPatch = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id workers.permissions workers.user owner name")
+    .select(
+      "_id workers.permissions workers.user owner name adress code city maps"
+    )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -2000,53 +2250,173 @@ exports.companySettingsPatch = (req, res, next) => {
       }
     })
     .then((companyDoc) => {
-      if (!!dataSettings.updateCityInput) {
-        companyDoc.city = dataSettings.updateCityInput;
-      }
+      const unhashedAdress = Buffer.from(companyDoc.adress, "base64").toString(
+        "ascii"
+      );
+      const adressToMap = convertString(
+        `${
+          !!dataSettings.updateCodeInput
+            ? dataSettings.updateCodeInput
+            : companyDoc.code
+        } ${
+          !!dataSettings.updateCityInput
+            ? dataSettings.updateCityInput
+            : companyDoc.city
+        } ${
+          !!dataSettings.updateAdressInput
+            ? dataSettings.updateAdressInput
+            : unhashedAdress
+        }`.toLowerCase()
+      );
 
-      if (!!dataSettings.updateCodeInput) {
-        companyDoc.code = dataSettings.updateCodeInput;
-      }
+      return Geolocations.findOne({
+        adress: adressToMap,
+      }).then((geolocationData) => {
+        if (!!geolocationData) {
+          companyDoc.maps.lat = geolocationData.lat;
 
-      if (!!dataSettings.updateDiscrictInput) {
-        companyDoc.district = dataSettings.updateDiscrictInput;
-      }
+          companyDoc.maps.long = geolocationData.long;
 
-      if (!!dataSettings.updateAdressInput) {
-        const hashedAdress = Buffer.from(
-          dataSettings.updateAdressInput,
-          "utf-8"
-        ).toString("base64");
-        companyDoc.adress = hashedAdress;
-      }
+          if (!!dataSettings.updateCityInput) {
+            companyDoc.city = dataSettings.updateCityInput;
+          }
 
-      if (!!dataSettings.updatePhoneInput) {
-        const hashedPhoneNumber = Buffer.from(
-          dataSettings.updatePhoneInput,
-          "utf-8"
-        ).toString("base64");
-        companyDoc.phone = hashedPhoneNumber;
-      }
+          if (!!dataSettings.updateCodeInput) {
+            companyDoc.code = dataSettings.updateCodeInput;
+          }
 
-      if (!!dataSettings.industriesComponent) {
-        if (dataSettings.industriesComponent != companyDoc.companyType) {
-          companyDoc.companyType = dataSettings.industriesComponent;
+          if (!!dataSettings.updateDiscrictInput) {
+            companyDoc.district = dataSettings.updateDiscrictInput;
+          }
+
+          if (!!dataSettings.updateAdressInput) {
+            const hashedAdress = Buffer.from(
+              dataSettings.updateAdressInput,
+              "utf-8"
+            ).toString("base64");
+            companyDoc.adress = hashedAdress;
+          }
+
+          if (!!dataSettings.updatePhoneInput) {
+            const hashedPhoneNumber = Buffer.from(
+              dataSettings.updatePhoneInput,
+              "utf-8"
+            ).toString("base64");
+            companyDoc.phone = hashedPhoneNumber;
+          }
+
+          if (!!dataSettings.industriesComponent) {
+            if (dataSettings.industriesComponent != companyDoc.companyType) {
+              companyDoc.companyType = dataSettings.industriesComponent;
+            }
+          }
+
+          if (dataSettings.pauseCompanyToServer !== null) {
+            companyDoc.pauseCompany = dataSettings.pauseCompanyToServer;
+          }
+
+          if (!!dataSettings.reserwationMonthToServer) {
+            companyDoc.reservationMonthTime =
+              dataSettings.reserwationMonthToServer;
+          }
+
+          if (!!dataSettings.reserwationEverToServer) {
+            companyDoc.reservationEveryTime =
+              dataSettings.reserwationEverToServer;
+          }
+
+          return companyDoc.save();
+        } else {
+          const url =
+            "https://maps.googleapis.com/maps/api/geocode/json?address=" +
+            adressToMap +
+            "&key=" +
+            GOOGLE_API_KEY;
+
+          return rp(url)
+            .then((resultRp) => {
+              if (!!resultRp) {
+                const resultReq = JSON.parse(resultRp);
+                const newgeolocation = new Geolocations({
+                  adress: convertString(adressToMap.toLowerCase().trim()),
+                  lat: resultReq.results[0].geometry.location.lat,
+                  long: resultReq.results[0].geometry.location.lng,
+                });
+                newgeolocation.save();
+
+                companyDoc.maps.lat =
+                  resultReq.results[0].geometry.location.lat;
+
+                companyDoc.maps.long =
+                  resultReq.results[0].geometry.location.lng;
+
+                if (!!dataSettings.updateCityInput) {
+                  companyDoc.city = dataSettings.updateCityInput;
+                }
+
+                if (!!dataSettings.updateCodeInput) {
+                  companyDoc.code = dataSettings.updateCodeInput;
+                }
+
+                if (!!dataSettings.updateDiscrictInput) {
+                  companyDoc.district = dataSettings.updateDiscrictInput;
+                }
+
+                if (!!dataSettings.updateAdressInput) {
+                  const hashedAdress = Buffer.from(
+                    dataSettings.updateAdressInput,
+                    "utf-8"
+                  ).toString("base64");
+                  companyDoc.adress = hashedAdress;
+                }
+
+                if (!!dataSettings.updatePhoneInput) {
+                  const hashedPhoneNumber = Buffer.from(
+                    dataSettings.updatePhoneInput,
+                    "utf-8"
+                  ).toString("base64");
+                  companyDoc.phone = hashedPhoneNumber;
+                }
+
+                if (!!dataSettings.industriesComponent) {
+                  if (
+                    dataSettings.industriesComponent != companyDoc.companyType
+                  ) {
+                    companyDoc.companyType = dataSettings.industriesComponent;
+                  }
+                }
+
+                if (dataSettings.pauseCompanyToServer !== null) {
+                  companyDoc.pauseCompany = dataSettings.pauseCompanyToServer;
+                }
+
+                if (!!dataSettings.reserwationMonthToServer) {
+                  companyDoc.reservationMonthTime =
+                    dataSettings.reserwationMonthToServer;
+                }
+
+                if (!!dataSettings.reserwationEverToServer) {
+                  companyDoc.reservationEveryTime =
+                    dataSettings.reserwationEverToServer;
+                }
+
+                return companyDoc.save();
+              } else {
+                const error = new Error(
+                  "Błąd podczas pobierania geolokalizacji"
+                );
+                error.statusCode = 421;
+                throw error;
+              }
+            })
+            .catch((err) => {
+              console.log(err);
+              const error = new Error("Błąd podczas pobierania geolokalizacji");
+              error.statusCode = 420;
+              throw error;
+            });
         }
-      }
-
-      if (dataSettings.pauseCompanyToServer !== null) {
-        companyDoc.pauseCompany = dataSettings.pauseCompanyToServer;
-      }
-
-      if (!!dataSettings.reserwationMonthToServer) {
-        companyDoc.reservationMonthTime = dataSettings.reserwationMonthToServer;
-      }
-
-      if (!!dataSettings.reserwationEverToServer) {
-        companyDoc.reservationEveryTime = dataSettings.reserwationEverToServer;
-      }
-
-      return companyDoc.save();
+      });
     })
     .then(() => {
       res.status(201).json({
@@ -4207,13 +4577,41 @@ exports.companyStatistics = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  Company.findOne({
-    _id: companyId,
-  })
-    .select(
-      "_id owner services.serviceName services._id workers.user workers._id"
-    )
-    .then((resultCompanyDoc) => {
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(companyId),
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        owner: 1,
+        services: {
+          serviceName: 1,
+          _id: 1,
+        },
+        workers: {
+          user: 1,
+          _id: 1,
+        },
+        raportSMS: {
+          $filter: {
+            input: "$raportSMS",
+            as: "raport",
+            cond: {
+              $and: [
+                { $in: ["$$raport.month", months] },
+                { $eq: ["$$raport.year", year] },
+              ],
+            },
+          },
+        },
+      },
+    },
+  ])
+    .then((resultCompanyDocQuery) => {
+      const resultCompanyDoc = resultCompanyDocQuery[0];
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
         let selectedWorkerId = null;
@@ -4263,6 +4661,7 @@ exports.companyStatistics = (req, res, next) => {
           return {
             resultReserwation: resultReserwation,
             services: result.resultCompanyDoc.services,
+            raportSMS: result.resultCompanyDoc.raportSMS,
           };
         });
     })
@@ -4270,6 +4669,7 @@ exports.companyStatistics = (req, res, next) => {
       res.status(201).json({
         stats: resultSave.resultReserwation,
         services: resultSave.services,
+        raportSMS: resultSave.raportSMS,
       });
     })
     .catch((err) => {
@@ -5029,6 +5429,14 @@ exports.companySMSSendClients = (req, res, next) => {
           $inc: {
             sms: -lengthCompanyClients,
           },
+          $addToSet: {
+            raportSMS: {
+              year: new Date().getFullYear(),
+              month: new Date().getMonth() + 1,
+              count: lengthCompanyClients,
+              isAdd: false,
+            },
+          },
         },
         { upsert: true, safe: true },
         null
@@ -5077,6 +5485,7 @@ exports.companySMSSendClients = (req, res, next) => {
           return lengthCompanyClients;
         })
         .catch((err) => {
+          console.log(err);
           const error = new Error("Brak odpowiedniej ilosci sms.");
           error.statusCode = 441;
           throw error;
@@ -5091,6 +5500,139 @@ exports.companySMSSendClients = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd podczas aktualizacji ustawień sms.";
+      }
+      next(err);
+    });
+};
+
+exports.getGeolocation = (req, res, next) => {
+  const adress = req.body.adress;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Geolocations.findOne({
+    adress: convertString(adress.toLowerCase().trim()),
+  })
+    .then((geolocationData) => {
+      if (!!geolocationData) {
+        return {
+          adress: geolocationData.adress,
+          lat: geolocationData.lat,
+          long: geolocationData.long,
+        };
+      } else {
+        const url =
+          "https://maps.googleapis.com/maps/api/geocode/json?address=" +
+          adress +
+          "&key=" +
+          GOOGLE_API_KEY;
+
+        return rp(url)
+          .then((resultRp) => {
+            if (!!resultRp) {
+              const resultReq = JSON.parse(resultRp);
+              const newgeolocation = new Geolocations({
+                adress: convertString(adress.toLowerCase().trim()),
+                lat: resultReq.results[0].geometry.location.lat,
+                long: resultReq.results[0].geometry.location.lng,
+              });
+              newgeolocation.save();
+              return {
+                adress: adress.toLowerCase().trim(),
+                lat: resultReq.results[0].geometry.location.lat,
+                long: resultReq.results[0].geometry.location.lng,
+              };
+            } else {
+              const error = new Error("Błąd podczas pobierania geolokalizacji");
+              error.statusCode = 421;
+              throw error;
+            }
+          })
+          .catch((err) => {
+            const error = new Error("Błąd podczas pobierania geolokalizacji");
+            error.statusCode = 420;
+            throw error;
+          });
+      }
+    })
+    .then((resultGeolocation) => {
+      res.status(201).json({
+        geolocation: resultGeolocation,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas pobierania geolokalizacji.";
+      }
+      next(err);
+    });
+};
+
+exports.getCompanyMarker = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    accountVerified: true,
+    pauseCompany: false,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select(
+      "adress city district linkPath name services title opinionsCount opinionsValue mainImageUrl imagesUrl code"
+    )
+    .then((companyData) => {
+      if (!!companyData) {
+        const unhashedAdress = Buffer.from(
+          companyData.adress,
+          "base64"
+        ).toString("ascii");
+
+        const dataToSent = {
+          adress: unhashedAdress,
+          city: companyData.city,
+          district: companyData.district,
+          linkPath: companyData.linkPath,
+          name: companyData.name,
+          services: companyData.services,
+          code: companyData.code,
+          title: companyData.title,
+          _id: companyData._id,
+          mainImageUrl: companyData.mainImageUrl,
+          imagesUrl: companyData.imagesUrl,
+          opinionsCount: !!companyData.opinionsCount
+            ? companyData.opinionsCount
+            : 0,
+          opinionsValue: !!companyData.opinionsValue
+            ? companyData.opinionsValue
+            : 0,
+        };
+        res.status(201).json({
+          companyMarker: dataToSent,
+        });
+      } else {
+        const error = new Error("Nie znaleziono firmy");
+        error.statusCode = 420;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
       }
       next(err);
     });
