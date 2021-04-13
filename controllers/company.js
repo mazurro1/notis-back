@@ -1780,6 +1780,7 @@ exports.allMapMarks = (req, res, next) => {
       $gte: new Date().toISOString(),
     },
   })
+    .limit(500)
     .select("maps name _id")
     .sort(propsSort)
     .then((resultCompanyDoc) => {
