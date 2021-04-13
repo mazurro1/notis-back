@@ -513,7 +513,6 @@ exports.addReserwation = (req, res, next) => {
                                   dateToReserwIsGood =
                                     maxDateToReserw >= selectedDate;
                                 }
-
                                 if (dateToReserwIsGood) {
                                   if (
                                     !!isEmptyDate &&
@@ -1051,16 +1050,26 @@ exports.addReserwation = (req, res, next) => {
                 );
 
                 if (findIndexUserInformations >= 0) {
-                  const validReserwationCount = companyDoc.usersInformation[
-                    findIndexUserInformations
-                  ].reserwationsCount
-                    ? companyDoc.usersInformation[findIndexUserInformations]
-                        .reserwationsCount
-                    : 0;
-                  companyDoc.usersInformation[
-                    findIndexUserInformations
-                  ].reserwationsCount = validReserwationCount + 1;
-                  companyDoc.save();
+                  // const validReserwationCount = companyDoc.usersInformation[
+                  //   findIndexUserInformations
+                  // ].reserwationsCount
+                  //   ? companyDoc.usersInformation[findIndexUserInformations]
+                  //       .reserwationsCount
+                  //   : 0;
+                  // companyDoc.usersInformation[
+                  //   findIndexUserInformations
+                  // ].reserwationsCount = validReserwationCount + 1;
+                  // companyDoc.save();
+
+                  Company.updateOne(
+                    {
+                      _id: companyId,
+                      "usersInformation.userId": userId,
+                    },
+                    {
+                      $inc: { "usersInformation.$.reserwationsCount": 1 },
+                    }
+                  ).then(() => {});
                 } else {
                   const newUserInfo = {
                     userId: userId,

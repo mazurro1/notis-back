@@ -85,6 +85,7 @@ router.post(
   [body("filters")],
   [body("localization")],
   [body("selectedName")],
+  [body("district")],
   company.allCompanys
 );
 
@@ -96,6 +97,8 @@ router.post(
   [body("filters")],
   [body("localization")],
   [body("selectedName")],
+  [body("district")],
+
   company.allCompanysOfType
 );
 
@@ -106,6 +109,7 @@ router.post(
   [body("filters")],
   [body("localization")],
   [body("selectedName")],
+  [body("district")],
   company.allMapMarks
 );
 
@@ -398,5 +402,14 @@ router.patch(
 router.post("/get-geolocation", [body("address")], company.getGeolocation);
 
 router.post("/company-marker", [body("companyId")], company.getCompanyMarker);
+
+router.post(
+  "/company-report",
+  isAuth,
+  [body("companyId")],
+  [body("reportValue")],
+  [body("opinionId")],
+  company.companyReport
+);
 
 module.exports = router;

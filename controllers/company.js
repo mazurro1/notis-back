@@ -4,6 +4,7 @@ const CompanyAvailability = require("../models/companyAvailability");
 const Reserwation = require("../models/reserwation");
 const Geolocations = require("../models/geolocation");
 const Opinion = require("../models/opinion");
+const Report = require("../models/reports");
 const mongoose = require("mongoose");
 const User = require("../models/user");
 const { validationResult } = require("express-validator");
@@ -1483,6 +1484,7 @@ exports.allCompanys = (req, res, next) => {
   const filters = req.body.filters;
   const localization = req.body.localization;
   const selectedName = req.body.selectedName;
+  const district = req.body.district;
 
   const errors = validationResult(req);
 
@@ -1511,6 +1513,15 @@ exports.allCompanys = (req, res, next) => {
       }
     : {};
 
+  const districtValid = !!district ? district : null;
+  const propsFilterDistrict = !!districtValid
+    ? {
+        district: {
+          $regex: new RegExp(districtValid, "i"),
+        },
+      }
+    : {};
+
   const validSelectedName = !!selectedName ? selectedName : null;
 
   const propsSelectedName = !!validSelectedName
@@ -1533,6 +1544,7 @@ exports.allCompanys = (req, res, next) => {
   Company.find({
     ...propsFilterCity,
     ...propsFilterFilters,
+    ...propsFilterDistrict,
     ...propsSelectedName,
     accountVerified: true,
     pauseCompany: false,
@@ -1601,6 +1613,7 @@ exports.allCompanysOfType = (req, res, next) => {
   const filters = req.body.filters;
   const localization = req.body.localization;
   const selectedName = req.body.selectedName;
+  const district = req.body.district;
 
   const localizationValid = !!localization ? localization.value : null;
   const filtersValid = !!filters ? filters.value : null;
@@ -1617,6 +1630,15 @@ exports.allCompanysOfType = (req, res, next) => {
     ? {
         "services.serviceName": {
           $regex: new RegExp(filtersValid, "i"),
+        },
+      }
+    : {};
+
+  const districtValid = !!district ? district : null;
+  const propsFilterDistrict = !!districtValid
+    ? {
+        district: {
+          $regex: new RegExp(districtValid, "i"),
         },
       }
     : {};
@@ -1652,6 +1674,7 @@ exports.allCompanysOfType = (req, res, next) => {
     companyType: type,
     ...propsFilterCity,
     ...propsFilterFilters,
+    ...propsFilterDistrict,
     ...propsSelectedName,
     accountVerified: true,
     pauseCompany: false,
@@ -1719,6 +1742,7 @@ exports.allMapMarks = (req, res, next) => {
   const filters = req.body.filters;
   const localization = req.body.localization;
   const selectedName = req.body.selectedName;
+  const district = req.body.district;
 
   const localizationValid = !!localization ? localization.value : null;
   const localizationValidMaps = !!localization
@@ -1738,6 +1762,15 @@ exports.allMapMarks = (req, res, next) => {
     ? {
         "services.serviceName": {
           $regex: new RegExp(filtersValid, "i"),
+        },
+      }
+    : {};
+
+  const districtValid = !!district ? district : null;
+  const propsFilterDistrict = !!districtValid
+    ? {
+        district: {
+          $regex: new RegExp(districtValid, "i"),
         },
       }
     : {};
@@ -1774,6 +1807,7 @@ exports.allMapMarks = (req, res, next) => {
     ...propsFilterCity,
     ...propsFilterFilters,
     ...propsSelectedName,
+    ...propsFilterDistrict,
     accountVerified: true,
     pauseCompany: false,
     premium: {
@@ -5629,6 +5663,73 @@ exports.getCompanyMarker = (req, res, next) => {
         error.statusCode = 420;
         throw error;
       }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyReport = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const reportValue = req.body.reportValue;
+  const userId = req.userId;
+  const opinionId = req.body.opinionId;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id")
+    .then((companyData) => {
+      if (!!companyData) {
+        return Report.find({
+          createdAt: {
+            $gte: new Date(
+              new Date(new Date().setHours(0)).setMinutes(0)
+            ).toISOString(),
+          },
+        }).then((docReport) => {
+          let reportValid = true;
+          if (!!docReport) {
+            if (docReport.length >= 3) {
+              reportValid = false;
+            }
+          }
+          if (reportValid) {
+            const newReport = new Report({
+              whoReportedUser: userId,
+              reportedCompany: companyId,
+              reportedValue: reportValue,
+              opinionId: !!opinionId ? opinionId : null,
+            });
+            return newReport.save();
+          } else {
+            const error = new Error(
+              "Nie można dokonać reportu więcej niż 3 razy dziennie"
+            );
+            error.statusCode = 440;
+            throw error;
+          }
+        });
+      } else {
+        const error = new Error("Nie znaleziono firmy");
+        error.statusCode = 420;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Zgłoszono firmę",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
