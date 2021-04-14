@@ -20,6 +20,22 @@ router.post(
 );
 
 router.post(
+  "/change-reserwation",
+  isAuth,
+  [body("workerUserId")],
+  [body("workerId")],
+  [body("companyId")],
+  [body("dateStart")],
+  [body("dateEnd")],
+  [body("dateFull")],
+  [body("reserwationMessage")],
+  [body("serviceId")],
+  [body("numberPhone")],
+  [body("selectedReserwationId")],
+  reserwation.changeReserwation
+);
+
+router.post(
   "/add-reserwation-worker",
   isAuth,
   [body("workerUserId")],

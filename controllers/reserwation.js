@@ -2183,12 +2183,22 @@ exports.getUserReserwations = (req, res, next) => {
     workerReserwation: false,
     isDraft: { $in: [false, null] },
     company: { $exists: true, $ne: null },
+    fullDate: {
+      $gte: new Date().toISOString(),
+    },
   })
     .populate("toWorkerUserId", "name surname")
-    .populate("company", "name linkPath")
+    .populate({
+      path: "company",
+      select:
+        "name linkPath workers._id workers.user workers.active workers.servicesCategory workers.specialization ownerData.servicesCategory ownerData.specialization owner companyStamps services reservationMonthTime",
+      populate: {
+        path: "workers.user owner",
+        select: "name surname imageOther imageUrl",
+      },
+    })
     .populate("opinionId", "")
     .then((reserwationsDoc) => {
-      //?
       const otherPropsToReserwation = [];
       const allReserwationsFilter = reserwationsDoc.filter(
         (itemReserwation) => {
@@ -2222,7 +2232,6 @@ exports.getUserReserwations = (req, res, next) => {
           );
         }
       );
-      //?
       const tempItemsReserwations = allReserwationsFilter.map((item) => {
         return item.company.name;
       });
@@ -3287,5 +3296,1236 @@ exports.getSelectedUserReserwations = (req, res, next) => {
           }
           next(err);
         });
+    });
+};
+
+exports.changeReserwation = (req, res, next) => {
+  const userId = req.userId;
+  const userEmail = req.userEmail;
+  const workerId = req.body.workerId;
+  const workerUserId = req.body.workerUserId;
+  const companyId = req.body.companyId;
+  const dateStart = req.body.dateStart;
+  const dateFull = req.body.dateFull;
+  const reserwationMessage = req.body.reserwationMessage;
+  const serviceId = req.body.serviceId;
+  const numberPhone = req.body.numberPhone;
+  const isStampActive = req.body.isStampActive;
+  const selectedReserwationId = req.body.selectedReserwationId;
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  const arrayDateFull = dateFull.split("-");
+  const splitDateStart = dateStart.split(":");
+
+  const actualDate = new Date(
+    Number(arrayDateFull[2]),
+    Number(arrayDateFull[1]) - 1,
+    Number(arrayDateFull[0]),
+    Number(splitDateStart[0]),
+    Number(splitDateStart[1])
+  );
+  const isGoodTimeDate = actualDate >= new Date();
+
+  const resultDayMinus = new Date(
+    Number(arrayDateFull[2]),
+    Number(arrayDateFull[1]) - 1,
+    Number(arrayDateFull[0]) - 1,
+    Number(splitDateStart[0]),
+    Number(splitDateStart[1])
+  );
+
+  const resultDayPlus = new Date(
+    Number(arrayDateFull[2]),
+    Number(arrayDateFull[1]) - 1,
+    Number(arrayDateFull[0]) + 1,
+    Number(splitDateStart[0]),
+    Number(splitDateStart[1])
+  );
+
+  let newReserwationDraftId = null;
+
+  Reserwation.find({
+    company: companyId,
+    toWorkerUserId: workerUserId,
+    dateDay: Number(arrayDateFull[0]),
+    dateMonth: Number(arrayDateFull[1]),
+    dateYear: Number(arrayDateFull[2]),
+    visitCanceled: false,
+  })
+    .then((allReserwations) => {
+      return Company.aggregate([
+        {
+          $match: {
+            _id: mongoose.Types.ObjectId(companyId),
+            pauseCompany: false,
+            premium: {
+              $gte: new Date(),
+            },
+          },
+        },
+        { $unwind: "$ownerData" },
+        {
+          $project: {
+            openingDays: 1,
+            ownerData: 1,
+            workers: {
+              $filter: {
+                input: "$workers",
+                as: "workerFirstFilter",
+                cond: {
+                  $and: [
+                    {
+                      $eq: [
+                        "$$workerFirstFilter.user",
+                        mongoose.Types.ObjectId(workerUserId),
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            services: {
+              $filter: {
+                input: "$services",
+                as: "serviceitem",
+                cond: {
+                  $and: [
+                    {
+                      $eq: [
+                        "$$serviceitem._id",
+                        mongoose.Types.ObjectId(serviceId),
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            owner: 1,
+            daysOff: {
+              $filter: {
+                input: "$daysOff",
+                as: "dayOffItem",
+                cond: {
+                  $and: [
+                    {
+                      $eq: ["$$dayOffItem.day", Number(arrayDateFull[0])],
+                    },
+                    {
+                      $eq: ["$$dayOffItem.month", Number(arrayDateFull[1])],
+                    },
+                    {
+                      $eq: ["$$dayOffItem.year", Number(arrayDateFull[2])],
+                    },
+                  ],
+                },
+              },
+            },
+            reservationMonthTime: 1,
+            reservationEveryTime: 1,
+            promotions: 1,
+            usersInformation: 1,
+            happyHoursConst: 1,
+            companyStamps: 1,
+            premium: 1,
+            smsReserwationAvaible: 1,
+            smsNotifactionAvaible: 1,
+            sms: 1,
+            pauseCompany: 1,
+            _id: 1,
+          },
+        },
+        { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: "$services", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            openingDays: 1,
+            ownerData: {
+              _id: 1,
+              specialization: 1,
+              user: 1,
+              constantWorkingHours: 1,
+              active: 1,
+              permissions: 1,
+              servicesCategory: 1,
+              noConstantWorkingHours: {
+                $filter: {
+                  input: "$ownerData.noConstantWorkingHours",
+                  as: "itemOwner",
+                  cond: {
+                    $and: [
+                      { $gte: ["$$itemOwner.start", resultDayMinus] },
+                      { $lte: ["$$itemOwner.start", resultDayPlus] },
+                    ],
+                  },
+                },
+              },
+            },
+            workers: {
+              _id: 1,
+              specialization: 1,
+              user: 1,
+              constantWorkingHours: 1,
+              active: 1,
+              permissions: 1,
+              servicesCategory: 1,
+              noConstantWorkingHours: {
+                $filter: {
+                  input: "$workers.noConstantWorkingHours",
+                  as: "item",
+                  cond: {
+                    $and: [
+                      { $gte: ["$$item.start", resultDayMinus] },
+                      { $lte: ["$$item.start", resultDayPlus] },
+                    ],
+                  },
+                },
+              },
+            },
+            owner: 1,
+            daysOff: 1,
+            reservationMonthTime: 1,
+            reservationEveryTime: 1,
+            services: 1,
+            promotions: 1,
+            usersInformation: {
+              $filter: {
+                input: "$usersInformation",
+                as: "userInfo",
+                cond: {
+                  $and: [
+                    {
+                      $eq: [
+                        "$$userInfo.userId",
+                        mongoose.Types.ObjectId(userId),
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            happyHoursConst: 1,
+            companyStamps: 1,
+            premium: 1,
+            smsReserwationAvaible: 1,
+            smsNotifactionAvaible: 1,
+            sms: 1,
+            pauseCompany: 1,
+            _id: 1,
+          },
+        },
+      ])
+        .then((companyDoc) => {
+          if (companyDoc.length > 0) {
+            const companyDocData = companyDoc[0];
+            return User.findOne({
+              _id: userId,
+            })
+              .select("_id stamps")
+              .populate(
+                "stamps.reserwations",
+                "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate"
+              )
+              .then((resultUserDoc) => {
+                if (!!resultUserDoc) {
+                  let newReserwationToValid = null;
+                  if (!!companyDocData.services) {
+                    const splitDateStartToValid = dateStart.split(":");
+                    let numberDateEnd =
+                      Number(splitDateStartToValid[0]) * 60 +
+                      Number(splitDateStartToValid[1]) +
+                      Number(companyDocData.services.time);
+                    const numberWith2Spaces = (numberDateEnd / 60).toFixed(2);
+                    const splitNumberWithComa = numberWith2Spaces.split(".");
+                    const otherNumberValue = numberDateEnd % 60;
+                    const endDateToValidCompany = `${splitNumberWithComa[0]}:${otherNumberValue}`;
+                    newReserwationToValid = new Reserwation({
+                      fromUser: userId,
+                      toWorkerUserId: workerUserId,
+                      company: companyId,
+                      dateYear: Number(arrayDateFull[2]),
+                      dateMonth: Number(arrayDateFull[1]),
+                      dateDay: Number(arrayDateFull[0]),
+                      dateStart: dateStart,
+                      dateEnd: endDateToValidCompany,
+                      fullDate: actualDate,
+                      workerReserwation: false,
+                      isDraft: true,
+                    });
+                    newReserwationDraftId = newReserwationToValid._id;
+                  }
+                  if (!!newReserwationToValid) {
+                    return newReserwationToValid
+                      .save()
+                      .then((resultSavePreBooking) => {
+                        let userIsBlocked = false;
+                        const validUserInformation = !!companyDocData.usersInformation
+                          ? companyDocData.usersInformation
+                          : [];
+                        const isUserInUsersInformations = validUserInformation.findIndex(
+                          (infUser) => infUser.userId == userId
+                        );
+
+                        if (isUserInUsersInformations >= 0) {
+                          userIsBlocked =
+                            companyDocData.usersInformation[
+                              isUserInUsersInformations
+                            ].isBlocked;
+                        }
+
+                        if (isGoodTimeDate) {
+                          if (!!!userIsBlocked) {
+                            let selectedWorker = null;
+                            if (companyDocData.owner == workerUserId) {
+                              selectedWorker = companyDocData.ownerData;
+                            } else {
+                              if (!!companyDocData.workers) {
+                                if (!!companyDocData.workers._id) {
+                                  if (companyDocData.workers._id == workerId) {
+                                    selectedWorker = companyDocData.workers;
+                                  }
+                                }
+                              }
+                            }
+                            if (!!selectedWorker) {
+                              let selectedServices = null;
+                              if (companyDocData.services._id) {
+                                selectedServices = companyDocData.services;
+                              }
+                              if (!!selectedServices) {
+                                const disabledWorkerDate = [];
+                                let isEmptyDate = true;
+
+                                const arrayDateStartNewReserwation = dateStart.split(
+                                  ":"
+                                );
+
+                                const convertDateStartToMinNewReserwation =
+                                  Number(arrayDateStartNewReserwation[0]) * 60 +
+                                  Number(arrayDateStartNewReserwation[1]);
+
+                                const dateEndNewReserwation =
+                                  convertDateStartToMinNewReserwation +
+                                  Number(selectedServices.time);
+                                //////////////////////////////////////////////////////////////////////////
+
+                                const selectedDate = new Date(
+                                  Number(arrayDateFull[2]),
+                                  Number(arrayDateFull[1]) - 1,
+                                  Number(arrayDateFull[0]),
+                                  10,
+                                  0,
+                                  0,
+                                  0
+                                );
+                                const selectedDateDayOfTheWeek = selectedDate.getDay();
+                                const selectedFullDate = `${Number(
+                                  arrayDateFull[0]
+                                )}-${Number(arrayDateFull[1])}-${Number(
+                                  arrayDateFull[2]
+                                )}`;
+                                const mapWorkerConstWorkingHours = selectedWorker.constantWorkingHours.map(
+                                  (item) => {
+                                    return {
+                                      _id: item._id,
+                                      dayOfTheWeek: item.dayOfTheWeek,
+                                      start: item.startWorking,
+                                      end: item.endWorking,
+                                      disabled: item.disabled,
+                                    };
+                                  }
+                                );
+
+                                const workerConstWorkingHours = mapWorkerConstWorkingHours.find(
+                                  (item) =>
+                                    item.dayOfTheWeek ===
+                                    selectedDateDayOfTheWeek
+                                );
+                                let workerNoConstWorkingHours = selectedWorker.noConstantWorkingHours.find(
+                                  (item) => item.fullDate == selectedFullDate
+                                );
+
+                                if (!!workerNoConstWorkingHours) {
+                                  const startDate = new Date(
+                                    workerNoConstWorkingHours.start
+                                  );
+                                  const startDateResult = `${startDate.getHours()}:${startDate.getMinutes()}`;
+                                  const endDate = new Date(
+                                    workerNoConstWorkingHours.end
+                                  );
+                                  const endDateResult = `${endDate.getHours()}:${endDate.getMinutes()}`;
+                                  const newDateNoConst = {
+                                    _id: workerNoConstWorkingHours._id,
+                                    fullDate:
+                                      workerNoConstWorkingHours.fullDate,
+                                    holidays:
+                                      workerNoConstWorkingHours.holidays,
+                                    start: startDateResult,
+                                    end: endDateResult,
+                                  };
+                                  workerNoConstWorkingHours = newDateNoConst;
+                                }
+                                const selectedOpenTimeDay = !!workerNoConstWorkingHours
+                                  ? workerNoConstWorkingHours.holidays
+                                    ? null
+                                    : workerNoConstWorkingHours
+                                  : workerConstWorkingHours;
+                                /////////////////////////////////////////////////////////////
+                                const splitOpenWorker = selectedOpenTimeDay.start.split(
+                                  ":"
+                                );
+                                const splitCloseWorker = selectedOpenTimeDay.end.split(
+                                  ":"
+                                );
+
+                                const convertDateStartWorkWorker =
+                                  Number(splitOpenWorker[0]) * 60 +
+                                  Number(splitOpenWorker[1]);
+
+                                const convertDateEndWorkWorker =
+                                  Number(splitCloseWorker[0]) * 60 +
+                                  Number(splitCloseWorker[1]);
+
+                                allReserwations.forEach((workerReserwation) => {
+                                  const arrayDateStart = workerReserwation.dateStart.split(
+                                    ":"
+                                  );
+
+                                  const convertDateStartToMin =
+                                    Number(arrayDateStart[0]) * 60 +
+                                    Number(arrayDateStart[1]);
+
+                                  const dateEndSerwer =
+                                    convertDateStartToMin +
+                                    Number(workerReserwation.timeReserwation);
+
+                                  const newData = {
+                                    dateStart: convertDateStartToMin,
+                                    dateEnd: dateEndSerwer,
+                                  };
+
+                                  disabledWorkerDate.push(newData);
+                                });
+
+                                disabledWorkerDate.forEach(
+                                  (disabledDateItem) => {
+                                    const isStartInDate =
+                                      convertDateStartToMinNewReserwation <
+                                        disabledDateItem.dateEnd &&
+                                      convertDateStartToMinNewReserwation >=
+                                        disabledDateItem.dateStart;
+
+                                    const isEndInDate =
+                                      dateEndNewReserwation <=
+                                        disabledDateItem.dateEnd &&
+                                      dateEndNewReserwation >
+                                        disabledDateItem.dateStart;
+
+                                    const isStartLowerAndEndBigger =
+                                      disabledDateItem.dateStart >=
+                                        convertDateStartToMinNewReserwation &&
+                                      disabledDateItem.dateEnd <=
+                                        dateEndNewReserwation;
+
+                                    if (
+                                      isStartInDate ||
+                                      isEndInDate ||
+                                      isStartLowerAndEndBigger
+                                    ) {
+                                      isEmptyDate = false;
+                                    }
+                                  }
+                                );
+
+                                const companyIsClose =
+                                  selectedOpenTimeDay.disabled ||
+                                  convertDateStartToMinNewReserwation <
+                                    convertDateStartWorkWorker ||
+                                  convertDateEndWorkWorker <
+                                    dateEndNewReserwation;
+
+                                const findOffDay = companyDocData.daysOff.some(
+                                  (dayOff) =>
+                                    dayOff.day === Number(arrayDateFull[0]) &&
+                                    dayOff.month === Number(arrayDateFull[1]) &&
+                                    dayOff.year === Number(arrayDateFull[2])
+                                );
+
+                                // sprawdzanie rezerwacji do przodu
+                                let dateToReserwIsGood = true;
+                                if (!!companyDocData.reservationMonthTime) {
+                                  const maxDateToReserw = new Date(
+                                    new Date().setMonth(
+                                      new Date().getMonth() +
+                                        companyDocData.reservationMonthTime
+                                    )
+                                  );
+                                  dateToReserwIsGood =
+                                    maxDateToReserw >= selectedDate;
+                                }
+                                if (dateToReserwIsGood) {
+                                  if (
+                                    !!isEmptyDate &&
+                                    !companyIsClose &&
+                                    !!!findOffDay
+                                  ) {
+                                    let timeEndService = "";
+                                    if (Number(dateEndNewReserwation) <= 60) {
+                                      timeEndService = `00:${
+                                        dateEndNewReserwation <= 9
+                                          ? `0${dateEndNewReserwation}`
+                                          : dateEndNewReserwation
+                                      }`;
+                                    } else {
+                                      const numberTime = Number(
+                                        dateEndNewReserwation
+                                      );
+                                      const numberOfHours = Math.floor(
+                                        numberTime / 60
+                                      );
+                                      if (
+                                        Number(dateEndNewReserwation) % 60 ===
+                                        0
+                                      ) {
+                                        timeEndService = `${
+                                          numberOfHours <= 9
+                                            ? `0${numberOfHours}`
+                                            : numberOfHours
+                                        }:00`;
+                                      } else {
+                                        const numberOfMinutes =
+                                          numberTime - numberOfHours * 60;
+                                        timeEndService = `${
+                                          numberOfHours <= 9
+                                            ? `0${numberOfHours}`
+                                            : numberOfHours
+                                        }:${
+                                          numberOfMinutes <= 9
+                                            ? `0${numberOfMinutes}`
+                                            : numberOfMinutes
+                                        }`;
+                                      }
+                                    }
+
+                                    const convertToValidDateDateFull = `${Number(
+                                      arrayDateFull[2]
+                                    )}-${
+                                      Number(arrayDateFull[1]) < 10
+                                        ? `0${Number(arrayDateFull[1])}`
+                                        : Number(arrayDateFull[1])
+                                    }-${
+                                      Number(arrayDateFull[0]) < 10
+                                        ? `0${Number(arrayDateFull[0])}`
+                                        : Number(arrayDateFull[0])
+                                    }`;
+                                    const newDateConvertToValidDateDateFull = new Date(
+                                      convertToValidDateDateFull
+                                    );
+
+                                    const dayNewDateConvertToValidDateDateFull = newDateConvertToValidDateDateFull.getDay();
+
+                                    //promotions
+                                    const filterSelectedPromotions = companyDocData.promotions.filter(
+                                      (promotionItem) => {
+                                        const dateStartPromotion = new Date(
+                                          promotionItem.start
+                                        );
+                                        const dateEndPromotion = new Date(
+                                          promotionItem.end
+                                        );
+                                        const isDayInPromotion =
+                                          dateStartPromotion <=
+                                            newDateConvertToValidDateDateFull &&
+                                          dateEndPromotion >=
+                                            newDateConvertToValidDateDateFull;
+
+                                        const isServiceInPromotion = promotionItem.servicesInPromotion.some(
+                                          (promotionItemService) =>
+                                            promotionItemService ==
+                                            selectedServices._id
+                                        );
+                                        return (
+                                          isServiceInPromotion &&
+                                          isDayInPromotion
+                                        );
+                                      }
+                                    );
+                                    let promotionNumber = null;
+
+                                    if (filterSelectedPromotions.length > 0) {
+                                      filterSelectedPromotions.sort((a, b) => {
+                                        const firstItemToSort =
+                                          a.promotionPercent;
+                                        const secondItemToSort =
+                                          b.promotionPercent;
+                                        if (firstItemToSort < secondItemToSort)
+                                          return 1;
+                                        if (firstItemToSort > secondItemToSort)
+                                          return -1;
+                                        return 0;
+                                      });
+
+                                      promotionNumber =
+                                        filterSelectedPromotions[0]
+                                          .promotionPercent;
+                                    }
+
+                                    //happy hours
+                                    const filterSelectedHappyHours = companyDocData.happyHoursConst.filter(
+                                      (happyHourItem) => {
+                                        const isSelectedDayHappyHour = happyHourItem.dayWeekIndex.some(
+                                          (happyHourItemService) =>
+                                            happyHourItemService ===
+                                            dayNewDateConvertToValidDateDateFull
+                                        );
+
+                                        const isServiceInHappyHour = happyHourItem.servicesInPromotion.some(
+                                          (happyHourItemService) =>
+                                            happyHourItemService == serviceId
+                                        );
+                                        const splitDateStart = happyHourItem.start.split(
+                                          ":"
+                                        );
+                                        const splitDateEnd = happyHourItem.end.split(
+                                          ":"
+                                        );
+                                        const dateStartToValid = new Date(
+                                          new Date(
+                                            newDateConvertToValidDateDateFull.setHours(
+                                              Number(splitDateStart[0])
+                                            )
+                                          ).setMinutes(
+                                            Number(splitDateStart[1])
+                                          )
+                                        );
+                                        const dateEndToValid = new Date(
+                                          new Date(
+                                            newDateConvertToValidDateDateFull.setHours(
+                                              Number(splitDateEnd[0])
+                                            )
+                                          ).setMinutes(Number(splitDateEnd[1]))
+                                        );
+                                        const validHappyHourDate =
+                                          dateStartToValid <= actualDate &&
+                                          actualDate <= dateEndToValid;
+                                        return (
+                                          isSelectedDayHappyHour &&
+                                          isServiceInHappyHour &&
+                                          validHappyHourDate
+                                        );
+                                      }
+                                    );
+                                    let happyHourNumber = null;
+                                    if (filterSelectedHappyHours.length > 0) {
+                                      filterSelectedHappyHours.sort((a, b) => {
+                                        const firstItemToSort =
+                                          a.promotionPercent;
+                                        const secondItemToSort =
+                                          b.promotionPercent;
+                                        if (firstItemToSort < secondItemToSort)
+                                          return 1;
+                                        if (firstItemToSort > secondItemToSort)
+                                          return -1;
+                                        return 0;
+                                      });
+                                      happyHourNumber =
+                                        filterSelectedHappyHours[0]
+                                          .promotionPercent;
+                                    }
+
+                                    // promotionNumber; happyHourNumber
+
+                                    // promotion in stamp
+
+                                    let stampNumber = null;
+                                    if (
+                                      !!!promotionNumber &&
+                                      !!!happyHourNumber &&
+                                      !!isStampActive
+                                    ) {
+                                      const filterCompanyStampsNoDisabled = companyDocData.companyStamps.filter(
+                                        (item) => item.disabled === false
+                                      );
+
+                                      filterCompanyStampsNoDisabled.sort(
+                                        (a, b) => {
+                                          const firstItemToSort =
+                                            a.countStampsToActive;
+                                          const secondItemToSort =
+                                            b.countStampsToActive;
+                                          if (
+                                            firstItemToSort < secondItemToSort
+                                          )
+                                            return -1;
+                                          if (
+                                            firstItemToSort > secondItemToSort
+                                          )
+                                            return 1;
+                                          return 0;
+                                        }
+                                      );
+
+                                      //was companyDoc.companyStamps <- filterCompanyStampsNoDisabled
+                                      const findCompanyStamp = filterCompanyStampsNoDisabled.find(
+                                        (itemStamp) => {
+                                          const isInStampsService = itemStamp.servicesId.some(
+                                            (stampService) =>
+                                              stampService.toString() ===
+                                              serviceId.toString()
+                                          );
+                                          return isInStampsService;
+                                        }
+                                      );
+
+                                      if (!!findCompanyStamp) {
+                                        if (!!!findCompanyStamp.disabled) {
+                                          const findStampId = resultUserDoc.stamps.findIndex(
+                                            (itemStamp) => {
+                                              return (
+                                                itemStamp.companyId.toString() ===
+                                                companyId.toString()
+                                              );
+                                            }
+                                          );
+
+                                          if (findStampId >= 0) {
+                                            let numberOfActiveStamps = 0;
+                                            const badDateReserwations = [];
+                                            const goodDateReserwations = [];
+
+                                            resultUserDoc.stamps[
+                                              findStampId
+                                            ].reserwations.forEach(
+                                              (stampReserwation) => {
+                                                const splitDateEnd = stampReserwation.dateEnd.split(
+                                                  ""
+                                                );
+                                                const reserwationStampDateEnd = new Date(
+                                                  stampReserwation.dateYear,
+                                                  stampReserwation.dateMonth -
+                                                    1,
+                                                  stampReserwation.dateDay,
+                                                  Number(splitDateEnd[0]),
+                                                  Number(splitDateEnd[1])
+                                                );
+
+                                                if (
+                                                  !!!stampReserwation.visitCanceled &&
+                                                  reserwationStampDateEnd <
+                                                    new Date()
+                                                ) {
+                                                  numberOfActiveStamps =
+                                                    numberOfActiveStamps + 1;
+                                                  goodDateReserwations.push(
+                                                    stampReserwation
+                                                  );
+                                                } else {
+                                                  badDateReserwations.push(
+                                                    stampReserwation
+                                                  );
+                                                }
+                                              }
+                                            );
+                                            if (
+                                              numberOfActiveStamps > 0 &&
+                                              findCompanyStamp.countStampsToActive <=
+                                                numberOfActiveStamps
+                                            ) {
+                                              goodDateReserwations.sort(
+                                                (a, b) => {
+                                                  const firstItemToSort = new Date(
+                                                    a.fullDate
+                                                  );
+                                                  const secondItemToSort = new Date(
+                                                    b.fullDate
+                                                  );
+                                                  if (
+                                                    firstItemToSort <
+                                                    secondItemToSort
+                                                  )
+                                                    return -1;
+                                                  if (
+                                                    firstItemToSort >
+                                                    secondItemToSort
+                                                  )
+                                                    return 1;
+                                                  return 0;
+                                                }
+                                              );
+                                              stampNumber =
+                                                findCompanyStamp.promotionPercent;
+                                              const newGoodDateReserwation = goodDateReserwations.slice(
+                                                findCompanyStamp.countStampsToActive
+                                              );
+                                              const newUserReserwations = [
+                                                ...badDateReserwations,
+                                                ...newGoodDateReserwation,
+                                              ];
+
+                                              resultUserDoc.stamps[
+                                                findStampId
+                                              ].reserwations = newUserReserwations;
+                                              resultUserDoc.save();
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+
+                                    const resultPromotion =
+                                      stampNumber !== null
+                                        ? stampNumber
+                                        : promotionNumber !== null
+                                        ? promotionNumber
+                                        : happyHourNumber !== null
+                                        ? happyHourNumber
+                                        : 0;
+                                    const resultPriceAfterPromotion = Math.floor(
+                                      (selectedServices.serviceCost *
+                                        (100 - resultPromotion)) /
+                                        100
+                                    );
+
+                                    return Reserwation.updateOne(
+                                      {
+                                        _id: newReserwationDraftId._id,
+                                      },
+                                      {
+                                        $set: {
+                                          sendSMSReserwation: false,
+                                          sendSMSNotifaction: false,
+                                          sendSMSCanceled: false,
+                                          isDraft: false,
+                                          dateStart: dateStart,
+                                          dateEnd: timeEndService,
+                                          costReserwation: resultPriceAfterPromotion,
+                                          timeReserwation:
+                                            selectedServices.time,
+                                          serviceName:
+                                            selectedServices.serviceName,
+                                          visitNotFinished: false,
+                                          visitCanceled: false,
+                                          visitChanged: true,
+                                          extraCost: selectedServices.extraCost,
+                                          extraTime: selectedServices.extraTime,
+                                          reserwationMessage: reserwationMessage,
+                                          workerReserwation: false,
+                                          serviceId: selectedServices._id,
+                                          fullDate: actualDate,
+                                          activePromotion: !!promotionNumber
+                                            ? true
+                                            : false,
+                                          activeHappyHour: !!happyHourNumber
+                                            ? true
+                                            : false,
+                                          activeStamp: !!stampNumber
+                                            ? true
+                                            : false,
+                                          basicPrice:
+                                            selectedServices.serviceCost,
+                                        },
+                                      }
+                                    )
+                                      .then(() => {
+                                        newReserwationDraftId.sendSMSReserwation = false;
+                                        newReserwationDraftId.sendSMSNotifaction = false;
+                                        newReserwationDraftId.sendSMSCanceled = false;
+                                        newReserwationToValid.isDraft = false;
+                                        newReserwationToValid.dateStart = dateStart;
+                                        newReserwationToValid.dateEnd = timeEndService;
+                                        newReserwationToValid.costReserwation = resultPriceAfterPromotion;
+                                        newReserwationToValid.timeReserwation =
+                                          selectedServices.time;
+                                        newReserwationToValid.serviceName =
+                                          selectedServices.serviceName;
+                                        newReserwationToValid.visitNotFinished = false;
+                                        newReserwationToValid.visitCanceled = false;
+                                        newReserwationToValid.visitChanged = false;
+                                        newReserwationToValid.extraCost =
+                                          selectedServices.extraCost;
+                                        newReserwationToValid.extraTime =
+                                          selectedServices.extraTime;
+                                        newReserwationToValid.reserwationMessage = reserwationMessage;
+                                        newReserwationToValid.workerReserwation = false;
+                                        newReserwationToValid.serviceId =
+                                          selectedServices._id;
+                                        newReserwationToValid.fullDate = actualDate;
+                                        newReserwationToValid.activePromotion = !!promotionNumber
+                                          ? true
+                                          : false;
+                                        newReserwationToValid.activeHappyHour = !!happyHourNumber
+                                          ? true
+                                          : false;
+                                        newReserwationToValid.activeStamp = !!stampNumber
+                                          ? true
+                                          : false;
+                                        newReserwationToValid.basicPrice =
+                                          selectedServices.serviceCost;
+
+                                        Reserwation.deleteOne({
+                                          _id: selectedReserwationId,
+                                        }).then(() => {});
+
+                                        return {
+                                          companyDoc: companyDocData,
+                                          newReserwation: newReserwationToValid,
+                                        };
+                                      })
+                                      .catch((err) => {
+                                        Reserwation.deleteOne({
+                                          _id: resultSavePreBooking._id,
+                                        }).then(() => {});
+                                        const error = new Error(
+                                          "Błąd podczas składania rezerwacji."
+                                        );
+                                        error.statusCode = 420;
+                                        throw error;
+                                      });
+                                  } else {
+                                    Reserwation.deleteOne({
+                                      _id: resultSavePreBooking._id,
+                                    }).then(() => {});
+                                    const error = new Error(
+                                      "Podany termin jest zajęty."
+                                    );
+                                    error.statusCode = 422;
+                                    throw error;
+                                  }
+                                } else {
+                                  Reserwation.deleteOne({
+                                    _id: resultSavePreBooking._id,
+                                  }).then(() => {});
+                                  const error = new Error(
+                                    "Brak możliwości rezerwacji w podanym terminie."
+                                  );
+                                  error.statusCode = 422;
+                                  throw error;
+                                }
+                              } else {
+                                Reserwation.deleteOne({
+                                  _id: resultSavePreBooking._id,
+                                }).then(() => {});
+                                const error = new Error("Brak podanej usługi.");
+                                error.statusCode = 422;
+                                throw error;
+                              }
+                            } else {
+                              Reserwation.deleteOne({
+                                _id: resultSavePreBooking._id,
+                              }).then(() => {});
+                              const error = new Error(
+                                "Brak podanego pracownika."
+                              );
+                              error.statusCode = 422;
+                              throw error;
+                            }
+                          } else {
+                            Reserwation.deleteOne({
+                              _id: resultSavePreBooking._id,
+                            }).then(() => {});
+                            const error = new Error(
+                              "Użytkownik został zablokowany do rezerwacji w tej firmie."
+                            );
+                            error.statusCode = 422;
+                            throw error;
+                          }
+                        } else {
+                          Reserwation.deleteOne({
+                            _id: resultSavePreBooking._id,
+                          }).then(() => {});
+                          const error = new Error(
+                            "Nie można dokonywać rezerwacji w tym terminie."
+                          );
+                          error.statusCode = 422;
+                          throw error;
+                        }
+                      })
+                      .catch((err) => {
+                        if (!err.statusCode) {
+                          err.statusCode = 501;
+                          err.message =
+                            "Błąd podczas składania wstępnej rezerwacji czasu.";
+                        }
+                        next(err);
+                      });
+                  } else {
+                    const error = new Error(
+                      "Błąd podczas wstępnego zapisu rezerwacji."
+                    );
+                    error.statusCode = 422;
+                    throw error;
+                  }
+                } else {
+                  const error = new Error("Brak użytkownika.");
+                  error.statusCode = 422;
+                  throw error;
+                }
+              })
+              .catch((err) => {
+                if (!err.statusCode) {
+                  err.statusCode = 501;
+                  err.message = "Błąd podczas pobieranie danych o firmie.";
+                }
+                next(err);
+              });
+          } else {
+            const error = new Error(
+              "Brak firmy lub konto firmowe jest nieaktywne."
+            );
+            error.statusCode = 419;
+            throw error;
+          }
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas pobierania danych o rezerwacjach.";
+          }
+          next(err);
+        });
+    })
+    .then((result) => {
+      const resultReserwation = result.newReserwation;
+      return User.find({
+        _id: { $in: [userId, workerUserId] },
+        accountVerified: true,
+      })
+        .select(
+          "_id alerts alertActiveCount stamps whiteListVerifiedPhones phone phoneVerified"
+        )
+        .then((allUsers) => {
+          if (!!allUsers) {
+            return resultReserwation
+              .populate(
+                "reserwationId",
+                "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
+              )
+              .populate(
+                {
+                  path: "company fromUser",
+                  select:
+                    "name surname linkPath smsChangedAvaible sms companyStamps",
+                },
+                function (err, resultReserwationPopulate) {
+                  const bulkArrayToUpdate = [];
+                  if (allUsers.length > 0) {
+                    allUsers.forEach((userResult) => {
+                      const newAlertData = {
+                        reserwationId: resultReserwation._id,
+                        active: true,
+                        type: "rezerwation_changed",
+                        creationTime: new Date(),
+                        companyChanged: false,
+                      };
+                      io.getIO().emit(`user${userResult._id}`, {
+                        action: "update-alerts",
+                        alertData: {
+                          reserwationId: resultReserwationPopulate,
+                          active: true,
+                          type: "rezerwation_changed",
+                          creationTime: new Date(),
+                          companyChanged: false,
+                        },
+                      });
+
+                      transporter.sendMail({
+                        to: userEmail,
+                        from: MAIL_INFO,
+                        subject: `Dokonano zmiany rezerwacji w firmie ${resultReserwationPopulate.company.name}`,
+                        html: `<h1>Termin rezerwacji:</h1>
+                      <h4>
+                        Nazwa usługi: ${resultReserwationPopulate.serviceName}
+                      </h4>
+                      <h4>
+                        Termin: ${resultReserwationPopulate.dateDay}-${
+                          resultReserwationPopulate.dateMonth
+                        }-${resultReserwationPopulate.dateYear}
+                      </h4>
+                      <h4>
+                        Godzina: ${resultReserwationPopulate.dateStart}
+                      </h4>
+                      <h4>
+                        Czas trwania: ${
+                          resultReserwationPopulate.timeReserwation
+                        }min ${resultReserwationPopulate.extraTime ? "+" : ""}
+                      </h4>
+                      <h4>
+                        Koszt: ${
+                          resultReserwationPopulate.costReserwation
+                        } zł ${resultReserwationPopulate.extraCost ? "+" : ""}
+                      </h4>
+                      `,
+                      });
+
+                      if (
+                        userId == userResult._id &&
+                        resultReserwationPopulate.company.smsChangedAvaible
+                      ) {
+                        let selectedPhoneNumber = null;
+                        if (!!userResult.phoneVerified) {
+                          selectedPhoneNumber = userResult.phone;
+                        } else {
+                          if (!!userResult.whiteListVerifiedPhones) {
+                            if (userResult.whiteListVerifiedPhones.length > 0) {
+                              selectedPhoneNumber =
+                                userResult.whiteListVerifiedPhones[
+                                  userResult.whiteListVerifiedPhones.length - 1
+                                ];
+                            }
+                          }
+                        }
+
+                        if (!!selectedPhoneNumber) {
+                          const userPhone = Buffer.from(
+                            selectedPhoneNumber,
+                            "base64"
+                          ).toString("ascii");
+                          Company.updateOne(
+                            {
+                              _id: companyId,
+                              sms: { $gt: 0 },
+                            },
+                            {
+                              $inc: {
+                                sms: -1,
+                              },
+                              $addToSet: {
+                                raportSMS: {
+                                  year: new Date().getFullYear(),
+                                  month: new Date().getMonth() + 1,
+                                  count: 1,
+                                  isAdd: false,
+                                },
+                              },
+                            },
+                            { upsert: true, safe: true },
+                            null
+                          )
+                            .then((result) => {
+                              const params = {
+                                Message: `Dokonano zmiany rezerwacji w firmie: ${
+                                  resultReserwationPopulate.company.name
+                                } dnia: ${resultReserwationPopulate.dateDay}-${
+                                  resultReserwationPopulate.dateMonth
+                                }-${
+                                  resultReserwationPopulate.dateYear
+                                }, o godzine: ${
+                                  resultReserwationPopulate.dateStart
+                                }, na usługę: ${
+                                  resultReserwationPopulate.serviceName
+                                }. Czas trwania usługi: ${
+                                  resultReserwationPopulate.timeReserwation
+                                }min ${
+                                  resultReserwationPopulate.extraTime ? "+" : ""
+                                }. Koszt usługi: ${
+                                  resultReserwationPopulate.costReserwation
+                                } zł ${
+                                  resultReserwationPopulate.extraCost ? "+" : ""
+                                }`,
+                                MessageStructure: "string",
+                                PhoneNumber: `+48${userPhone}`,
+                                MessageAttributes: {
+                                  "AWS.SNS.SMS.SenderID": {
+                                    DataType: "String",
+                                    StringValue: "Meetsy",
+                                  },
+                                },
+                              };
+                              // sns.publish(params, function (err, data) {
+                              //   if (err) console.log(err, err.stack);
+                              // });
+                              Reserwation.updateOne(
+                                {
+                                  _id: resultReserwation._id,
+                                  sendSMSReserwation: false,
+                                },
+                                {
+                                  $set: {
+                                    sendSMSReserwation: true,
+                                  },
+                                }
+                              )
+                                .then(() => {})
+                                .catch(() => {});
+                            })
+                            .catch((err) => {});
+                        }
+                      }
+                      bulkArrayToUpdate.push({
+                        updateOne: {
+                          filter: {
+                            _id: userResult._id,
+                          },
+                          update: {
+                            $inc: { alertActiveCount: 1 },
+                            $push: {
+                              alerts: {
+                                $each: [newAlertData],
+                                $position: 0,
+                              },
+                            },
+                          },
+                        },
+                      });
+                    });
+                  } else {
+                    const error = new Error(
+                      "Błąd podczas wysyłania powiadomień użytkownikom. Rezerwaca została odwołana."
+                    );
+                    error.statusCode = 422;
+                    throw error;
+                  }
+
+                  return User.bulkWrite(bulkArrayToUpdate)
+                    .then(() => {
+                      return true;
+                    })
+                    .catch((err) => {
+                      console.log(err);
+                      const error = new Error(
+                        "Błąd podczas wysyłania powiadomień użytkownikom. Rezerwaca została odwołana."
+                      );
+                      error.statusCode = 422;
+                      throw error;
+                    });
+                }
+              );
+          }
+        });
+    })
+    .then(() => {
+      CompanyUsersInformations.findOne({
+        userId: userId,
+        companyId: companyId,
+      }).then((resultCompanyUsersInformations) => {
+        if (!!!resultCompanyUsersInformations) {
+          const newUserCompanyInfo = new CompanyUsersInformations({
+            userId: userId,
+            companyId: companyId,
+            messages: [],
+          });
+          return newUserCompanyInfo.save();
+        } else {
+          return true;
+        }
+      });
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Dokonano zmiany rezerwacji!",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas składania rezerwacji.";
+      }
+      next(err);
     });
 };

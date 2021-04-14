@@ -1331,7 +1331,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "premium shopStore companyStamps mainImageUrl imagesUrl workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name daysOff openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
+      "premium shopStore companyStamps mainImageUrl imagesUrl workers.active workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name daysOff openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
     )
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
