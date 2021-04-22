@@ -156,6 +156,10 @@ const companySchema = new Schema(
           type: Boolean,
           required: false,
         },
+        title: {
+          type: String,
+          required: false,
+        },
       },
     ],
     premium: {
@@ -691,6 +695,14 @@ const companySchema = new Schema(
     },
     codeDeleteDate: {
       type: Date,
+      required: false,
+    },
+    notifactionNoSMS: {
+      type: Boolean,
+      required: false,
+    },
+    notifactionNoPremium: {
+      type: Boolean,
       required: false,
     },
   },

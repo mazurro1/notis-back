@@ -1222,6 +1222,7 @@ exports.addReserwation = (req, res, next) => {
                                   month: new Date().getMonth() + 1,
                                   count: 1,
                                   isAdd: false,
+                                  title: "sms_add_reserwation",
                                 },
                               },
                             },
@@ -2861,6 +2862,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
                                 month: new Date().getMonth() + 1,
                                 count: 1,
                                 isAdd: false,
+                                title: "sms_update_worker_reserwation",
                               },
                             },
                           },
@@ -2948,6 +2950,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
                                 month: new Date().getMonth() + 1,
                                 count: 1,
                                 isAdd: false,
+                                title: "sms_canceled_worker_reserwation",
                               },
                             },
                           },
@@ -4401,6 +4404,7 @@ exports.changeReserwation = (req, res, next) => {
                                   month: new Date().getMonth() + 1,
                                   count: 1,
                                   isAdd: false,
+                                  title: "sms_change_reserwation",
                                 },
                               },
                             },
@@ -4468,6 +4472,20 @@ exports.changeReserwation = (req, res, next) => {
                               alerts: {
                                 $each: [newAlertData],
                                 $position: 0,
+                              },
+                            },
+                          },
+                        },
+                      });
+                      bulkArrayToUpdate.push({
+                        updateOne: {
+                          filter: {
+                            _id: userResult._id,
+                          },
+                          update: {
+                            $pull: {
+                              alerts: {
+                                reserwationId: selectedReserwationId,
                               },
                             },
                           },

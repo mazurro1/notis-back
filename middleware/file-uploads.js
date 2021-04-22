@@ -9,7 +9,7 @@ const MIME_TYPE_MAP = {
 };
 
 const fileUpload = multer({
-  limits: 2000000, // ustawiamy limit np: 500 kb
+  limits: 5000000, // ustawiamy limit np: 500 kb
   // storage: multer.diskStorage({
   //   destination: (req, file, callback) => {
   //   //   callback(null, "uploads/images"); // zapisuje zdjęcia do folderu uploads i do folderu images

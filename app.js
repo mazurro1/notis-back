@@ -8,6 +8,7 @@ const coinsRoutes = require("./routes/coins");
 const reserwationRoutes = require("./routes/reserwation");
 const availabilityRoutes = require("./routes/companyAvailability");
 const opinionRoutes = require("./routes/opinion");
+const { startShedule } = require("./middleware/shedule");
 const cors = require("cors");
 const companyUsersInformationsRoutes = require("./routes/companyUsersInformations");
 const {
@@ -29,7 +30,7 @@ app.use(
     exposedHeaders: "*",
   })
 );
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "5mb" }));
 app.use(userRoutes);
 app.use(companyRoutes);
 app.use(paymentRoutes);
@@ -38,6 +39,7 @@ app.use(reserwationRoutes);
 app.use(availabilityRoutes);
 app.use(opinionRoutes);
 app.use(companyUsersInformationsRoutes);
+app.use(startShedule);
 
 app.use((error, req, res, next) => {
   console.log(error);

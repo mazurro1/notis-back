@@ -25,7 +25,8 @@ passport.use(
       clientID: FACEBOOK_APP_ID,
       clientSecret: FACEBOOK_APP_SECRET,
       callbackURL: `${BACKEND_URL}/auth/facebook/callback`,
-      profileFields: ["emails", "displayName", "picture.type(large)"],
+      // profileFields: ["emails", "displayName", "picture.type(large)"],
+      profileFields: ["emails", "displayName"],
     },
     function (token, refreshToken, profile, done) {
       const user = {
@@ -43,7 +44,8 @@ passport.use(
       clientID: GOOGLE_CLIENT_ID,
       clientSecret: GOOGLE_APP_SECRET,
       callbackURL: `${BACKEND_URL}/auth/google/callback`,
-      profileFields: ["emails", "displayName", "picture.type(large)"],
+      profileFields: ["emails", "displayName"],
+      // "emails", "displayName", "picture.type(large)"
     },
     function (token, refreshToken, profile, done) {
       const user = {

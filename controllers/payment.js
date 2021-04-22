@@ -266,6 +266,9 @@ exports.updateOrderProcess = async (req, res, next) => {
                       },
                       update: {
                         $inc: { sms: allCountSMS },
+                        $set: {
+                          notifactionNoSMS: false,
+                        },
                       },
                       $addToSet: {
                         raportSMS: {
@@ -273,6 +276,7 @@ exports.updateOrderProcess = async (req, res, next) => {
                           month: new Date().getMonth() + 1,
                           count: allCountSMS,
                           isAdd: true,
+                          title: "sms_added",
                         },
                       },
                     },
@@ -291,6 +295,7 @@ exports.updateOrderProcess = async (req, res, next) => {
                         {
                           $set: {
                             premium: { $add: ["$premium", oneWeek] },
+                            notifactionNoPremium: false,
                           },
                         },
                       ],

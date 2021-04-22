@@ -303,6 +303,8 @@ exports.registrationCompany = (req, res, next) => {
                       lat: resultGeolocation.lat,
                       long: resultGeolocation.long,
                     },
+                    notifactionNoSMS: true,
+                    notifactionNoPremium: true,
                   });
                   return company.save();
                 })
@@ -5470,6 +5472,7 @@ exports.companySMSSendClients = (req, res, next) => {
               month: new Date().getMonth() + 1,
               count: lengthCompanyClients,
               isAdd: false,
+              title: "sms_client",
             },
           },
         },

@@ -1316,7 +1316,8 @@ exports.userDeleteImageOther = (req, res, next) => {
 
 exports.loginFacebookNew = (req, res, next) => {
   const {
-    _json: { email, name, picture },
+    // _json: { email, name, picture },
+    _json: { email, name },
   } = req.user.profile;
   User.findOne({
     email: email,
@@ -1375,7 +1376,7 @@ exports.loginFacebookNew = (req, res, next) => {
                   accountVerified: true,
                   codeToVerified: null,
                   hasPhone: false,
-                  imageOther: !!picture ? picture.data.url : "",
+                  // imageOther: !!picture ? picture.data.url : "",
                   hasCompany: false,
                   company: null,
                   phoneVerified: false,
@@ -1504,7 +1505,8 @@ exports.deleteCompanyFavourites = (req, res, next) => {
 
 exports.loginGoogle = (req, res, next) => {
   const {
-    _json: { email, name, picture },
+    // _json: { email, name, picture },
+    _json: { email, name },
   } = req.user.profile;
   User.findOne({
     email: email,
@@ -1563,7 +1565,7 @@ exports.loginGoogle = (req, res, next) => {
                   accountVerified: true,
                   codeToVerified: null,
                   hasPhone: false,
-                  imageOther: !!picture ? picture : "",
+                  // imageOther: !!picture ? picture : "",
                   hasCompany: false,
                   company: null,
                   phoneVerified: false,
