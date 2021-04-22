@@ -325,7 +325,9 @@ exports.updateOrderProcess = async (req, res, next) => {
                       "payments.$.status": event.data.object.payment_status,
                     },
                   }
-                ).then(() => {});
+                ).then(() => {
+                  return false;
+                });
                 const error = new Error("Transakcja została odrzucona.");
                 error.statusCode = 444;
                 throw error;
@@ -336,6 +338,10 @@ exports.updateOrderProcess = async (req, res, next) => {
               throw error;
             }
           });
+        } else {
+          const error = new Error("Brak sesji transakcji.");
+          error.statusCode = 410;
+          throw error;
         }
       } else {
         const error = new Error("Brak wybranej firmy.");
@@ -344,66 +350,88 @@ exports.updateOrderProcess = async (req, res, next) => {
       }
     })
     .then((resultCompanyDoc) => {
-      const dateInvoice = new Date();
-      return Invoice.find({
-        year: dateInvoice.getFullYear(),
-        month: dateInvoice.getMonth() + 1,
-        day: dateInvoice.getDate(),
-      }).then((resultInvouices) => {
-        let countAllInvoices = 0;
-        if (!!resultInvouices) {
-          countAllInvoices = resultInvouices.length;
-        }
-        const findIndexActiveInvoice = resultInvouices.findIndex(
-          (item) => item.sessionId === event.data.object.id
-        );
-        const findIndexPayment = resultCompanyDoc.payments.findIndex(
-          (item) => item.sessionId == event.data.object.id
-        );
-        let selectedPaymentItem = null;
-        let activeInvoice = null;
-        if (findIndexActiveInvoice >= 0) {
-          activeInvoice = resultInvouices[findIndexActiveInvoice];
-        } else {
-          const newInvoiceItem = new Invoice({
-            year: dateInvoice.getFullYear(),
-            month: dateInvoice.getMonth() + 1,
-            day: dateInvoice.getDate(),
-            link: null,
-            companyId: resultCompanyDoc._id,
-            sessionId: event.data.object.id,
-            invoiceNumber: countAllInvoices + 1,
-          });
-          newInvoiceItem.save();
+      if (!!resultCompanyDoc) {
+        const dateInvoice = new Date();
+        return Invoice.findOne({
+          // year: dateInvoice.getFullYear(),
+          // month: dateInvoice.getMonth() + 1,
+          // day: dateInvoice.getDate(),
+          sessionId: event.data.object.id,
+        }).then((resultInvouices) => {
+          // console.log(resultInvouices);
+          // let countAllInvoices = 0;
+          // if (!!resultInvouices) {
+          //   countAllInvoices = resultInvouices.length;
+          // }
+          // if(!!resultInvouices){}
+          // const findIndexActiveInvoice = resultInvouices.findIndex(
+          //   (item) => item.sessionId === event.data.object.id
+          // );
+          const findIndexPayment = resultCompanyDoc.payments.findIndex(
+            (item) => item.sessionId == event.data.object.id
+          );
+          // let selectedPaymentItem = null;
+          let activeInvoice = null;
+          if (!!resultInvouices) {
+            activeInvoice = resultInvouices;
+          } else {
+            const newInvoiceItem = new Invoice({
+              year: dateInvoice.getFullYear(),
+              month: dateInvoice.getMonth() + 1,
+              day: dateInvoice.getDate(),
+              link: null,
+              companyId: resultCompanyDoc._id,
+              sessionId: event.data.object.id,
+              invoiceNumber: null,
+              productsInfo:
+                findIndexPayment >= 0
+                  ? resultCompanyDoc.payments[findIndexPayment].productsInfo
+                  : null,
+            });
+            newInvoiceItem.save();
 
-          activeInvoice = newInvoiceItem;
-        }
-        if (findIndexPayment >= 0) {
-          selectedPaymentItem = resultCompanyDoc.payments[findIndexPayment];
-          resultCompanyDoc.payments[findIndexPayment].invoiceId =
-            activeInvoice._id;
+            activeInvoice = newInvoiceItem;
+          }
+          if (findIndexPayment >= 0) {
+            // selectedPaymentItem = resultCompanyDoc.payments[findIndexPayment];
+            // resultCompanyDoc.payments[findIndexPayment].invoiceId =
+            //   activeInvoice._id;
 
-          return Company.updateOne(
-            {
-              _id: resultCompanyDoc._id,
-              "payments.sessionId": event.data.object.id,
-            },
-            {
-              $set: { "payments.$.invoiceId": activeInvoice._id },
-            }
-          ).then(() => {
-            return {
-              newInvoice: activeInvoice,
-              resultCompanyDoc: resultCompanyDoc,
-              dateInvoice: dateInvoice,
-              findIndexPayment: findIndexPayment,
-              selectedPaymentItem: selectedPaymentItem,
-            };
-          });
-        }
-      });
+            return Company.updateOne(
+              {
+                _id: resultCompanyDoc._id,
+                "payments.sessionId": event.data.object.id,
+              },
+              {
+                $set: { "payments.$.invoiceId": activeInvoice._id },
+              }
+            ).then(() => {
+              transporter.sendMail({
+                to: resultCompanyDoc.email,
+                from: MAIL_INFO,
+                subject: `Dziękujemy za zakup!`,
+                html: `Dziękujemy za zakup! Faktura vat zostanie wysłana w ciagu 1 dnia roboczego.`,
+              });
+              return true;
+              // return {
+              //   newInvoice: activeInvoice,
+              //   resultCompanyDoc: resultCompanyDoc,
+              //   dateInvoice: dateInvoice,
+              //   findIndexPayment: findIndexPayment,
+              //   selectedPaymentItem: selectedPaymentItem,
+              // };
+            });
+          }
+        });
+      } else {
+        const error = new Error("Transakcja została odrzucona.");
+        error.statusCode = 422;
+        throw error;
+      }
     })
+    /*
     .then((resultNewInvoice) => {
+      console.log(resultNewInvoice);
       if (!!resultNewInvoice.selectedPaymentItem) {
         const unhashedAdress = Buffer.from(
           resultNewInvoice.resultCompanyDoc.adress,
@@ -505,6 +533,10 @@ exports.updateOrderProcess = async (req, res, next) => {
           throw error;
         }
       });
+      res.json({ received: true });
+    })
+    */
+    .then(() => {
       res.json({ received: true });
     })
     .catch((err) => {

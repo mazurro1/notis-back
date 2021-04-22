@@ -29,9 +29,34 @@ const invoiceSchema = new Schema(
       required: false,
     },
     invoiceNumber: {
-      type: String,
-      required: true,
+      type: Number,
+      required: false,
     },
+    productsInfo: [
+      {
+        coinsId: {
+          type: Schema.Types.ObjectId,
+          ref: "Coins",
+          required: true,
+        },
+        name: {
+          type: String,
+          required: true,
+        },
+        price: {
+          type: Number,
+          required: true,
+        },
+        sms: {
+          type: Number,
+          required: false,
+        },
+        premium: {
+          type: Number,
+          required: false,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

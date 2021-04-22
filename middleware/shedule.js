@@ -5,6 +5,9 @@ const User = require("../models/user");
 const nodemailer = require("nodemailer");
 const io = require("../socket");
 const AWS = require("aws-sdk");
+const Invoice = require("../models/invoice");
+const { createInvoice } = require("../generateInvoice");
+
 require("dotenv").config();
 const {
   AWS_ACCESS_KEY_ID_APP,
@@ -260,12 +263,15 @@ for (let i = 0; i < 24; i++) {
               }
             }
           });
-          filteredCompany.forEach(async (itemCompany) => {
+
+          for (const itemCompany of filteredCompany) {
+            // filteredCompany.forEach(async (itemCompany) => {
             const resultFunctionUpdate = await updateCompanyFunction(
               itemCompany
             );
             if (!!resultFunctionUpdate) {
-              itemCompany.allReserwations.forEach((itemReserwation) => {
+              for (const itemReserwation of itemCompany.allReserwations) {
+                // itemCompany.allReserwations.forEach((itemReserwation) => {
                 if (itemReserwation.fromUser) {
                   let selectedPhoneNumber = null;
                   if (!!itemReserwation.fromUser.phoneVerified) {
@@ -326,7 +332,7 @@ for (let i = 0; i < 24; i++) {
                     // });
                   }
                 }
-              });
+              }
 
               Reserwation.bulkWrite(bulkArrayToUpdateReserwations)
                 .then(() => {})
@@ -346,7 +352,7 @@ for (let i = 0; i < 24; i++) {
                 html: `<h1>Brak środków na wysłanie sms-ów na potwierdzenie wizyty</h1> Potrzebna ilość: ${itemCompany.allReserwations.length}`,
               });
             }
-          });
+          }
         })
         .catch(() => {});
     }
@@ -525,6 +531,162 @@ schedule.scheduleJob(`20 8 * * *`, () => {
       }
     })
     .catch(() => {});
+});
+
+const handleUpdateInvoiceToS3 = async (
+  dateInvoice,
+  companyId,
+  invoiceId,
+  newInvoice
+) => {
+  try {
+    const result = await s3Bucket
+      .upload({
+        Key: `invoices/${dateInvoice.getFullYear()}/${
+          dateInvoice.getMonth() + 1
+        }/${dateInvoice.getDate()}/${companyId}_${invoiceId}`,
+        Body: newInvoice,
+        ContentType: "application/pdf; charset=utf-8",
+        ACL: "public-read",
+      })
+      .promise()
+      .then((result) => {
+        return result.key;
+      });
+    if (!!result) {
+      return result;
+    } else {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+};
+
+schedule.scheduleJob(`5 3 * * *`, async () => {
+  const actualDate = new Date();
+  Invoice.find({
+    year: actualDate.getFullYear(),
+    month: actualDate.getMonth() + 1,
+    day: actualDate.getDate() - 1,
+    link: null,
+  })
+    .populate("companyId", "_id email name city district adress code nip")
+    .then(async (newInvoices) => {
+      const bulkArrayToUpdateInvoices = [];
+      for (const [indexInvoice, resultNewInvoice] of newInvoices.entries()) {
+        if (!!resultNewInvoice.companyId._id) {
+          const unhashedAdress = Buffer.from(
+            resultNewInvoice.companyId.adress,
+            "base64"
+          ).toString("ascii");
+          const mapBoughtItems = resultNewInvoice.productsInfo.map(
+            (boughtItem) => {
+              return {
+                name: boughtItem.name,
+                count: 1,
+                price: boughtItem.price,
+              };
+            }
+          );
+          const invoiceData = {
+            dealer: {
+              name: "FROFRONT Hubert Mazur",
+              address: "Struga 18",
+              code: "26-600",
+              city: "Radom",
+              nip: "799999999",
+            },
+            shipping: {
+              name: resultNewInvoice.companyId.name,
+              address: unhashedAdress,
+              code: !!resultNewInvoice.companyId.code
+                ? resultNewInvoice.companyId.code
+                : "00-000",
+              city: resultNewInvoice.companyId.city,
+              nip: !!resultNewInvoice.companyId.nip
+                ? resultNewInvoice.companyId.nip
+                : "000000000",
+            },
+            items: mapBoughtItems,
+          };
+          const newInvoice = createInvoice(
+            invoiceData,
+            indexInvoice + 1,
+            new Date()
+          );
+          const resultUpload = await handleUpdateInvoiceToS3(
+            actualDate,
+            resultNewInvoice.companyId._id,
+            resultNewInvoice._id,
+            newInvoice
+          );
+          if (!!resultUpload) {
+            console.log(resultUpload);
+            bulkArrayToUpdateInvoices.push({
+              updateOne: {
+                filter: {
+                  _id: resultNewInvoice._id,
+                },
+                update: {
+                  $set: {
+                    link: resultUpload,
+                    invoiceNumber: indexInvoice + 1,
+                  },
+                },
+              },
+            });
+          }
+        }
+      }
+      Invoice.bulkWrite(bulkArrayToUpdateInvoices)
+        .then(() => {})
+        .catch(() => {
+          const error = new Error("Błąd podczas aktualizacji zamówień.");
+          error.statusCode = 422;
+          throw error;
+        });
+    });
+});
+
+schedule.scheduleJob(`5 8 * * *`, async () => {
+  const actualDate = new Date();
+  Invoice.find({
+    year: actualDate.getFullYear(),
+    month: actualDate.getMonth() + 1,
+    day: actualDate.getDate() - 1,
+    link: { $ne: null },
+  })
+    .populate("companyId", "_id email")
+    .then(async (allInvoices) => {
+      for (const resultInvoice of allInvoices) {
+        const options = {
+          Key: resultInvoice.link,
+        };
+        await s3Bucket.getObject(options, (err, data) => {
+          if (!err) {
+            transporter.sendMail({
+              to: resultInvoice.companyId.email,
+              from: MAIL_INFO,
+              subject: "Faktura vat za dokonany zakup",
+              html: `<h1>Witamy</h1>
+                    Przesyłamy w załączniku fakture vat za dokonane zakupy!
+            `,
+              attachments: [
+                {
+                  content: data.Body,
+                  contentType: "application/pdf",
+                },
+              ],
+            });
+          } else {
+            const error = new Error("Błąd podczas pobierania faktury.");
+            error.statusCode = 425;
+            throw error;
+          }
+        });
+      }
+    });
 });
 
 exports.startShedule = () => {};
