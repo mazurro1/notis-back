@@ -2101,16 +2101,13 @@ exports.saveNotificationEndpoint = (req, res, next) => {
       if (!!resultUserDoc) {
         resultUserDoc.vapidEndpoint = endpoint;
 
-        var payload = {
+        const params = {
           title: "Test podczas logowania",
           body: "Test podczas logowania body",
-          icon: "images/someImageInPath.png",
         };
 
-        const payloadFinall = JSON.stringify(payload.toString());
-
         webpush
-          .sendNotification(endpoint, payloadFinall)
+          .sendNotification(endpoint, JSON.stringify(params))
           .then(() => {})
           .catch(() => {});
 

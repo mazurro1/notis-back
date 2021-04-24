@@ -1353,13 +1353,11 @@ exports.addReserwation = (req, res, next) => {
                         icon: "images/someImageInPath.png",
                       };
 
-                      const payloadFinall = JSON.stringify(payload.toString());
-
                       if (!!userResult.vapidEndpoint) {
                         webpush
                           .sendNotification(
                             userResult.vapidEndpoint,
-                            payloadFinall
+                            JSON.stringify(payload)
                           )
                           .then(() => {})
                           .catch(() => {});
