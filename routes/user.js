@@ -242,4 +242,11 @@ router.post(
   user.verifiedUserPhone
 );
 
+router.post(
+  "/save-notification-endpoint",
+  isAuth,
+  [body("endpoint")],
+  user.saveNotificationEndpoint
+);
+
 module.exports = router;

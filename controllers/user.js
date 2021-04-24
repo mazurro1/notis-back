@@ -10,6 +10,8 @@ const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const io = require("../socket");
 const getImgBuffer = require("../getImgBuffer");
+const webpush = require("web-push");
+
 require("dotenv").config();
 const {
   TOKEN_PASSWORD,
@@ -25,7 +27,15 @@ const {
   MAIL_PORT,
   MAIL_HOST,
   MAIL_PASSWORD,
+  PUBLIC_KEY_VAPID,
+  PRIVATE_KEY_VAPID,
 } = process.env;
+
+webpush.setVapidDetails(
+  `mailto:${MAIL_INFO}`,
+  PUBLIC_KEY_VAPID,
+  PRIVATE_KEY_VAPID
+);
 
 const transporter = nodemailer.createTransport({
   host: MAIL_HOST,
@@ -312,6 +322,7 @@ exports.login = (req, res, next) => {
               phoneVerified: user.phoneVerified,
               blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
               blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
+              vapidPublic: PUBLIC_KEY_VAPID,
             });
           })
           .catch((err) => {
@@ -772,6 +783,7 @@ exports.autoLogin = (req, res, next) => {
           phoneVerified: user.phoneVerified,
           blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
           blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
+          vapidPublic: PUBLIC_KEY_VAPID,
         });
       } else {
         res.status(422).json({
@@ -2072,6 +2084,47 @@ exports.verifiedUserPhone = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd podczas weryfikowania numeru telefonu.";
+      }
+      next(err);
+    });
+};
+
+exports.saveNotificationEndpoint = (req, res, next) => {
+  const userId = req.userId;
+  const endpoint = req.body.endpoint;
+
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id vapidEndpoint")
+    .then((resultUserDoc) => {
+      if (!!resultUserDoc) {
+        resultUserDoc.vapidEndpoint = endpoint;
+
+        var payload = {
+          title: "Test podczas logowania",
+          body: "Test podczas logowania body",
+          icon: "images/someImageInPath.png",
+        };
+
+        const payloadFinall = JSON.stringify(payload.toString());
+
+        webpush
+          .sendNotification(endpoint, payloadFinall)
+          .then(() => {})
+          .catch(() => {});
+
+        return resultUserDoc.save();
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas wysyłania kodu do usunięcia konta.";
       }
       next(err);
     });

@@ -30,6 +30,7 @@
     "request": "^2.88.2",
     "request-promise": "^4.2.6",
     "socket.io": "^2.3.0",
-    "stripe": "^8.138.0"
+    "stripe": "^8.138.0",
+    "web-push": "^3.4.4"
   }
 }

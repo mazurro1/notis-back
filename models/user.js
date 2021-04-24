@@ -158,6 +158,26 @@ const userSchema = new Schema(
         },
       },
     ],
+    vapidEndpoint: {
+      endpoint: {
+        type: String,
+        required: false,
+      },
+      expirationTime: {
+        type: Number,
+        required: false,
+      },
+      keys: {
+        p256dh: {
+          type: String,
+          required: false,
+        },
+        auth: {
+          type: String,
+          required: false,
+        },
+      },
+    },
   },
   {
     timestamps: true,

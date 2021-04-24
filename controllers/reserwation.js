@@ -8,6 +8,7 @@ const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const AWS = require("aws-sdk");
 const company = require("../models/company");
+const webpush = require("web-push");
 require("dotenv").config();
 const {
   MAIL_HOST,
@@ -19,7 +20,15 @@ const {
   AWS_REGION_APP,
   AWS_BUCKET,
   AWS_PATH_URL,
+  PUBLIC_KEY_VAPID,
+  PRIVATE_KEY_VAPID,
 } = process.env;
+
+webpush.setVapidDetails(
+  `mailto:${MAIL_INFO}`,
+  PUBLIC_KEY_VAPID,
+  PRIVATE_KEY_VAPID
+);
 
 const transporter = nodemailer.createTransport({
   host: MAIL_HOST,
@@ -1050,17 +1059,6 @@ exports.addReserwation = (req, res, next) => {
                 );
 
                 if (findIndexUserInformations >= 0) {
-                  // const validReserwationCount = companyDoc.usersInformation[
-                  //   findIndexUserInformations
-                  // ].reserwationsCount
-                  //   ? companyDoc.usersInformation[findIndexUserInformations]
-                  //       .reserwationsCount
-                  //   : 0;
-                  // companyDoc.usersInformation[
-                  //   findIndexUserInformations
-                  // ].reserwationsCount = validReserwationCount + 1;
-                  // companyDoc.save();
-
                   Company.updateOne(
                     {
                       _id: companyId,
@@ -1118,7 +1116,7 @@ exports.addReserwation = (req, res, next) => {
         accountVerified: true,
       })
         .select(
-          "_id alerts alertActiveCount stamps whiteListVerifiedPhones phone phoneVerified"
+          "_id alerts alertActiveCount stamps whiteListVerifiedPhones phone phoneVerified vapidEndpoint"
         )
         .then((allUsers) => {
           if (!!allUsers) {
@@ -1347,6 +1345,24 @@ exports.addReserwation = (req, res, next) => {
                             }
                           }
                         }
+                      }
+
+                      const payload = {
+                        title: `Dokonano rezerwacji dnia: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}`,
+                        body: "this is the body",
+                        icon: "images/someImageInPath.png",
+                      };
+
+                      const payloadFinall = JSON.stringify(payload.toString());
+
+                      if (!!userResult.vapidEndpoint) {
+                        webpush
+                          .sendNotification(
+                            userResult.vapidEndpoint,
+                            payloadFinall
+                          )
+                          .then(() => {})
+                          .catch(() => {});
                       }
 
                       bulkArrayToUpdate.push({
