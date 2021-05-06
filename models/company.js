@@ -705,6 +705,24 @@ const companySchema = new Schema(
       type: Boolean,
       required: false,
     },
+    dataToInvoice: {
+      name: {
+        type: String,
+        required: false,
+      },
+      city: {
+        type: String,
+        required: false,
+      },
+      postalCode: {
+        type: String,
+        required: false,
+      },
+      street: {
+        type: String,
+        required: false,
+      },
+    },
   },
   {
     timestamps: true,

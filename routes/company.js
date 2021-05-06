@@ -412,4 +412,12 @@ router.post(
   company.companyReport
 );
 
+router.post(
+  "/company-add-link",
+  isAuth,
+  [body("companyId")],
+  [body("pathValue")],
+  company.companyAddLink
+);
+
 module.exports = router;

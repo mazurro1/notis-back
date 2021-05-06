@@ -1204,7 +1204,7 @@ exports.addReserwation = (req, res, next) => {
                           const userPhone = Buffer.from(
                             selectedPhoneNumber,
                             "base64"
-                          ).toString("ascii");
+                          ).toString("utf-8");
                           Company.updateOne(
                             {
                               _id: companyId,
@@ -1348,7 +1348,7 @@ exports.addReserwation = (req, res, next) => {
                       }
 
                       const payload = {
-                        title: `Dokonano rezerwacji dnia: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}`,
+                        title: `Dokonano rezerwacji dnia: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}, na usługę: ${resultReserwationPopulate.serviceName}`,
                         body: "this is the body",
                         icon: "images/someImageInPath.png",
                       };
@@ -2905,7 +2905,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
                               const userPhone = Buffer.from(
                                 selectedPhoneNumber,
                                 "base64"
-                              ).toString("ascii");
+                              ).toString("utf-8");
 
                               const params = {
                                 Message: `Dokonano zmianę rezerwacji w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
@@ -2993,7 +2993,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
                               const userPhone = Buffer.from(
                                 selectedPhoneNumber,
                                 "base64"
-                              ).toString("ascii");
+                              ).toString("utf-8");
 
                               const params = {
                                 Message: `Rezerwacja została odwołana w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
@@ -3079,6 +3079,50 @@ exports.updateWorkerReserwation = (req, res, next) => {
                         </h4>
                         `,
                         });
+                      }
+
+                      if (
+                        !!!resultReserwation.visitNotFinished &&
+                        !!!resultReserwation.workerReserwation &&
+                        !!!resultReserwation.visitCanceled &&
+                        !!resultReserwation.visitChanged
+                      ) {
+                        const payload = {
+                          title: `Dokonano zmianę w rezerwacji dnia: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, o godzine: ${resultReserwation.dateStart}, na usługę: ${resultReserwation.serviceName}`,
+                          body: "this is the body",
+                          icon: "images/someImageInPath.png",
+                        };
+
+                        if (!!userResult.vapidEndpoint) {
+                          webpush
+                            .sendNotification(
+                              userResult.vapidEndpoint,
+                              JSON.stringify(payload)
+                            )
+                            .then(() => {})
+                            .catch(() => {});
+                        }
+                      } else if (
+                        !!!resultReserwation.visitNotFinished &&
+                        !!!resultReserwation.workerReserwation &&
+                        !!resultReserwation.visitCanceled &&
+                        !!!resultReserwation.visitChanged
+                      ) {
+                        const payload = {
+                          title: `Odwołano rezerwację dnia: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, o godzine: ${resultReserwation.dateStart}, na usługę: ${resultReserwation.serviceName}`,
+                          body: "this is the body",
+                          icon: "images/someImageInPath.png",
+                        };
+
+                        if (!!userResult.vapidEndpoint) {
+                          webpush
+                            .sendNotification(
+                              userResult.vapidEndpoint,
+                              JSON.stringify(payload)
+                            )
+                            .then(() => {})
+                            .catch(() => {});
+                        }
                       }
 
                       bulkArrayToUpdate.push({
@@ -4402,7 +4446,7 @@ exports.changeReserwation = (req, res, next) => {
                           const userPhone = Buffer.from(
                             selectedPhoneNumber,
                             "base64"
-                          ).toString("ascii");
+                          ).toString("utf-8");
                           Company.updateOne(
                             {
                               _id: companyId,
@@ -4475,6 +4519,23 @@ exports.changeReserwation = (req, res, next) => {
                             .catch((err) => {});
                         }
                       }
+
+                      const payload = {
+                        title: `Dokonano zmiany rezerwacji na: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}, na usługę: ${resultReserwationPopulate.serviceName}`,
+                        body: "this is the body",
+                        icon: "images/someImageInPath.png",
+                      };
+
+                      if (!!userResult.vapidEndpoint) {
+                        webpush
+                          .sendNotification(
+                            userResult.vapidEndpoint,
+                            JSON.stringify(payload)
+                          )
+                          .then(() => {})
+                          .catch(() => {});
+                      }
+
                       bulkArrayToUpdate.push({
                         updateOne: {
                           filter: {

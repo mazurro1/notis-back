@@ -436,7 +436,7 @@ exports.updateOrderProcess = async (req, res, next) => {
         const unhashedAdress = Buffer.from(
           resultNewInvoice.resultCompanyDoc.adress,
           "base64"
-        ).toString("ascii");
+        ).toString("utf-8");
 
         const mapBoughtItems = resultNewInvoice.selectedPaymentItem.productsInfo.map(
           (boughtItem) => {

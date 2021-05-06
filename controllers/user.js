@@ -173,14 +173,14 @@ exports.registration = (req, res, next) => {
       }
     })
     .then((result) => {
-      const userName = Buffer.from(result.name, "base64").toString("ascii");
+      const userName = Buffer.from(result.name, "base64").toString("utf-8");
       const userSurname = Buffer.from(result.surname, "base64").toString(
-        "ascii"
+        "utf-8"
       );
       const unhashedCodeToVerified = Buffer.from(
         result.codeToVerified,
         "base64"
-      ).toString("ascii");
+      ).toString("utf-8");
       transporter.sendMail({
         to: result.email,
         from: MAIL_INFO,
@@ -273,12 +273,12 @@ exports.login = (req, res, next) => {
           })
           .then((userWithToken) => {
             const userName = Buffer.from(userWithToken.name, "base64").toString(
-              "ascii"
+              "utf-8"
             );
             const userSurname = Buffer.from(
               userWithToken.surname,
               "base64"
-            ).toString("ascii");
+            ).toString("utf-8");
 
             const isNotCompanyStamps = userWithToken.stamps.some(
               (stamp) => stamp.companyId === null
@@ -359,7 +359,7 @@ exports.sentAgainVerifiedEmail = (req, res, next) => {
         const unhashedCodeToVerified = Buffer.from(
           user.codeToVerified,
           "base64"
-        ).toString("ascii");
+        ).toString("utf-8");
         transporter.sendMail({
           to: user.email,
           from: MAIL_INFO,
@@ -394,7 +394,7 @@ exports.getUserPhone = (req, res, next) => {
     .then((user) => {
       if (!!user) {
         if (!!user.phone) {
-          const userPhone = Buffer.from(user.phone, "base64").toString("ascii");
+          const userPhone = Buffer.from(user.phone, "base64").toString("utf-8");
           res.status(201).json({
             userPhone: userPhone,
           });
@@ -462,7 +462,7 @@ exports.getCustomUserPhone = (req, res, next) => {
                   const userPhone = Buffer.from(
                     selectedPhoneNumber,
                     "base64"
-                  ).toString("ascii");
+                  ).toString("utf-8");
                   res.status(201).json({
                     userPhone: userPhone,
                   });
@@ -525,7 +525,7 @@ exports.veryfiedEmail = (req, res, next) => {
         const unhashedCodeToVerified = Buffer.from(
           user.codeToVerified,
           "base64"
-        ).toString("ascii");
+        ).toString("utf-8");
         if (unhashedCodeToVerified.toUpperCase() === codeSent.toUpperCase()) {
           user.codeToVerified = null;
           user.accountVerified = true;
@@ -719,9 +719,9 @@ exports.autoLogin = (req, res, next) => {
     })
     .then((user) => {
       if (!!user) {
-        const userName = Buffer.from(user.name, "base64").toString("ascii");
+        const userName = Buffer.from(user.name, "base64").toString("utf-8");
         const userSurname = Buffer.from(user.surname, "base64").toString(
-          "ascii"
+          "utf-8"
         );
         let validUserActiveCount = 0;
         if (!!user.alertActiveCount) {
@@ -916,15 +916,15 @@ exports.edit = (req, res, next) => {
               const userName = Buffer.from(
                 userSavedData.name,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
               const userSurname = Buffer.from(
                 userSavedData.surname,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
               const codeToDelete = Buffer.from(
                 userSavedData.codeVerifiedPhone,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
 
               // const params = {
               //   Message: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
@@ -953,7 +953,7 @@ exports.edit = (req, res, next) => {
           })
           .then((result) => {
             const userPhone = !!result.phone
-              ? Buffer.from(result.phone, "base64").toString("ascii")
+              ? Buffer.from(result.phone, "base64").toString("utf-8")
               : null;
             transporter.sendMail({
               to: result.email,
@@ -1029,7 +1029,7 @@ exports.sentEmailResetPassword = (req, res, next) => {
       const codeToResetPassword = Buffer.from(
         result.codeToResetPassword,
         "base64"
-      ).toString("ascii");
+      ).toString("utf-8");
       const showDate = `${result.dateToResetPassword.getFullYear()}-${
         result.dateToResetPassword.getMonth() + 1 < 10
           ? `0${result.dateToResetPassword.getMonth() + 1}`
@@ -1663,15 +1663,15 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
     })
     .then((userSavedData) => {
       const userName = Buffer.from(userSavedData.name, "base64").toString(
-        "ascii"
+        "utf-8"
       );
       const userSurname = Buffer.from(userSavedData.surname, "base64").toString(
-        "ascii"
+        "utf-8"
       );
       const codeToDelete = Buffer.from(
         userSavedData.codeDelete,
         "base64"
-      ).toString("ascii");
+      ).toString("utf-8");
       transporter.sendMail({
         to: userSavedData.email,
         from: MAIL_INFO,
@@ -1735,15 +1735,15 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
     })
     .then((userSavedData) => {
       const userName = Buffer.from(userSavedData.name, "base64").toString(
-        "ascii"
+        "utf-8"
       );
       const userSurname = Buffer.from(userSavedData.surname, "base64").toString(
-        "ascii"
+        "utf-8"
       );
       const codeToDelete = Buffer.from(
         userSavedData.codeVerifiedPhone,
         "base64"
-      ).toString("ascii");
+      ).toString("utf-8");
 
       const params = {
         Message: `Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}`,
@@ -1797,7 +1797,7 @@ exports.deleteUserAccount = (req, res, next) => {
     .select("_id codeDeleteDate codeDelete name surname email")
     .then((userData) => {
       const codeToDelete = Buffer.from(userData.codeDelete, "base64").toString(
-        "ascii"
+        "utf-8"
       );
       if (
         code.toUpperCase() === codeToDelete.toUpperCase() &&
@@ -2047,7 +2047,7 @@ exports.verifiedUserPhone = (req, res, next) => {
       const codeToVerified = Buffer.from(
         userData.codeVerifiedPhone,
         "base64"
-      ).toString("ascii");
+      ).toString("utf-8");
       if (
         code.toUpperCase() === codeToVerified.toUpperCase() &&
         userData.codeVerifiedPhoneDate > new Date()

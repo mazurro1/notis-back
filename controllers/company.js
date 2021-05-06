@@ -3,6 +3,7 @@ const CompanyUsersInformations = require("../models/companyUsersInformations");
 const CompanyAvailability = require("../models/companyAvailability");
 const Reserwation = require("../models/reserwation");
 const Geolocations = require("../models/geolocation");
+const RegisterCompany = require("../models/registerCompany");
 const Opinion = require("../models/opinion");
 const Report = require("../models/reports");
 const mongoose = require("mongoose");
@@ -15,6 +16,7 @@ require("dotenv").config();
 const io = require("../socket");
 const bcrypt = require("bcryptjs");
 const rp = require("request-promise");
+const Bir = require("bir1");
 
 const {
   AWS_ACCESS_KEY_ID_APP,
@@ -28,6 +30,7 @@ const {
   MAIL_INFO,
   MAIL_PASSWORD,
   GOOGLE_API_KEY,
+  GUS_USER_KEY,
 } = process.env;
 
 AWS.config.update({
@@ -53,6 +56,13 @@ const transporter = nodemailer.createTransport({
     pass: MAIL_PASSWORD,
   },
 });
+
+const getGUSInfo = async (nipCompany) => {
+  const bir = new Bir({ key: GUS_USER_KEY });
+  await bir.login();
+  const result = await bir.search({ nip: nipCompany });
+  return result;
+};
 
 function makeid(length) {
   var result = "";
@@ -91,16 +101,169 @@ function convertString(phrase) {
   // if there are other invalid chars, convert them into blank spaces
   str = str.replace(/[^a-z\d\s-]/gi, "");
   // convert multiple spaces and hyphens into one space
-  str = str.replace(/[\s-]+/g, " ");
+  // str = str.replace(/[\s-]+/g, " ");
   // trim string
-  str.replace(/^\s+|\s+$/g, "");
+  // str.replace(/^\s+|\s+$/g, "");
   // cut string
   str = str.substring(0, str.length <= maxLength ? str.length : maxLength);
   // add hyphens
-  str = str.replace(/\s/g, "-");
+  // str = str.replace(/\s/g, "-");
 
   return str;
 }
+
+const convertLinkString = (phrase) => {
+  const maxLength = 100;
+  let str = phrase.toLowerCase();
+
+  const charMapITems = [
+    {
+      old: "?",
+      new: "",
+    },
+    {
+      old: "@",
+      new: "",
+    },
+    {
+      old: "#",
+      new: "",
+    },
+    {
+      old: "$",
+      new: "",
+    },
+    {
+      old: "%",
+      new: "",
+    },
+    {
+      old: "^",
+      new: "",
+    },
+    {
+      old: "&",
+      new: "",
+    },
+    {
+      old: "*",
+      new: "",
+    },
+    {
+      old: "(",
+      new: "",
+    },
+    {
+      old: ")",
+      new: "",
+    },
+    {
+      old: ";",
+      new: "",
+    },
+    {
+      old: ":",
+      new: "",
+    },
+    {
+      old: "'",
+      new: "",
+    },
+    {
+      old: ",",
+      new: "",
+    },
+    {
+      old: ".",
+      new: "",
+    },
+    {
+      old: "/",
+      new: "",
+    },
+    {
+      old: "<",
+      new: "",
+    },
+    {
+      old: ">",
+      new: "",
+    },
+    {
+      old: "/",
+      new: "",
+    },
+    {
+      old: "`",
+      new: "",
+    },
+    {
+      old: "!",
+      new: "",
+    },
+    {
+      old: "=",
+      new: "",
+    },
+    {
+      old: "`",
+      new: "",
+    },
+    {
+      old: "ó",
+      new: "o",
+    },
+    {
+      old: "ę",
+      new: "e",
+    },
+    {
+      old: "ą",
+      new: "a",
+    },
+    {
+      old: "ś",
+      new: "s",
+    },
+    {
+      old: "ł",
+      new: "l",
+    },
+    {
+      old: "ż",
+      new: "z",
+    },
+    {
+      old: "ź",
+      new: "z",
+    },
+    {
+      old: "ć",
+      new: "c",
+    },
+    {
+      old: "ń",
+      new: "n",
+    },
+  ];
+
+  const newArrayString = str.split("");
+  const newStr = newArrayString.map((strItem) => {
+    const findInAll = charMapITems.find(
+      (itemVariable) => itemVariable.old.toLowerCase() === strItem.toLowerCase()
+    );
+    if (!!findInAll) {
+      return findInAll.new;
+    } else {
+      return strItem;
+    }
+  });
+  const convertedArray = newStr.join("");
+  str = convertedArray;
+  str = str.replace(/\s/g, "-");
+  str = str.substring(0, str.length <= maxLength ? str.length : maxLength);
+  return str;
+};
 
 const imageUpload = (path, buffer) => {
   const data = {
@@ -155,166 +318,234 @@ exports.registrationCompany = (req, res, next) => {
       if (!!!companyNameDoc) {
         return Company.findOne({ email: companyEmail })
           .select("_id email")
-          .then((companyDoc) => {
+          .then(async (companyDoc) => {
             if (!!!companyDoc) {
-              const codeToVerified = makeid(6);
+              const companyInfoByNip = await getGUSInfo(companyNip);
 
-              const codeRandom = Math.floor(
-                1000 + Math.random() * 9000
-              ).toString();
-
-              const hashedCodeToVerified = Buffer.from(
-                codeToVerified,
-                "utf-8"
-              ).toString("base64");
-
-              const hashedPhoneNumber = Buffer.from(
-                companyNumber,
-                "utf-8"
-              ).toString("base64");
-
-              const hashedAdress = Buffer.from(companyAdress, "utf-8").toString(
-                "base64"
-              );
-
-              const newOpeningDays = {
-                mon: {
-                  disabled: false,
-                  start: "10:00",
-                  end: "20:00",
-                },
-                tue: {
-                  disabled: false,
-                  start: "10:00",
-                  end: "20:00",
-                },
-                wed: {
-                  disabled: false,
-                  start: "10:00",
-                  end: "20:00",
-                },
-                thu: {
-                  disabled: false,
-                  start: "10:00",
-                  end: "20:00",
-                },
-                fri: {
-                  disabled: false,
-                  start: "10:00",
-                  end: "20:00",
-                },
-                sat: {
-                  disabled: true,
-                  start: "0:00",
-                  end: "0:00",
-                },
-                sun: {
-                  disabled: true,
-                  start: "0:00",
-                  end: "0:00",
-                },
-              };
-              const actualMonth = new Date().getMonth();
-              const pathCompanyName = encodeURI(companyName);
-              const adress = `${companyAdressCode} ${companyCity} ${companyAdress}`;
-
-              return Geolocations.findOne({
-                adress: convertString(adress.toLowerCase().trim()),
-              })
-                .then((geolocationData) => {
-                  if (!!geolocationData) {
-                    return {
-                      adress: geolocationData.adress,
-                      lat: geolocationData.lat,
-                      long: geolocationData.long,
-                    };
-                  } else {
-                    const url =
-                      "https://maps.googleapis.com/maps/api/geocode/json?address=" +
-                      adress +
-                      "&key=" +
-                      GOOGLE_API_KEY;
-
-                    return rp(url)
-                      .then((resultRp) => {
-                        if (!!resultRp) {
-                          const resultReq = JSON.parse(resultRp);
-                          const newgeolocation = new Geolocations({
-                            adress: convertString(adress.toLowerCase().trim()),
-                            lat: resultReq.results[0].geometry.location.lat,
-                            long: resultReq.results[0].geometry.location.lng,
-                          });
-                          newgeolocation.save();
-                          return {
-                            adress: adress.toLowerCase().trim(),
-                            lat: resultReq.results[0].geometry.location.lat,
-                            long: resultReq.results[0].geometry.location.lng,
-                          };
-                        } else {
-                          const error = new Error(
-                            "Błąd podczas pobierania geolokalizacji"
-                          );
-                          error.statusCode = 421;
-                          throw error;
-                        }
-                      })
-                      .catch((err) => {
-                        const error = new Error(
-                          "Nie znaleziono danej geolokalizacji"
-                        );
-                        error.statusCode = 442;
-                        throw error;
-                      });
-                  }
-                })
-                .then((resultGeolocation) => {
-                  const company = new Company({
-                    linkPath: pathCompanyName + codeRandom,
-                    email: companyEmail.toLowerCase(),
-                    name: companyName.toLowerCase(),
-                    phone: hashedPhoneNumber,
-                    city: companyCity,
-                    district: companyDiscrict,
-                    adress: hashedAdress,
-                    accountVerified: false,
-                    codeToVerified: hashedCodeToVerified,
-                    owner: ownerId,
-                    ownerData: {
-                      specialization: "Admin",
-                    },
-                    pauseCompany: true,
-                    allDataVerified: false,
-                    messangerAvaible: false,
-                    title: "",
-                    reservationEveryTime: 5,
-                    reservationMonthTime: 12,
-                    companyType: companyIndustries,
-                    openingDays: newOpeningDays,
+              if (!!companyInfoByNip) {
+                if (
+                  !!companyInfoByNip.nazwa &&
+                  !!companyInfoByNip.miejscowosc &&
+                  !!companyInfoByNip.kodPocztowy &&
+                  !!companyInfoByNip.ulica
+                ) {
+                  return RegisterCompany.countDocuments({
                     nip: companyNip,
-                    code: companyAdressCode,
-                    premium: new Date(new Date().setMonth(actualMonth + 3)),
-                    smsReserwationAvaible: false,
-                    smsNotifactionAvaible: false,
-                    smsCanceledAvaible: false,
-                    smsChangedAvaible: false,
-                    sms: 0,
-                    raportSMS: [],
-                    maps: {
-                      lat: resultGeolocation.lat,
-                      long: resultGeolocation.long,
-                    },
-                    notifactionNoSMS: true,
-                    notifactionNoPremium: true,
+                  }).then((resultFromNip) => {
+                    const hashedPhoneNumber = Buffer.from(
+                      companyNumber,
+                      "utf-8"
+                    ).toString("base64");
+                    return RegisterCompany.countDocuments({
+                      phone: hashedPhoneNumber,
+                    }).then((resultFromPhone) => {
+                      const dateCompanyToInvoice = {
+                        name: companyInfoByNip.nazwa,
+                        city: companyInfoByNip.miejscowosc,
+                        postalCode: companyInfoByNip.kodPocztowy,
+                        street: `${companyInfoByNip.ulica} ${
+                          !!companyInfoByNip.nrNieruchomosci
+                            ? companyInfoByNip.nrNieruchomosci
+                            : 1
+                        }${
+                          !!companyInfoByNip.nrLokalu
+                            ? `/${companyInfoByNip.nrLokalu}`
+                            : ""
+                        }`,
+                      };
+                      const codeToVerified = makeid(6);
+                      const codeRandom = Math.floor(
+                        1000000 + Math.random() * 9000000
+                      ).toString();
+
+                      const hashedCodeToVerified = Buffer.from(
+                        codeToVerified,
+                        "utf-8"
+                      ).toString("base64");
+
+                      const hashedAdress = Buffer.from(
+                        companyAdress,
+                        "utf-8"
+                      ).toString("base64");
+
+                      const newOpeningDays = {
+                        mon: {
+                          disabled: false,
+                          start: "10:00",
+                          end: "20:00",
+                        },
+                        tue: {
+                          disabled: false,
+                          start: "10:00",
+                          end: "20:00",
+                        },
+                        wed: {
+                          disabled: false,
+                          start: "10:00",
+                          end: "20:00",
+                        },
+                        thu: {
+                          disabled: false,
+                          start: "10:00",
+                          end: "20:00",
+                        },
+                        fri: {
+                          disabled: false,
+                          start: "10:00",
+                          end: "20:00",
+                        },
+                        sat: {
+                          disabled: true,
+                          start: "0:00",
+                          end: "0:00",
+                        },
+                        sun: {
+                          disabled: true,
+                          start: "0:00",
+                          end: "0:00",
+                        },
+                      };
+                      const actualMonth = new Date().getMonth();
+                      const pathCompanyName = encodeURI(
+                        convertLinkString(companyName)
+                      );
+                      const adress = `${companyAdressCode} ${companyCity} ${companyAdress}`;
+                      return Geolocations.findOne({
+                        adress: convertString(adress.toLowerCase().trim()),
+                      })
+                        .then((geolocationData) => {
+                          if (!!geolocationData) {
+                            return {
+                              adress: geolocationData.adress,
+                              lat: geolocationData.lat,
+                              long: geolocationData.long,
+                            };
+                          } else {
+                            const url =
+                              "https://maps.googleapis.com/maps/api/geocode/json?address=" +
+                              convertString(adress.toLowerCase().trim()) +
+                              "&key=" +
+                              GOOGLE_API_KEY;
+
+                            return rp(url)
+                              .then((resultRp) => {
+                                if (!!resultRp) {
+                                  const resultReq = JSON.parse(resultRp);
+                                  const newgeolocation = new Geolocations({
+                                    adress: convertString(
+                                      adress.toLowerCase().trim()
+                                    ),
+                                    lat:
+                                      resultReq.results[0].geometry.location
+                                        .lat,
+                                    long:
+                                      resultReq.results[0].geometry.location
+                                        .lng,
+                                  });
+                                  newgeolocation.save();
+                                  return {
+                                    adress: adress.toLowerCase().trim(),
+                                    lat:
+                                      resultReq.results[0].geometry.location
+                                        .lat,
+                                    long:
+                                      resultReq.results[0].geometry.location
+                                        .lng,
+                                  };
+                                } else {
+                                  const error = new Error(
+                                    "Błąd podczas pobierania geolokalizacji"
+                                  );
+                                  error.statusCode = 421;
+                                  throw error;
+                                }
+                              })
+                              .catch((err) => {
+                                console.log(err);
+                                const error = new Error(
+                                  "Nie znaleziono danej geolokalizacji"
+                                );
+                                error.statusCode = 442;
+                                throw error;
+                              });
+                          }
+                        })
+                        .then((resultGeolocation) => {
+                          const company = new Company({
+                            linkPath: pathCompanyName + codeRandom,
+                            email: companyEmail.toLowerCase(),
+                            name: companyName.toLowerCase(),
+                            phone: hashedPhoneNumber,
+                            city: companyCity,
+                            district: companyDiscrict,
+                            adress: hashedAdress,
+                            accountVerified: false,
+                            codeToVerified: hashedCodeToVerified,
+                            owner: ownerId,
+                            ownerData: {
+                              specialization: "Admin",
+                            },
+                            pauseCompany: true,
+                            allDataVerified: false,
+                            messangerAvaible: false,
+                            title: "",
+                            reservationEveryTime: 5,
+                            reservationMonthTime: 12,
+                            companyType: companyIndustries,
+                            openingDays: newOpeningDays,
+                            nip: companyNip,
+                            code: companyAdressCode,
+                            premium:
+                              !!resultFromNip || !!resultFromPhone
+                                ? new Date()
+                                : new Date(
+                                    new Date().setMonth(actualMonth + 3)
+                                  ),
+                            smsReserwationAvaible: false,
+                            smsNotifactionAvaible: false,
+                            smsCanceledAvaible: false,
+                            smsChangedAvaible: false,
+                            sms: 0,
+                            raportSMS: [],
+                            maps: {
+                              lat: resultGeolocation.lat,
+                              long: resultGeolocation.long,
+                            },
+                            notifactionNoSMS: true,
+                            notifactionNoPremium: true,
+                            dataToInvoice: dateCompanyToInvoice,
+                          });
+
+                          if (!!!resultFromNip || !!!resultFromPhone) {
+                            const newRegisterCompany = new RegisterCompany({
+                              nip: company.nip,
+                              phone: company.phone,
+                              companyId: company._id,
+                            });
+                            newRegisterCompany.save();
+                          }
+                          return company.save();
+                        })
+                        .catch((err) => {
+                          if (!err.statusCode) {
+                            err.statusCode = 501;
+                            err.message =
+                              "Błąd podczas pobierania geolokalizacji.";
+                          }
+                          next(err);
+                        });
+                    });
                   });
-                  return company.save();
-                })
-                .catch((err) => {
-                  if (!err.statusCode) {
-                    err.statusCode = 501;
-                    err.message = "Błąd podczas pobierania geolokalizacji.";
-                  }
-                  next(err);
-                });
+                } else {
+                  const error = new Error("Nieprawidłowy numer NIP.");
+                  error.statusCode = 443;
+                  throw error;
+                }
+              } else {
+                const error = new Error("Nieprawidłowy numer NIP.");
+                error.statusCode = 500;
+                throw error;
+              }
             } else {
               const error = new Error("Email zajęty.");
               error.statusCode = 500;
@@ -350,7 +581,7 @@ exports.registrationCompany = (req, res, next) => {
             const unhashedCodeToVerified = Buffer.from(
               result.codeToVerified,
               "base64"
-            ).toString("ascii");
+            ).toString("utf-8");
             transporter.sendMail({
               to: result.email,
               from: MAIL_INFO,
@@ -397,7 +628,7 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
       const unhashedCodeToVerified = Buffer.from(
         companyData.codeToVerified,
         "base64"
-      ).toString("ascii");
+      ).toString("utf-8");
       transporter.sendMail({
         to: companyData.email,
         from: MAIL_INFO,
@@ -439,7 +670,7 @@ exports.veryfiedCompanyEmail = (req, res, next) => {
         const unhashedCodeToVerified = Buffer.from(
           companyDoc.codeToVerified,
           "base64"
-        ).toString("ascii");
+        ).toString("utf-8");
 
         if (unhashedCodeToVerified === codeSent) {
           companyDoc.codeToVerified = null;
@@ -506,9 +737,17 @@ exports.getCompanyData = (req, res, next) => {
           })
           .limit(10)
           .sort({ createdAt: -1 })
-          .then((resultOpinions) => {
+          .then(async (resultOpinions) => {
             const companyOpinions = !!resultOpinions ? resultOpinions : [];
             let userHasPermission = userId == companyDoc.owner._id;
+            const userIsAdmin = userId == companyDoc.owner._id;
+            const dataGUS = !!userIsAdmin
+              ? {
+                  dataToInvoice: !!companyDoc.dataToInvoice
+                    ? companyDoc.dataToInvoice
+                    : null,
+                }
+              : {};
             if (!!!userHasPermission) {
               const workerSelected = companyDoc.workers.find(
                 (worker) => worker.user._id == userId
@@ -533,22 +772,22 @@ exports.getCompanyData = (req, res, next) => {
               const unhashedOwnerName = Buffer.from(
                 companyDoc.owner.name,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
 
               const unhashedOwnerSurname = Buffer.from(
                 companyDoc.owner.surname,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
 
               const unhashedPhone = Buffer.from(
                 companyDoc.phone,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
 
               const unhashedAdress = Buffer.from(
                 companyDoc.adress,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
 
               let validCompanySMS = 0;
               if (!!companyDoc.sms) {
@@ -560,11 +799,11 @@ exports.getCompanyData = (req, res, next) => {
                 const unhashedName = Buffer.from(
                   item.user.name,
                   "base64"
-                ).toString("ascii");
+                ).toString("utf-8");
                 const unhashedSurname = Buffer.from(
                   item.user.surname,
                   "base64"
-                ).toString("ascii");
+                ).toString("utf-8");
                 const unhashedUserProps = {
                   email: item.email,
                   name: unhashedName,
@@ -659,6 +898,8 @@ exports.getCompanyData = (req, res, next) => {
                 smsChangedAvaible: !!dataCompany.smsChangedAvaible
                   ? dataCompany.smsChangedAvaible
                   : false,
+                ...dataGUS,
+                nip: !!dataCompany.nip ? dataCompany.nip : null,
               };
 
               res.status(201).json({
@@ -863,7 +1104,7 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
   const codeToActive = req.body.codeToActive;
 
   const unhashedWorkerEmail = Buffer.from(workerEmail, "base64").toString(
-    "ascii"
+    "utf-8"
   );
 
   const errors = validationResult(req);
@@ -884,7 +1125,7 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
         const unhashedCodeFromClient = Buffer.from(
           codeToActive,
           "base64"
-        ).toString("ascii");
+        ).toString("utf-8");
 
         const selectWorker = companyDoc.workers.find(
           (item) => item.email === unhashedWorkerEmail
@@ -893,7 +1134,7 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
           const unhashedCodeFromBase = Buffer.from(
             selectWorker.codeToActive,
             "base64"
-          ).toString("ascii");
+          ).toString("utf-8");
           if (unhashedCodeFromBase === unhashedCodeFromClient) {
             return Company.updateOne(
               {
@@ -1360,32 +1601,32 @@ exports.companyPath = (req, res, next) => {
             const unhashedOwnerName = Buffer.from(
               resultCompanyDoc.owner.name,
               "base64"
-            ).toString("ascii");
+            ).toString("utf-8");
 
             const unhashedOwnerSurname = Buffer.from(
               resultCompanyDoc.owner.surname,
               "base64"
-            ).toString("ascii");
+            ).toString("utf-8");
 
             const unhashedPhone = Buffer.from(
               resultCompanyDoc.phone,
               "base64"
-            ).toString("ascii");
+            ).toString("utf-8");
 
             const unhashedAdress = Buffer.from(
               resultCompanyDoc.adress,
               "base64"
-            ).toString("ascii");
+            ).toString("utf-8");
 
             const mapedWorkers = dataCompany.workers.map((item) => {
               const unhashedName = Buffer.from(
                 item.user.name,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
               const unhashedSurname = Buffer.from(
                 item.user.surname,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
               const unhashedUserProps = {
                 email: item.email,
                 name: unhashedName,
@@ -1567,7 +1808,7 @@ exports.allCompanys = (req, res, next) => {
           const unhashedAdress = Buffer.from(
             itemCompany.adress,
             "base64"
-          ).toString("ascii");
+          ).toString("utf-8");
 
           const dataToSent = {
             adress: unhashedAdress,
@@ -1697,7 +1938,7 @@ exports.allCompanysOfType = (req, res, next) => {
           const unhashedAdress = Buffer.from(
             itemCompany.adress,
             "base64"
-          ).toString("ascii");
+          ).toString("utf-8");
 
           const dataToSent = {
             adress: unhashedAdress,
@@ -2288,7 +2529,7 @@ exports.companySettingsPatch = (req, res, next) => {
     })
     .then((companyDoc) => {
       const unhashedAdress = Buffer.from(companyDoc.adress, "base64").toString(
-        "ascii"
+        "utf-8"
       );
       const adressToMap = convertString(
         `${
@@ -4758,7 +4999,7 @@ exports.companySentCodeDeleteCompany = (req, res, next) => {
       const codeToDelete = Buffer.from(
         companyData.codeDelete,
         "base64"
-      ).toString("ascii");
+      ).toString("utf-8");
       transporter.sendMail({
         to: companyData.email,
         from: MAIL_INFO,
@@ -4810,7 +5051,7 @@ exports.companyDeleteCompany = (req, res, next) => {
       const codeToDelete = Buffer.from(
         resultCompanyDoc.codeDelete,
         "base64"
-      ).toString("ascii");
+      ).toString("utf-8");
       if (
         codeToDelete.toUpperCase() === code.toUpperCase() &&
         resultCompanyDoc.codeDeleteDate > new Date()
@@ -5498,7 +5739,7 @@ exports.companySMSSendClients = (req, res, next) => {
               const userPhone = Buffer.from(
                 selectedPhoneNumber,
                 "base64"
-              ).toString("ascii");
+              ).toString("utf-8");
 
               const validComapnyName =
                 companyDoc.name.length > 32
@@ -5637,7 +5878,7 @@ exports.getCompanyMarker = (req, res, next) => {
         const unhashedAdress = Buffer.from(
           companyData.adress,
           "base64"
-        ).toString("ascii");
+        ).toString("utf-8");
 
         const dataToSent = {
           adress: unhashedAdress,
@@ -5733,6 +5974,52 @@ exports.companyReport = (req, res, next) => {
       res.status(201).json({
         message: "Zgłoszono firmę",
       });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyAddLink = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const pathValue = req.body.pathValue;
+  const pathCompanyName = encodeURI(convertLinkString(pathValue));
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    linkPath: pathCompanyName,
+  })
+    .select("_id pathValue")
+    .then((companyData) => {
+      if (!!!companyData) {
+        Company.updateOne(
+          {
+            _id: companyId,
+          },
+          {
+            $set: {
+              linkPath: pathCompanyName,
+            },
+          }
+        ).then(() => {
+          res.status(201).json({
+            message: "Zaktualizowano link firmowy",
+          });
+        });
+      } else {
+        const error = new Error("Podany link jest zajęty");
+        error.statusCode = 440;
+        throw error;
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {

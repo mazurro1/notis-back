@@ -307,7 +307,7 @@ for (let i = 0; i < 24; i++) {
                     const userPhone = Buffer.from(
                       selectedPhoneNumber,
                       "base64"
-                    ).toString("ascii");
+                    ).toString("utf-8");
 
                     const validComapnyName =
                       itemReserwation.company.name.length > 32
@@ -571,7 +571,10 @@ schedule.scheduleJob(`5 3 * * *`, async () => {
     day: actualDate.getDate() - 1,
     link: null,
   })
-    .populate("companyId", "_id email name city district adress code nip")
+    .populate(
+      "companyId",
+      "_id email name city district adress code nip dataToInvoice"
+    )
     .then(async (newInvoices) => {
       const bulkArrayToUpdateInvoices = [];
       for (const [indexInvoice, resultNewInvoice] of newInvoices.entries()) {
@@ -579,7 +582,31 @@ schedule.scheduleJob(`5 3 * * *`, async () => {
           const unhashedAdress = Buffer.from(
             resultNewInvoice.companyId.adress,
             "base64"
-          ).toString("ascii");
+          ).toString("utf-8");
+          let shipingCompanyDate = {};
+          if (!!resultNewInvoice.companyId.dataToInvoice) {
+            shipingCompanyDate = {
+              name: resultNewInvoice.companyId.dataToInvoice.name,
+              address: resultNewInvoice.companyId.dataToInvoice.street,
+              code: resultNewInvoice.companyId.dataToInvoice.postalCode,
+              city: resultNewInvoice.companyId.dataToInvoice.city,
+              nip: !!resultNewInvoice.companyId.nip
+                ? resultNewInvoice.companyId.nip
+                : "000000000",
+            };
+          } else {
+            shipingCompanyDate = {
+              name: resultNewInvoice.companyId.name,
+              address: unhashedAdress,
+              code: !!resultNewInvoice.companyId.code
+                ? resultNewInvoice.companyId.code
+                : "00-000",
+              city: resultNewInvoice.companyId.city,
+              nip: !!resultNewInvoice.companyId.nip
+                ? resultNewInvoice.companyId.nip
+                : "000000000",
+            };
+          }
           const mapBoughtItems = resultNewInvoice.productsInfo.map(
             (boughtItem) => {
               return {
