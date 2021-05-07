@@ -420,4 +420,19 @@ router.post(
   company.companyAddLink
 );
 
+router.post(
+  "/company-update-nip",
+  isAuth,
+  [body("companyId")],
+  [body("nipValue").isLength(10)],
+  company.companyUpdateNip
+);
+
+router.post(
+  "/company-update-nip-info",
+  isAuth,
+  [body("companyId")],
+  company.companyUpdateNipInfo
+);
+
 module.exports = router;

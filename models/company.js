@@ -723,6 +723,10 @@ const companySchema = new Schema(
         required: false,
       },
     },
+    dateUpdateNip: {
+      type: Date,
+      required: false,
+    },
   },
   {
     timestamps: true,
