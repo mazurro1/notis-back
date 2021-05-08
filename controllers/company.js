@@ -6263,3 +6263,96 @@ exports.companyUpdateNipInfo = (req, res, next) => {
       next(err);
     });
 };
+
+exports.companyUpdateNip = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const nipValue = req.body.nipValue;
+  const userId = req.userId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    owner: userId,
+  })
+    .select("_id nip dataToInvoice dateUpdateNip phone")
+    .then(async (companyData) => {
+      if (!!companyData) {
+        const validDateUpdateNip = !!companyData.dateUpdateNip
+          ? new Date(companyData.dateUpdateNip)
+          : new Date();
+        if (validDateUpdateNip <= new Date()) {
+          const companyInfoByNip = await getGUSInfo(nipValue);
+          if (!!companyInfoByNip) {
+            if (
+              !!companyInfoByNip.nazwa &&
+              !!companyInfoByNip.miejscowosc &&
+              !!companyInfoByNip.kodPocztowy &&
+              !!companyInfoByNip.ulica
+            ) {
+              const dateCompanyToInvoice = {
+                name: companyInfoByNip.nazwa,
+                city: companyInfoByNip.miejscowosc,
+                postalCode: companyInfoByNip.kodPocztowy,
+                street: `${companyInfoByNip.ulica} ${
+                  !!companyInfoByNip.nrNieruchomosci
+                    ? companyInfoByNip.nrNieruchomosci
+                    : 1
+                }${
+                  !!companyInfoByNip.nrLokalu
+                    ? `/${companyInfoByNip.nrLokalu}`
+                    : ""
+                }`,
+              };
+              companyData.dataToInvoice = dateCompanyToInvoice;
+              companyData.nip = nipValue;
+              companyData.dateUpdateNip = new Date(
+                new Date().setDate(new Date().getDate() + 1)
+              );
+              return companyData.save();
+            } else {
+              const error = new Error("Niepoprawny nip");
+              error.statusCode = 440;
+              throw error;
+            }
+          } else {
+            const error = new Error("Niepoprawny nip");
+            error.statusCode = 440;
+            throw error;
+          }
+        } else {
+          const error = new Error("Nie można teraz zaktualizować danych nip");
+          error.statusCode = 441;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((resultSaveCompany) => {
+      const newRegisterCompany = new RegisterCompany({
+        nip: resultSaveCompany.nip,
+        phone: resultSaveCompany.phone,
+        companyId: resultSaveCompany._id,
+      });
+      newRegisterCompany.save();
+      res.status(201).json({
+        nip: resultSaveCompany.nip,
+        dataToInvoice: resultSaveCompany.dataToInvoice,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};

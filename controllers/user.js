@@ -2118,3 +2118,51 @@ exports.saveNotificationEndpoint = (req, res, next) => {
       next(err);
     });
 };
+
+exports.userUpdateDefaultCompany = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const userId = req.userId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id company companys")
+    .then((userData) => {
+      if (!!userData) {
+        const isInCompanys = userData.companys.some(
+          (item) => item == companyId
+        );
+        if (isInCompanys) {
+          userData.company = companyId;
+          return userData.save();
+        } else {
+          const error = new Error("Brak firmy");
+          error.statusCode = 422;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Zaktualizowano domyślną firmę",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};

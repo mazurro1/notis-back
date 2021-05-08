@@ -242,4 +242,11 @@ router.post(
   user.saveNotificationEndpoint
 );
 
+router.post(
+  "/user-update-default-company",
+  isAuth,
+  [body("companyId")],
+  user.userUpdateDefaultCompany
+);
+
 module.exports = router;
