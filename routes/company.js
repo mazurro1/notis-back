@@ -173,6 +173,8 @@ router.patch(
   [body("companyId")],
   [body("year")],
   [body("month")],
+  [body("ownerId")],
+
   company.companyOwnerNoConstData
 );
 

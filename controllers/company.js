@@ -908,7 +908,7 @@ exports.getCompanyData = (req, res, next) => {
               });
             } else {
               const error = new Error("Brak uprawnień.");
-              error.statusCode = 401;
+              error.statusCode = 440;
               throw error;
             }
           });
@@ -955,8 +955,6 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
           User.findOne({
             email: emailWorker,
             accountVerified: true,
-            hasCompany: false,
-            company: null,
           })
             .select("email")
             .then((userData) => {
@@ -1177,10 +1175,11 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
       return User.findOne({
         email: unhashedWorkerEmail,
       })
-        .select("email company hasCompany")
+        .select("email companys hasCompany")
         .then((userDocUpdate) => {
           if (userDocUpdate) {
-            userDocUpdate.company = result._id;
+            // userDocUpdate.company = result._id;
+            userDocUpdate.companys = [...userDocUpdate.companys, result._id];
             userDocUpdate.hasCompany = true;
             return userDocUpdate.save();
           } else {
@@ -2739,19 +2738,19 @@ exports.companyWorkersSaveProps = (req, res, next) => {
     _id: companyId,
   })
     .select(
-      "_id workers._id workers.specialization workers.constantWorkingHours workers.servicesCategory workers.permissions owner ownerData.specialization ownerData.constantWorkingHours ownerData.servicesCategory ownerData.permissions"
+      "_id workers._id workers.user workers.specialization workers.constantWorkingHours workers.servicesCategory workers.permissions owner ownerData.specialization ownerData.constantWorkingHours ownerData.servicesCategory ownerData.permissions"
     )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
         if (!hasPermission) {
-          const selectedWorker = resultCompanyDoc.workers.find(
-            (worker) => worker.user == userId
-          );
+          const selectedWorker = resultCompanyDoc.workers.find((worker) => {
+            return worker.user == userId;
+          });
           if (!!selectedWorker) {
-            hasPermission = selectedWorker.permissions.some(
-              (perm) => perm === 4
-            );
+            hasPermission = selectedWorker.permissions.some((perm) => {
+              return perm === 4;
+            });
           }
         }
         if (hasPermission) {
@@ -2980,6 +2979,7 @@ exports.companyOwnerNoConstData = (req, res, next) => {
   const companyId = req.body.companyId;
   const year = req.body.year;
   const month = req.body.month;
+  const ownerId = req.body.ownerId;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -2991,7 +2991,7 @@ exports.companyOwnerNoConstData = (req, res, next) => {
     {
       $match: {
         _id: mongoose.Types.ObjectId(companyId),
-        owner: mongoose.Types.ObjectId(userId),
+        owner: mongoose.Types.ObjectId(ownerId),
       },
     },
     { $unwind: "$ownerData" },
@@ -3019,7 +3019,7 @@ exports.companyOwnerNoConstData = (req, res, next) => {
   ])
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
-        let hasPermission = resultCompanyDoc[0].owner == userId;
+        let hasPermission = resultCompanyDoc[0].owner == ownerId;
         if (hasPermission) {
           return resultCompanyDoc;
         } else {
@@ -3059,6 +3059,7 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
   const dayPlus = new Date(dateEnd.setDate(dateEnd.getDate() + 1));
 
   const validIsOwner = workerId === "owner" ? userId : workerId;
+
   let bulkArrayToUpdate = [];
 
   const errors = validationResult(req);
@@ -3088,7 +3089,7 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
               $and: [
                 {
                   $eq: [
-                    "$$workerFirstFilter._id",
+                    "$$workerFirstFilter.user",
                     mongoose.Types.ObjectId(validIsOwner),
                   ],
                 },
@@ -3149,11 +3150,8 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
         const resultCompanyDoc = companyDoc[0];
         let hasPermission = resultCompanyDoc.owner == userId;
         if (!hasPermission) {
-          const selectedWorker = resultCompanyDoc.workers.find(
-            (worker) => worker.user == userId
-          );
-          if (!!selectedWorker) {
-            hasPermission = selectedWorker.permissions.some(
+          if (!!resultCompanyDoc.workers.permissions) {
+            hasPermission = resultCompanyDoc.workers.permissions.some(
               (perm) => perm === 4
             );
           }
@@ -3202,7 +3200,7 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
               updateOne: {
                 filter: {
                   _id: companyId,
-                  "workers._id": workerId,
+                  "workers._id": companyDoc.workers._id,
                 },
                 update: {
                   $pull: {
@@ -3238,7 +3236,7 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
           updateOne: {
             filter: {
               _id: companyId,
-              "workers._id": workerId,
+              "workers.user": workerId,
             },
             update: {
               $addToSet: {
@@ -3283,7 +3281,7 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
                   $and: [
                     {
                       $eq: [
-                        "$$workerFirstFilter._id",
+                        "$$workerFirstFilter.user",
                         mongoose.Types.ObjectId(validIsOwner),
                       ],
                     },
@@ -4576,10 +4574,22 @@ exports.companyAddStamp = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id owner companyStamps")
+    .select(
+      "_id owner companyStamps workers._id workers.user workers.permissions"
+    )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 3
+            );
+          }
+        }
         if (hasPermission) {
           return resultCompanyDoc;
         } else {
@@ -4761,10 +4771,20 @@ exports.companyUpdateShopStore = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id owner shopStore")
+    .select("_id owner shopStore workers._id workers.user workers.permissions")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 7
+            );
+          }
+        }
         if (hasPermission) {
           return resultCompanyDoc;
         } else {

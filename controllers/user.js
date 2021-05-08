@@ -148,6 +148,8 @@ exports.registration = (req, res, next) => {
                 codeToVerified: hashedCodeToVerified,
                 hasPhone: true,
                 hasCompany: false,
+                company: null,
+                companys: [],
                 phoneVerified: false,
                 stamps: [],
                 alerts: [],
@@ -227,6 +229,10 @@ exports.login = (req, res, next) => {
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "company",
+      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
+    )
+    .populate(
+      "companys",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .populate(
@@ -311,6 +317,7 @@ exports.login = (req, res, next) => {
               accountVerified: userWithToken.accountVerified,
               hasCompany: userWithToken.hasCompany,
               company: userWithToken.company,
+              companys: userWithToken.companys,
               alerts: userWithToken.alerts,
               alertActiveCount: !!userWithToken.alertActiveCount
                 ? userWithToken.alertActiveCount
@@ -642,10 +649,6 @@ exports.getMoreAlerts = (req, res, next) => {
   })
     .select("alerts _id")
     .slice("alerts", [10 * page, 10])
-    .populate(
-      "company",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions"
-    )
     .populate({
       path: "alerts.reserwationId",
       select:
@@ -706,6 +709,10 @@ exports.autoLogin = (req, res, next) => {
     )
     .populate(
       "company",
+      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
+    )
+    .populate(
+      "companys",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .populate({
@@ -774,6 +781,7 @@ exports.autoLogin = (req, res, next) => {
           userSurname: userSurname,
           hasCompany: user.hasCompany,
           company: user.company,
+          companys: user.companys,
           alerts: user.alerts,
           alertActiveCount: validUserActiveCount,
           imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
@@ -1162,13 +1170,12 @@ exports.addCompanyId = (req, res, next) => {
 
   User.findOne({
     _id: userId,
-    company: null,
-    hasCompany: false,
   })
-    .select("_id company hasCompany email")
+    .select("_id company companys hasCompany email")
     .then((user) => {
       if (!!user) {
-        user.company = companyId;
+        // user.company = companyId;
+        user.companys = [...user.companys, companyId];
         user.hasCompany = true;
         return user.save();
       } else {
@@ -1391,6 +1398,7 @@ exports.loginFacebookNew = (req, res, next) => {
                   // imageOther: !!picture ? picture.data.url : "",
                   hasCompany: false,
                   company: null,
+                  companys: [],
                   phoneVerified: false,
                   stamps: [],
                   alerts: [],
@@ -1580,6 +1588,7 @@ exports.loginGoogle = (req, res, next) => {
                   // imageOther: !!picture ? picture : "",
                   hasCompany: false,
                   company: null,
+                  companys: [],
                   phoneVerified: false,
                   stamps: [],
                   alerts: [],
