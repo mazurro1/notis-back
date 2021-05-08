@@ -316,7 +316,11 @@ exports.login = (req, res, next) => {
               token: userWithToken.loginToken,
               accountVerified: userWithToken.accountVerified,
               hasCompany: userWithToken.hasCompany,
-              company: userWithToken.company,
+              company: !!userWithToken.company
+                ? userWithToken.company
+                : userWithToken.companys.length > 0
+                ? userWithToken.companys[0]
+                : null,
               companys: userWithToken.companys,
               alerts: userWithToken.alerts,
               alertActiveCount: !!userWithToken.alertActiveCount
@@ -538,6 +542,7 @@ exports.veryfiedEmail = (req, res, next) => {
           user.accountVerified = true;
           user.hasCompany = false;
           user.company = null;
+          user.companys = [];
           return user.save();
         } else {
           res.status(403).json({
@@ -780,7 +785,11 @@ exports.autoLogin = (req, res, next) => {
           userName: userName,
           userSurname: userSurname,
           hasCompany: user.hasCompany,
-          company: user.company,
+          company: !!user.company
+            ? user.company
+            : user.companys.length > 0
+            ? user.companys[0]
+            : null,
           companys: user.companys,
           alerts: user.alerts,
           alertActiveCount: validUserActiveCount,
@@ -1151,54 +1160,6 @@ exports.resetPassword = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd serwera";
-      }
-      next(err);
-    });
-};
-
-exports.addCompanyId = (req, res, next) => {
-  const userId = req.userId;
-  const companyId = req.body.companyId;
-
-  const errors = validationResult(req);
-
-  if (!errors.isEmpty()) {
-    const error = new Error("Validation faild entered data is incorrect.");
-    error.statusCode = 422;
-    throw error;
-  }
-
-  User.findOne({
-    _id: userId,
-  })
-    .select("_id company companys hasCompany email")
-    .then((user) => {
-      if (!!user) {
-        // user.company = companyId;
-        user.companys = [...user.companys, companyId];
-        user.hasCompany = true;
-        return user.save();
-      } else {
-        const error = new Error("Brak użytkownika.");
-        error.statusCode = 502;
-        throw error;
-      }
-    })
-    .then((result) => {
-      transporter.sendMail({
-        to: result.email,
-        from: MAIL_INFO,
-        subject: "Tworzenie konta zakończone powodzeniem",
-        html: `<h1>Dodano do firmy!</h1>`,
-      });
-      res.status(201).json({
-        message: "Dodano firmę użytkownikowi",
-      });
-    })
-    .catch((err) => {
-      if (!err.statusCode) {
-        err.statusCode = 501;
-        err.message = "Błąd podczas dodawania firmy.";
       }
       next(err);
     });
@@ -1648,22 +1609,29 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
 
   User.findOne({
     _id: userId,
-    company: null,
     hasCompany: false,
   })
-    .select("_id codeDeleteDate codeDelete name surname email")
+    .select("_id codeDeleteDate codeDelete name surname email companys")
     .then((resultUserDoc) => {
       if (!!resultUserDoc) {
-        const randomCode = makeid(10);
-        const dateDeleteCompany = new Date(
-          new Date().setMinutes(new Date().getMinutes() + 30)
-        );
-        const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
-          "base64"
-        );
-        resultUserDoc.codeDeleteDate = dateDeleteCompany;
-        resultUserDoc.codeDelete = hashedCodeToDelete;
-        return resultUserDoc.save();
+        if (resultUserDoc.companys.length === 0) {
+          const randomCode = makeid(10);
+          const dateDeleteCompany = new Date(
+            new Date().setMinutes(new Date().getMinutes() + 30)
+          );
+          const hashedCodeToDelete = Buffer.from(randomCode, "utf-8").toString(
+            "base64"
+          );
+          resultUserDoc.codeDeleteDate = dateDeleteCompany;
+          resultUserDoc.codeDelete = hashedCodeToDelete;
+          return resultUserDoc.save();
+        } else {
+          const error = new Error(
+            "Nie można usunąć konta, które przynależy do działalności."
+          );
+          error.statusCode = 422;
+          throw error;
+        }
       } else {
         const error = new Error("Brak użytkownika.");
         error.statusCode = 422;
@@ -1802,19 +1770,34 @@ exports.deleteUserAccount = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  User.findOne({ _id: userId, company: null, hasCompany: false })
-    .select("_id codeDeleteDate codeDelete name surname email")
+  User.findOne({ _id: userId, hasCompany: false })
+    .select("_id codeDeleteDate codeDelete name surname email companys")
     .then((userData) => {
-      const codeToDelete = Buffer.from(userData.codeDelete, "base64").toString(
-        "utf-8"
-      );
-      if (
-        code.toUpperCase() === codeToDelete.toUpperCase() &&
-        userData.codeDeleteDate > new Date()
-      ) {
-        return true;
+      if (!!userData) {
+        if (userData.companys.length === 0) {
+          const codeToDelete = Buffer.from(
+            userData.codeDelete,
+            "base64"
+          ).toString("utf-8");
+          if (
+            code.toUpperCase() === codeToDelete.toUpperCase() &&
+            userData.codeDeleteDate > new Date()
+          ) {
+            return true;
+          } else {
+            const error = new Error("Błędny kod.");
+            error.statusCode = 422;
+            throw error;
+          }
+        } else {
+          const error = new Error(
+            "Nie można usunąć konta, które przynależy do działalności."
+          );
+          error.statusCode = 422;
+          throw error;
+        }
       } else {
-        const error = new Error("Błędny kod.");
+        const error = new Error("Brak użytkownika.");
         error.statusCode = 422;
         throw error;
       }

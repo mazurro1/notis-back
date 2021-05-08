@@ -461,7 +461,6 @@ exports.registrationCompany = (req, res, next) => {
                                 }
                               })
                               .catch((err) => {
-                                console.log(err);
                                 const error = new Error(
                                   "Nie znaleziono danej geolokalizacji"
                                 );
@@ -557,13 +556,15 @@ exports.registrationCompany = (req, res, next) => {
             return User.updateOne(
               {
                 _id: ownerId,
-                company: null,
                 hasCompany: false,
               },
               {
                 $set: {
                   company: result._id.toString(),
                   hasCompany: true,
+                },
+                $addToSet: {
+                  companys: result._id,
                 },
               }
             )
@@ -1175,12 +1176,11 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
       return User.findOne({
         email: unhashedWorkerEmail,
       })
-        .select("email companys hasCompany")
+        .select("email companys")
         .then((userDocUpdate) => {
           if (userDocUpdate) {
             // userDocUpdate.company = result._id;
             userDocUpdate.companys = [...userDocUpdate.companys, result._id];
-            userDocUpdate.hasCompany = true;
             return userDocUpdate.save();
           } else {
             const error = new Error(
@@ -1302,10 +1302,9 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
       return User.findOne({
         _id: workerUserId,
       })
-        .select("email hasCompany company _id")
+        .select("email company _id")
         .then((userDoc) => {
           if (!!userDoc) {
-            userDoc.hasCompany = false;
             userDoc.company = null;
             return userDoc.save();
           } else {
@@ -5108,6 +5107,9 @@ exports.companyDeleteCompany = (req, res, next) => {
               hasCompany: false,
               company: null,
             },
+            $pull: {
+              companys: companyId,
+            },
           },
         },
       });
@@ -5118,8 +5120,10 @@ exports.companyDeleteCompany = (req, res, next) => {
             filter: { _id: worker.user },
             update: {
               $set: {
-                hasCompany: false,
                 company: null,
+              },
+              $pull: {
+                companys: companyId,
               },
             },
           },
@@ -5458,6 +5462,9 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
               hasCompany: false,
               company: null,
             },
+            $pull: {
+              companys: companyId,
+            },
           },
         },
       });
@@ -5469,8 +5476,10 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
             },
             update: {
               $set: {
-                hasCompany: false,
                 company: null,
+              },
+              $pull: {
+                companys: companyId,
               },
             },
           },

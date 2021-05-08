@@ -163,13 +163,6 @@ router.post(
 );
 
 router.post(
-  "/add-company",
-  isAuth,
-  [body("companyId").trim().isLength({ min: 5 })],
-  user.addCompanyId
-);
-
-router.post(
   "/reset-password",
   [body("email").isEmail()],
   [body("password").trim().isLength({ min: 5 })],
