@@ -339,6 +339,10 @@ exports.registrationCompany = (req, res, next) => {
                     return RegisterCompany.countDocuments({
                       phone: hashedPhoneNumber,
                     }).then((resultFromPhone) => {
+                      const maxCountValid =
+                        resultFromNip >= resultFromPhone
+                          ? resultFromNip
+                          : resultFromPhone;
                       const dateCompanyToInvoice = {
                         name: companyInfoByNip.nazwa,
                         city: companyInfoByNip.miejscowosc,
@@ -406,6 +410,7 @@ exports.registrationCompany = (req, res, next) => {
                         },
                       };
                       const actualMonth = new Date().getMonth();
+                      const actualDate = new Date().getDate();
                       const pathCompanyName = encodeURI(
                         convertLinkString(companyName)
                       );
@@ -494,12 +499,13 @@ exports.registrationCompany = (req, res, next) => {
                             openingDays: newOpeningDays,
                             nip: companyNip,
                             code: companyAdressCode,
-                            premium:
-                              !!resultFromNip || !!resultFromPhone
-                                ? new Date()
-                                : new Date(
-                                    new Date().setMonth(actualMonth + 3)
-                                  ),
+                            premium: !!maxCountValid
+                              ? maxCountValid >= 1 && maxCountValid <= 3
+                                ? new Date(new Date().setDate(actualDate + 14))
+                                : maxCountValid >= 4 && maxCountValid <= 6
+                                ? new Date(new Date().setDate(actualDate + 7))
+                                : new Date()
+                              : new Date(new Date().setMonth(actualMonth + 3)),
                             smsReserwationAvaible: false,
                             smsNotifactionAvaible: false,
                             smsCanceledAvaible: false,
@@ -516,14 +522,12 @@ exports.registrationCompany = (req, res, next) => {
                             dateUpdateNip: new Date(),
                           });
 
-                          if (!!!resultFromNip || !!!resultFromPhone) {
-                            const newRegisterCompany = new RegisterCompany({
-                              nip: company.nip,
-                              phone: company.phone,
-                              companyId: company._id,
-                            });
-                            newRegisterCompany.save();
-                          }
+                          const newRegisterCompany = new RegisterCompany({
+                            nip: company.nip,
+                            phone: company.phone,
+                            companyId: company._id,
+                          });
+                          newRegisterCompany.save();
                           return company.save();
                         })
                         .catch((err) => {
@@ -548,7 +552,7 @@ exports.registrationCompany = (req, res, next) => {
               }
             } else {
               const error = new Error("Email zajęty.");
-              error.statusCode = 500;
+              error.statusCode = 440;
               throw error;
             }
           })
@@ -556,15 +560,13 @@ exports.registrationCompany = (req, res, next) => {
             return User.updateOne(
               {
                 _id: ownerId,
-                hasCompany: false,
               },
               {
                 $set: {
                   company: result._id.toString(),
-                  hasCompany: true,
                 },
                 $addToSet: {
-                  companys: result._id,
+                  allCompanys: result._id,
                 },
               }
             )
@@ -1176,11 +1178,14 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
       return User.findOne({
         email: unhashedWorkerEmail,
       })
-        .select("email companys")
+        .select("email allCompanys")
         .then((userDocUpdate) => {
           if (userDocUpdate) {
             // userDocUpdate.company = result._id;
-            userDocUpdate.companys = [...userDocUpdate.companys, result._id];
+            userDocUpdate.allCompanys = [
+              ...userDocUpdate.allCompanys,
+              result._id,
+            ];
             return userDocUpdate.save();
           } else {
             const error = new Error(
@@ -2580,12 +2585,19 @@ exports.companySettingsPatch = (req, res, next) => {
               "utf-8"
             ).toString("base64");
             companyDoc.phone = hashedPhoneNumber;
-            const newRegisterCompany = new RegisterCompany({
-              nip: companyDoc.nip,
-              phone: hashedPhoneNumber,
-              companyId: companyDoc._id,
-            });
-            newRegisterCompany.save();
+
+            RegisterCompany.updateOne(
+              {
+                companyId: companyDoc._id,
+              },
+              {
+                $set: {
+                  phone: hashedPhoneNumber,
+                },
+              }
+            )
+              .then(() => {})
+              .catch(() => {});
           }
 
           if (!!dataSettings.industriesComponent) {
@@ -2659,12 +2671,19 @@ exports.companySettingsPatch = (req, res, next) => {
                     "utf-8"
                   ).toString("base64");
                   companyDoc.phone = hashedPhoneNumber;
-                  const newRegisterCompany = new RegisterCompany({
-                    nip: companyDoc.nip,
-                    phone: hashedPhoneNumber,
-                    companyId: companyDoc._id,
-                  });
-                  newRegisterCompany.save();
+
+                  RegisterCompany.updateOne(
+                    {
+                      companyId: companyDoc._id,
+                    },
+                    {
+                      $set: {
+                        phone: hashedPhoneNumber,
+                      },
+                    }
+                  )
+                    .then(() => {})
+                    .catch(() => {});
                 }
 
                 if (!!dataSettings.industriesComponent) {
@@ -5104,11 +5123,10 @@ exports.companyDeleteCompany = (req, res, next) => {
           filter: { _id: resultCompanyDoc.owner },
           update: {
             $set: {
-              hasCompany: false,
               company: null,
             },
             $pull: {
-              companys: companyId,
+              allCompanys: companyId,
             },
           },
         },
@@ -5123,7 +5141,7 @@ exports.companyDeleteCompany = (req, res, next) => {
                 company: null,
               },
               $pull: {
-                companys: companyId,
+                allCompanys: companyId,
               },
             },
           },
@@ -5175,7 +5193,7 @@ exports.companyDeleteCompany = (req, res, next) => {
         { $unwind: "$fromUser" },
         {
           $lookup: {
-            from: "companys",
+            from: "allCompanys",
             localField: "company",
             foreignField: "_id",
             as: "company",
@@ -5459,11 +5477,10 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
           },
           update: {
             $set: {
-              hasCompany: false,
               company: null,
             },
             $pull: {
-              companys: companyId,
+              allCompanys: companyId,
             },
           },
         },
@@ -5479,7 +5496,7 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
                 company: null,
               },
               $pull: {
-                companys: companyId,
+                allCompanys: companyId,
               },
             },
           },
@@ -6153,12 +6170,18 @@ exports.companyUpdateNip = (req, res, next) => {
       }
     })
     .then((resultSaveCompany) => {
-      const newRegisterCompany = new RegisterCompany({
-        nip: resultSaveCompany.nip,
-        phone: resultSaveCompany.phone,
-        companyId: resultSaveCompany._id,
-      });
-      newRegisterCompany.save();
+      RegisterCompany.updateOne(
+        {
+          companyId: resultSaveCompany._id,
+        },
+        {
+          $set: {
+            nip: resultSaveCompany.nip,
+          },
+        }
+      )
+        .then(() => {})
+        .catch(() => {});
       res.status(201).json({
         nip: resultSaveCompany.nip,
         dataToInvoice: resultSaveCompany.dataToInvoice,
@@ -6244,105 +6267,18 @@ exports.companyUpdateNipInfo = (req, res, next) => {
       }
     })
     .then((resultSaveCompany) => {
-      const newRegisterCompany = new RegisterCompany({
-        nip: resultSaveCompany.nip,
-        phone: resultSaveCompany.phone,
-        companyId: resultSaveCompany._id,
-      });
-      newRegisterCompany.save();
-      res.status(201).json({
-        nip: resultSaveCompany.nip,
-        dataToInvoice: resultSaveCompany.dataToInvoice,
-      });
-    })
-    .catch((err) => {
-      if (!err.statusCode) {
-        err.statusCode = 501;
-        err.message = "Brak danego konta firmowego";
-      }
-      next(err);
-    });
-};
-
-exports.companyUpdateNip = (req, res, next) => {
-  const companyId = req.body.companyId;
-  const nipValue = req.body.nipValue;
-  const userId = req.userId;
-
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    const error = new Error("Validation faild entered data is incorrect.");
-    error.statusCode = 422;
-    throw error;
-  }
-
-  Company.findOne({
-    _id: companyId,
-    owner: userId,
-  })
-    .select("_id nip dataToInvoice dateUpdateNip phone")
-    .then(async (companyData) => {
-      if (!!companyData) {
-        const validDateUpdateNip = !!companyData.dateUpdateNip
-          ? new Date(companyData.dateUpdateNip)
-          : new Date();
-        if (validDateUpdateNip <= new Date()) {
-          const companyInfoByNip = await getGUSInfo(nipValue);
-          if (!!companyInfoByNip) {
-            if (
-              !!companyInfoByNip.nazwa &&
-              !!companyInfoByNip.miejscowosc &&
-              !!companyInfoByNip.kodPocztowy &&
-              !!companyInfoByNip.ulica
-            ) {
-              const dateCompanyToInvoice = {
-                name: companyInfoByNip.nazwa,
-                city: companyInfoByNip.miejscowosc,
-                postalCode: companyInfoByNip.kodPocztowy,
-                street: `${companyInfoByNip.ulica} ${
-                  !!companyInfoByNip.nrNieruchomosci
-                    ? companyInfoByNip.nrNieruchomosci
-                    : 1
-                }${
-                  !!companyInfoByNip.nrLokalu
-                    ? `/${companyInfoByNip.nrLokalu}`
-                    : ""
-                }`,
-              };
-              companyData.dataToInvoice = dateCompanyToInvoice;
-              companyData.nip = nipValue;
-              companyData.dateUpdateNip = new Date(
-                new Date().setDate(new Date().getDate() + 1)
-              );
-              return companyData.save();
-            } else {
-              const error = new Error("Niepoprawny nip");
-              error.statusCode = 440;
-              throw error;
-            }
-          } else {
-            const error = new Error("Niepoprawny nip");
-            error.statusCode = 440;
-            throw error;
-          }
-        } else {
-          const error = new Error("Nie można teraz zaktualizować danych nip");
-          error.statusCode = 441;
-          throw error;
+      RegisterCompany.updateOne(
+        {
+          companyId: resultSaveCompany._id,
+        },
+        {
+          $set: {
+            nip: resultSaveCompany.nip,
+          },
         }
-      } else {
-        const error = new Error("Brak firmy");
-        error.statusCode = 422;
-        throw error;
-      }
-    })
-    .then((resultSaveCompany) => {
-      const newRegisterCompany = new RegisterCompany({
-        nip: resultSaveCompany.nip,
-        phone: resultSaveCompany.phone,
-        companyId: resultSaveCompany._id,
-      });
-      newRegisterCompany.save();
+      )
+        .then(() => {})
+        .catch(() => {});
       res.status(201).json({
         nip: resultSaveCompany.nip,
         dataToInvoice: resultSaveCompany.dataToInvoice,

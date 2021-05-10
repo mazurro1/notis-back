@@ -109,68 +109,75 @@ exports.registration = (req, res, next) => {
     throw error;
   }
 
-  User.findOne({ email: email })
-    .select("email _id")
+  User.countDocuments({ email: email })
     .then((userDoc) => {
       if (!!!userDoc) {
-        return bcrypt
-          .hash(password, Number(BCRIPT_EXPIRES_IN))
-          .then((hashedPassword) => {
-            if (hashedPassword) {
-              const codeToVerified = makeid(6);
+        const hashedPhoneNumber = Buffer.from(phoneNumber, "utf-8").toString(
+          "base64"
+        );
+        return User.countDocuments({ phone: hashedPhoneNumber }).then(
+          (userCountPhone) => {
+            if (!!!userCountPhone) {
+              return bcrypt
+                .hash(password, Number(BCRIPT_EXPIRES_IN))
+                .then((hashedPassword) => {
+                  if (hashedPassword) {
+                    const codeToVerified = makeid(6);
 
-              const hashedCodeToVerified = Buffer.from(
-                codeToVerified.toUpperCase(),
-                "utf-8"
-              ).toString("base64");
+                    const hashedCodeToVerified = Buffer.from(
+                      codeToVerified.toUpperCase(),
+                      "utf-8"
+                    ).toString("base64");
 
-              const hashedUserName = Buffer.from(userName, "utf-8").toString(
-                "base64"
-              );
+                    const hashedUserName = Buffer.from(
+                      userName,
+                      "utf-8"
+                    ).toString("base64");
 
-              const hashedUserSurname = Buffer.from(
-                userSurname,
-                "utf-8"
-              ).toString("base64");
+                    const hashedUserSurname = Buffer.from(
+                      userSurname,
+                      "utf-8"
+                    ).toString("base64");
 
-              const hashedPhoneNumber = Buffer.from(
-                phoneNumber,
-                "utf-8"
-              ).toString("base64");
-
-              const user = new User({
-                email: email,
-                name: hashedUserName,
-                surname: hashedUserSurname,
-                password: hashedPassword,
-                phone: hashedPhoneNumber,
-                accountVerified: false,
-                codeToVerified: hashedCodeToVerified,
-                hasPhone: true,
-                hasCompany: false,
-                company: null,
-                companys: [],
-                phoneVerified: false,
-                stamps: [],
-                alerts: [],
-              });
-              const token = jwt.sign(
-                {
-                  email: user.email,
-                  userId: user._id.toString(),
-                },
-                TOKEN_PASSWORD,
-                {
-                  expiresIn: BCRIPT_EXPIRES_IN,
-                }
-              );
-              user.loginToken = token;
-              return user.save();
+                    const user = new User({
+                      email: email,
+                      name: hashedUserName,
+                      surname: hashedUserSurname,
+                      password: hashedPassword,
+                      phone: hashedPhoneNumber,
+                      accountVerified: false,
+                      codeToVerified: hashedCodeToVerified,
+                      hasPhone: true,
+                      company: null,
+                      allCompanys: [],
+                      phoneVerified: false,
+                      stamps: [],
+                      alerts: [],
+                    });
+                    const token = jwt.sign(
+                      {
+                        email: user.email,
+                        userId: user._id.toString(),
+                      },
+                      TOKEN_PASSWORD,
+                      {
+                        expiresIn: BCRIPT_EXPIRES_IN,
+                      }
+                    );
+                    user.loginToken = token;
+                    return user.save();
+                  }
+                });
+            } else {
+              const error = new Error("Numer telefonu zajęty.");
+              error.statusCode = 440;
+              throw error;
             }
-          });
+          }
+        );
       } else {
-        const error = new Error("Użytkownik zajęty.");
-        error.statusCode = 412;
+        const error = new Error("Adres email zajęty.");
+        error.statusCode = 441;
         throw error;
       }
     })
@@ -223,16 +230,12 @@ exports.login = (req, res, next) => {
     email: email,
   })
     .select(
-      "email blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified hasCompany alertActiveCount imageOther"
+      "email blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified alertActiveCount imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
-      "company",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
-    )
-    .populate(
-      "companys",
+      "allCompanys",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .populate(
@@ -308,6 +311,18 @@ exports.login = (req, res, next) => {
               userWithToken.save();
             }
 
+            let findCompanyInAllCompanys = null;
+            if (!!userWithToken.company) {
+              findCompanyInAllCompanys = userWithToken.allCompanys.find(
+                (itemCompany) => {
+                  return (
+                    itemCompany._id.toString() ==
+                    userWithToken.company.toString()
+                  );
+                }
+              );
+            }
+
             res.status(201).json({
               userId: userWithToken._id.toString(),
               email: userWithToken.email,
@@ -315,13 +330,17 @@ exports.login = (req, res, next) => {
               userSurname: userSurname,
               token: userWithToken.loginToken,
               accountVerified: userWithToken.accountVerified,
-              hasCompany: userWithToken.hasCompany,
-              company: !!userWithToken.company
-                ? userWithToken.company
-                : userWithToken.companys.length > 0
-                ? userWithToken.companys[0]
+              company: !!findCompanyInAllCompanys
+                ? findCompanyInAllCompanys
+                : userWithToken.allCompanys.length > 0
+                ? userWithToken.allCompanys[0]
                 : null,
-              companys: userWithToken.companys,
+              defaultCompany: !!userWithToken.company
+                ? userWithToken.company
+                : userWithToken.allCompanys.length > 0
+                ? userWithToken.allCompanys[0]._id
+                : null,
+              allCompanys: userWithToken.allCompanys,
               alerts: userWithToken.alerts,
               alertActiveCount: !!userWithToken.alertActiveCount
                 ? userWithToken.alertActiveCount
@@ -530,7 +549,7 @@ exports.veryfiedEmail = (req, res, next) => {
     _id: userId,
     accountVerified: false,
   })
-    .select("_id accountVerified codeToVerified hasCompany company email")
+    .select("_id accountVerified codeToVerified company email")
     .then((user) => {
       if (!!user) {
         const unhashedCodeToVerified = Buffer.from(
@@ -540,9 +559,8 @@ exports.veryfiedEmail = (req, res, next) => {
         if (unhashedCodeToVerified.toUpperCase() === codeSent.toUpperCase()) {
           user.codeToVerified = null;
           user.accountVerified = true;
-          user.hasCompany = false;
           user.company = null;
-          user.companys = [];
+          user.allCompanys = [];
           return user.save();
         } else {
           res.status(403).json({
@@ -700,7 +718,7 @@ exports.autoLogin = (req, res, next) => {
     loginToken: token,
   })
     .select(
-      "_id loginToken blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified hasCompany imageUrl hasPhone imageOther"
+      "_id loginToken blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified imageUrl hasPhone imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -713,11 +731,7 @@ exports.autoLogin = (req, res, next) => {
       "_id linkPath companyStamps services.serviceName services._id name"
     )
     .populate(
-      "company",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
-    )
-    .populate(
-      "companys",
+      "allCompanys",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .populate({
@@ -776,6 +790,12 @@ exports.autoLogin = (req, res, next) => {
           }
           user.save();
         }
+        let findCompanyInAllCompanys = null;
+        if (!!user.company) {
+          findCompanyInAllCompanys = user.allCompanys.find((itemCompany) => {
+            return itemCompany._id.toString() == user.company.toString();
+          });
+        }
 
         res.status(200).json({
           userId: user._id.toString(),
@@ -784,13 +804,17 @@ exports.autoLogin = (req, res, next) => {
           accountVerified: user.accountVerified,
           userName: userName,
           userSurname: userSurname,
-          hasCompany: user.hasCompany,
-          company: !!user.company
-            ? user.company
-            : user.companys.length > 0
-            ? user.companys[0]
+          company: !!findCompanyInAllCompanys
+            ? findCompanyInAllCompanys
+            : user.allCompanys.length > 0
+            ? user.allCompanys[0]
             : null,
-          companys: user.companys,
+          defaultCompany: !!user.company
+            ? user.company
+            : user.allCompanys.length > 0
+            ? user.allCompanys[0]._id
+            : null,
+          allCompanys: user.allCompanys,
           alerts: user.alerts,
           alertActiveCount: validUserActiveCount,
           imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
@@ -834,7 +858,7 @@ exports.edit = (req, res, next) => {
     _id: userId,
   })
     .select(
-      "_id phoneVerified blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber password email loginToken phone name surname accountVerified hasCompany company codeVerifiedPhoneDate codeVerifiedPhone whiteListVerifiedPhones"
+      "_id phoneVerified blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber password email loginToken phone name surname accountVerified company codeVerifiedPhoneDate codeVerifiedPhone whiteListVerifiedPhones"
     )
     .then((user) => {
       if (!!user) {
@@ -863,33 +887,43 @@ exports.edit = (req, res, next) => {
                       newPhone,
                       "utf-8"
                     ).toString("base64");
-
-                    const isPhoneInWhiteList = user.whiteListVerifiedPhones.some(
-                      (item) => item === hashedPhoneNumber
-                    );
-                    if (isPhoneInWhiteList) {
-                      user.phoneVerified = true;
-                    } else {
-                      const randomCode = makeid(6);
-                      const dateVerifiedPhoneCompany = new Date(
-                        new Date().setHours(new Date().getHours() + 1)
-                      );
-                      const hashedCodeToVerifiedPhone = Buffer.from(
-                        randomCode,
-                        "utf-8"
-                      ).toString("base64");
-                      user.phoneVerified = false;
-                      user.codeVerifiedPhoneDate = dateVerifiedPhoneCompany;
-                      user.codeVerifiedPhone = hashedCodeToVerifiedPhone;
-                    }
-                    user.blockUserChangePhoneNumber = new Date(
-                      new Date().setHours(new Date().getHours() + 1)
-                    );
-                    user.blockUserSendVerifiedPhoneSms = new Date(
-                      new Date().setHours(new Date().getHours() + 1)
-                    );
-                    user.phone = hashedPhoneNumber;
-                    user.hasPhone = true;
+                    return User.countDocuments({
+                      phone: hashedPhoneNumber,
+                    }).then((countUsersPhone) => {
+                      if (!!!countUsersPhone) {
+                        const isPhoneInWhiteList = user.whiteListVerifiedPhones.some(
+                          (item) => item === hashedPhoneNumber
+                        );
+                        if (isPhoneInWhiteList) {
+                          user.phoneVerified = true;
+                        } else {
+                          const randomCode = makeid(6);
+                          const dateVerifiedPhoneCompany = new Date(
+                            new Date().setHours(new Date().getHours() + 1)
+                          );
+                          const hashedCodeToVerifiedPhone = Buffer.from(
+                            randomCode,
+                            "utf-8"
+                          ).toString("base64");
+                          user.phoneVerified = false;
+                          user.codeVerifiedPhoneDate = dateVerifiedPhoneCompany;
+                          user.codeVerifiedPhone = hashedCodeToVerifiedPhone;
+                        }
+                        user.blockUserChangePhoneNumber = new Date(
+                          new Date().setHours(new Date().getHours() + 1)
+                        );
+                        user.blockUserSendVerifiedPhoneSms = new Date(
+                          new Date().setHours(new Date().getHours() + 1)
+                        );
+                        user.phone = hashedPhoneNumber;
+                        user.hasPhone = true;
+                        return user.save();
+                      } else {
+                        const error = new Error("Numer telefonu jest zajęty");
+                        error.statusCode = 442;
+                        throw error;
+                      }
+                    });
                   } else {
                     const error = new Error(
                       "Nie można teraz zmienić numeru telefonu"
@@ -904,7 +938,7 @@ exports.edit = (req, res, next) => {
                     .then((hashedPassword) => {
                       if (hashedPassword) {
                         user.password = hashedPassword;
-                        return user;
+                        return user.save();
                       }
                     })
                     .catch(() => {
@@ -916,7 +950,6 @@ exports.edit = (req, res, next) => {
                       next(err);
                     });
                 }
-                return user.save();
               } else {
                 const error = new Error("Brak nowych danych");
                 error.statusCode = 502;
@@ -1357,9 +1390,8 @@ exports.loginFacebookNew = (req, res, next) => {
                   codeToVerified: null,
                   hasPhone: false,
                   // imageOther: !!picture ? picture.data.url : "",
-                  hasCompany: false,
                   company: null,
-                  companys: [],
+                  allCompanys: [],
                   phoneVerified: false,
                   stamps: [],
                   alerts: [],
@@ -1547,9 +1579,8 @@ exports.loginGoogle = (req, res, next) => {
                   codeToVerified: null,
                   hasPhone: false,
                   // imageOther: !!picture ? picture : "",
-                  hasCompany: false,
                   company: null,
-                  companys: [],
+                  allCompanys: [],
                   phoneVerified: false,
                   stamps: [],
                   alerts: [],
@@ -1609,12 +1640,11 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
 
   User.findOne({
     _id: userId,
-    hasCompany: false,
   })
-    .select("_id codeDeleteDate codeDelete name surname email companys")
+    .select("_id codeDeleteDate codeDelete name surname email allCompanys")
     .then((resultUserDoc) => {
       if (!!resultUserDoc) {
-        if (resultUserDoc.companys.length === 0) {
+        if (resultUserDoc.allCompanys.length === 0) {
           const randomCode = makeid(10);
           const dateDeleteCompany = new Date(
             new Date().setMinutes(new Date().getMinutes() + 30)
@@ -1770,11 +1800,13 @@ exports.deleteUserAccount = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  User.findOne({ _id: userId, hasCompany: false })
-    .select("_id codeDeleteDate codeDelete name surname email companys")
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id codeDeleteDate codeDelete name surname email allCompanys")
     .then((userData) => {
       if (!!userData) {
-        if (userData.companys.length === 0) {
+        if (userData.allCompanys.length === 0) {
           const codeToDelete = Buffer.from(
             userData.codeDelete,
             "base64"
@@ -2133,10 +2165,10 @@ exports.userUpdateDefaultCompany = (req, res, next) => {
   User.findOne({
     _id: userId,
   })
-    .select("_id company companys")
+    .select("_id company allCompanys")
     .then((userData) => {
       if (!!userData) {
-        const isInCompanys = userData.companys.some(
+        const isInCompanys = userData.allCompanys.some(
           (item) => item == companyId
         );
         if (isInCompanys) {

@@ -86,17 +86,13 @@ const userSchema = new Schema(
       ref: "Companys",
       required: false,
     },
-    companys: [
+    allCompanys: [
       {
         type: Schema.Types.ObjectId,
         ref: "Companys",
         required: false,
       },
     ],
-    hasCompany: {
-      type: Boolean,
-      required: false,
-    },
     codeDelete: {
       type: String,
       required: false,

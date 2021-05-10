@@ -126,7 +126,6 @@ for (let i = 0; i < 24; i++) {
         )
         .populate("toWorkerUserId", "name surname _id")
         .then((resultReserwations) => {
-          console.log(resultReserwations);
           const bulkArrayToUpdateUsers = [];
           resultReserwations.forEach((resultReserwation) => {
             if (!!resultReserwation.fromUser) {
@@ -649,7 +648,6 @@ schedule.scheduleJob(`5 3 * * *`, async () => {
             newInvoice
           );
           if (!!resultUpload) {
-            console.log(resultUpload);
             bulkArrayToUpdateInvoices.push({
               updateOne: {
                 filter: {
