@@ -571,10 +571,6 @@ const companySchema = new Schema(
           type: Boolean,
           required: false,
         },
-        reserwationsCount: {
-          type: Number,
-          required: false,
-        },
       },
     ],
     happyHoursConst: [

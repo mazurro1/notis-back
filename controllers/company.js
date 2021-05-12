@@ -6,6 +6,7 @@ const Geolocations = require("../models/geolocation");
 const RegisterCompany = require("../models/registerCompany");
 const Opinion = require("../models/opinion");
 const Report = require("../models/reports");
+const Service = require("../models/service");
 const mongoose = require("mongoose");
 const User = require("../models/user");
 const { validationResult } = require("express-validator");
@@ -440,22 +441,18 @@ exports.registrationCompany = (req, res, next) => {
                                     adress: convertString(
                                       adress.toLowerCase().trim()
                                     ),
-                                    lat:
-                                      resultReq.results[0].geometry.location
-                                        .lat,
-                                    long:
-                                      resultReq.results[0].geometry.location
-                                        .lng,
+                                    lat: resultReq.results[0].geometry.location
+                                      .lat,
+                                    long: resultReq.results[0].geometry.location
+                                      .lng,
                                   });
                                   newgeolocation.save();
                                   return {
                                     adress: adress.toLowerCase().trim(),
-                                    lat:
-                                      resultReq.results[0].geometry.location
-                                        .lat,
-                                    long:
-                                      resultReq.results[0].geometry.location
-                                        .lng,
+                                    lat: resultReq.results[0].geometry.location
+                                      .lat,
+                                    long: resultReq.results[0].geometry.location
+                                      .lng,
                                   };
                                 } else {
                                   const error = new Error(
@@ -2167,9 +2164,10 @@ exports.companyUsersInformationsBlock = (req, res, next) => {
           }
         }
         if (hasPermission) {
-          const selectUserInformation = resultCompanyDoc.usersInformation.findIndex(
-            (item) => item.userId == selectedUserId
-          );
+          const selectUserInformation =
+            resultCompanyDoc.usersInformation.findIndex(
+              (item) => item.userId == selectedUserId
+            );
           if (selectUserInformation >= 0) {
             Company.updateOne(
               {
@@ -2280,22 +2278,20 @@ exports.companyServicesPatch = (req, res, next) => {
               return !isServiceInDeleted;
             }
           );
-          companyDoc.workers[
-            index
-          ].servicesCategory = filterWorkerServiceCategory;
+          companyDoc.workers[index].servicesCategory =
+            filterWorkerServiceCategory;
         });
 
         //delete from owner
-        const filterOwnerServiceCategory = companyDoc.ownerData.servicesCategory.filter(
-          (service) => {
+        const filterOwnerServiceCategory =
+          companyDoc.ownerData.servicesCategory.filter((service) => {
             const isServiceInDeleted = services.deleted.some(
               (itemDeletedOwner) => {
                 return itemDeletedOwner === service;
               }
             );
             return !isServiceInDeleted;
-          }
-        );
+          });
 
         companyDoc.ownerData.servicesCategory = filterOwnerServiceCategory;
 
@@ -2311,14 +2307,13 @@ exports.companyServicesPatch = (req, res, next) => {
             }
           );
           if (isServiceInHappyHour) {
-            const filterServiceInHappyHour = happyHour.servicesInPromotion.filter(
-              (happyHourService) => {
+            const filterServiceInHappyHour =
+              happyHour.servicesInPromotion.filter((happyHourService) => {
                 const isInDeleted = services.deleted.some((serviceDeleted) => {
                   return serviceDeleted == happyHourService;
                 });
                 return !isInDeleted;
-              }
-            );
+              });
             if (filterServiceInHappyHour.length > 0) {
               const newHappyHoursItemService = {
                 dayWeekIndex: happyHour.dayWeekIndex,
@@ -2350,14 +2345,13 @@ exports.companyServicesPatch = (req, res, next) => {
             }
           );
           if (isServiceInPromotion) {
-            const filterServiceInPromotion = promotion.servicesInPromotion.filter(
-              (promotionService) => {
+            const filterServiceInPromotion =
+              promotion.servicesInPromotion.filter((promotionService) => {
                 const isInDeleted = services.deleted.some((serviceDeleted) => {
                   return serviceDeleted == promotionService;
                 });
                 return !isInDeleted;
-              }
-            );
+              });
             if (filterServiceInPromotion.length > 0) {
               const newPromotionItemService = {
                 dayWeekIndex: promotion.dayWeekIndex,
@@ -2810,9 +2804,10 @@ exports.companyWorkersSaveProps = (req, res, next) => {
         if (constTime.indexWorker === "owner") {
           if (constTime.constantWorkingHours.length > 0) {
             constTime.constantWorkingHours.forEach((constDate) => {
-              const dateIsInBackend = companyDoc.ownerData.constantWorkingHours.findIndex(
-                (item) => item.dayOfTheWeek === constDate.dayOfTheWeek
-              );
+              const dateIsInBackend =
+                companyDoc.ownerData.constantWorkingHours.findIndex(
+                  (item) => item.dayOfTheWeek === constDate.dayOfTheWeek
+                );
               if (dateIsInBackend >= 0) {
                 companyDoc.ownerData.constantWorkingHours[
                   dateIsInBackend
@@ -3189,9 +3184,10 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
     })
     .then((companyDoc) => {
       if (workerId === "owner") {
-        const selectedOtherDaysOwner = companyDoc.ownerData.noConstantWorkingHours.find(
-          (item) => item.fullDate === newDate.fullDate
-        );
+        const selectedOtherDaysOwner =
+          companyDoc.ownerData.noConstantWorkingHours.find(
+            (item) => item.fullDate === newDate.fullDate
+          );
         if (!!selectedOtherDaysOwner) {
           bulkArrayToUpdate.push({
             updateOne: {
@@ -3210,9 +3206,10 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
         }
       } else {
         if (!!companyDoc.workers._id) {
-          const selectedOtherDays = companyDoc.workers.noConstantWorkingHours.find(
-            (item) => item.fullDate === newDate.fullDate
-          );
+          const selectedOtherDays =
+            companyDoc.workers.noConstantWorkingHours.find(
+              (item) => item.fullDate === newDate.fullDate
+            );
           if (!!selectedOtherDays) {
             bulkArrayToUpdate.push({
               updateOne: {
@@ -3354,18 +3351,20 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
         const savedNoConst = resultSavedNoConst[0];
         bulkArrayToUpdate = [];
         if (workerId === "owner") {
-          const findSelectedNoConstHoursOwner = savedNoConst.ownerData.noConstantWorkingHours.find(
-            (hour) => hour.fullDate === newDate.fullDate
-          );
+          const findSelectedNoConstHoursOwner =
+            savedNoConst.ownerData.noConstantWorkingHours.find(
+              (hour) => hour.fullDate === newDate.fullDate
+            );
           res.status(201).json({
             noConstantDay: !!findSelectedNoConstHoursOwner
               ? findSelectedNoConstHoursOwner
               : [],
           });
         } else {
-          const findSelectedNoConstHours = savedNoConst.workers.noConstantWorkingHours.find(
-            (hour) => hour.fullDate === newDate.fullDate
-          );
+          const findSelectedNoConstHours =
+            savedNoConst.workers.noConstantWorkingHours.find(
+              (hour) => hour.fullDate === newDate.fullDate
+            );
           res.status(201).json({
             noConstantDay: !!findSelectedNoConstHours
               ? findSelectedNoConstHours
@@ -6283,6 +6282,352 @@ exports.companyUpdateNipInfo = (req, res, next) => {
         nip: resultSaveCompany.nip,
         dataToInvoice: resultSaveCompany.dataToInvoice,
       });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyAddService = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const name = req.body.name;
+  const surname = req.body.surname;
+  const email = req.body.email;
+  const isActiveUser = req.body.isActiveUser;
+  const phone = req.body.phone;
+  const objectName = req.body.objectName;
+  const description = req.body.description;
+  const cost = req.body.cost;
+  const statusValue = req.body.statusValue;
+  const workerUserId = req.body.workerUserId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select("_id owner workers._id workers.user")
+    .then((companyData) => {
+      if (!!companyData) {
+        let hasPermission = companyData.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = companyData.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 8
+            );
+          }
+        }
+
+        const hashedPhoneNumber = Buffer.from(
+          phone.toString(),
+          "utf-8"
+        ).toString("base64");
+
+        return User.findOne({
+          phone: hashedPhoneNumber,
+          phoneVerified: true,
+        })
+          .select("_id")
+          .then((resultToUser) => {
+            if (isActiveUser) {
+              if (!!resultToUser) {
+                const newService = new Service({
+                  userId: !!resultToUser ? resultToUser._id : null,
+                  companyId: companyData._id,
+                  workerUserId: hasPermission ? workerUserId : userId,
+                  objectName: objectName,
+                  description: description,
+                  cost: cost,
+                  statusValue: statusValue,
+                  dateStart: statusValue >= 1 ? new Date() : null,
+                  dateService: statusValue >= 2 ? new Date() : null,
+                  dateEnd: statusValue >= 3 ? new Date() : null,
+                  month: new Date().getMonth() + 1,
+                  year: new Date().getFullYear(),
+                });
+                return newService.save();
+              } else {
+                const error = new Error("Brak użytkownika");
+                error.statusCode = 440;
+                throw error;
+              }
+            } else {
+              const hashedName = Buffer.from(name.toString(), "utf-8").toString(
+                "base64"
+              );
+              const hashedSurname = Buffer.from(
+                surname.toString(),
+                "utf-8"
+              ).toString("base64");
+
+              const newService = new Service({
+                userId: !!resultToUser ? resultToUser._id : null,
+                companyId: companyData._id,
+                workerUserId: hasPermission ? workerUserId : userId,
+                name: hashedName,
+                surname: hashedSurname,
+                email: !!email ? email : null,
+                phone: hashedPhoneNumber,
+                objectName: objectName,
+                description: description,
+                cost: cost,
+                statusValue: statusValue,
+                dateStart: statusValue >= 1 ? new Date() : null,
+                dateService: statusValue >= 2 ? new Date() : null,
+                dateEnd: statusValue >= 3 ? new Date() : null,
+                month: new Date().getMonth() + 1,
+                year: new Date().getFullYear(),
+              });
+              return newService.save();
+            }
+          });
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((resultSaveService) => {
+      return CompanyUsersInformations.findOne({
+        userId: userId,
+        companyId: companyId,
+      }).then((resultCompanyUsersInformations) => {
+        if (!!!resultCompanyUsersInformations) {
+          const newUserCompanyInfo = new CompanyUsersInformations({
+            userId: userId,
+            companyId: companyId,
+            messages: [],
+          });
+          newUserCompanyInfo.save();
+        }
+        return resultSaveService;
+      });
+    })
+    .then((resultSaveService) => {
+      return resultSaveService.populate(
+        {
+          path: "userId workerUserId",
+          select: "name surname _id",
+        },
+        function (err, populateService) {
+          populateService.phone = null;
+          res.status(200).json({
+            newService: populateService,
+          });
+        }
+      );
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyGetServices = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const year = req.body.year;
+  const month = req.body.month;
+  const workerUserId = req.body.workerUserId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select("_id owner workers._id workers.user")
+    .populate("workers.user", "_id name surname")
+    .then((companyData) => {
+      if (!!companyData) {
+        let hasPermission = companyData.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = companyData.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 8
+            );
+          }
+        }
+        return Service.find({
+          year: year,
+          month: month,
+          workerUserId: hasPermission ? workerUserId : userId,
+          companyId: companyData._id,
+        })
+          .select("-phone")
+          .populate("workerUserId userId", "_id name surname")
+          .then((resultServices) => {
+            res.status(200).json({
+              services: resultServices,
+              workers: hasPermission ? companyData.workers : null,
+            });
+          });
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyDeleteServices = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const serviceId = req.body.serviceId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner workers._id workers.user")
+    .then((companyData) => {
+      if (!!companyData) {
+        let hasPermission = companyData.owner == userId;
+        if (!hasPermission) {
+          hasPermission = companyData.workers.some((worker) => {
+            return worker.user == userId;
+          });
+        }
+        if (!!hasPermission) {
+          return Service.deleteOne({
+            _id: serviceId,
+          }).then(() => {
+            res.status(200).json({
+              message: "Usunieto serwis",
+            });
+          });
+        } else {
+          const error = new Error("Brak uprawnień");
+          error.statusCode = 422;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyUpdateServices = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const serviceId = req.body.serviceId;
+  const objectName = req.body.objectName;
+  const description = req.body.description;
+  const cost = req.body.cost;
+  const statusValue = req.body.statusValue;
+  const selectedWorkerUserId = req.body.selectedWorkerUserId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select("_id owner workers._id workers.user")
+    .then((companyData) => {
+      if (!!companyData) {
+        let hasPermission = companyData.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = companyData.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 8
+            );
+          }
+        }
+        const validPermission = !!hasPermission ? {} : { workerUserId: userId };
+        const validDateService =
+          statusValue == 2 ? { dateService: new Date() } : {};
+        const validDateServiceEnd =
+          statusValue == 3 ? { dateEnd: new Date() } : {};
+
+        return Service.updateOne(
+          {
+            _id: serviceId,
+            companyId: companyId,
+            ...validPermission,
+          },
+          {
+            $set: {
+              workerUserId: selectedWorkerUserId,
+              objectName: objectName,
+              description: description,
+              cost: cost,
+              statusValue: statusValue,
+              ...validDateService,
+              ...validDateServiceEnd,
+            },
+          }
+        ).then(() => {
+          res.status(200).json({
+            message: "Zaktualizowano serwis",
+          });
+        });
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {

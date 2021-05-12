@@ -63,7 +63,6 @@ exports.addCompanyUsersInformationsMessage = (req, res, next) => {
               userId: selectedUserId,
               companyId: companyId,
               messages: [],
-              reserwationsCount: 0,
             });
             newuserCompanyInformation.messages.unshift(newMessage);
             return newuserCompanyInformation.save();

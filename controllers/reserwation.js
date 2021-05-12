@@ -318,12 +318,14 @@ exports.addReserwation = (req, res, next) => {
                       .save()
                       .then((resultSavePreBooking) => {
                         let userIsBlocked = false;
-                        const validUserInformation = !!companyDocData.usersInformation
-                          ? companyDocData.usersInformation
-                          : [];
-                        const isUserInUsersInformations = validUserInformation.findIndex(
-                          (infUser) => infUser.userId == userId
-                        );
+                        const validUserInformation =
+                          !!companyDocData.usersInformation
+                            ? companyDocData.usersInformation
+                            : [];
+                        const isUserInUsersInformations =
+                          validUserInformation.findIndex(
+                            (infUser) => infUser.userId == userId
+                          );
 
                         if (isUserInUsersInformations >= 0) {
                           userIsBlocked =
@@ -355,9 +357,8 @@ exports.addReserwation = (req, res, next) => {
                                 const disabledWorkerDate = [];
                                 let isEmptyDate = true;
 
-                                const arrayDateStartNewReserwation = dateStart.split(
-                                  ":"
-                                );
+                                const arrayDateStartNewReserwation =
+                                  dateStart.split(":");
 
                                 const convertDateStartToMinNewReserwation =
                                   Number(arrayDateStartNewReserwation[0]) * 60 +
@@ -377,32 +378,36 @@ exports.addReserwation = (req, res, next) => {
                                   0,
                                   0
                                 );
-                                const selectedDateDayOfTheWeek = selectedDate.getDay();
+                                const selectedDateDayOfTheWeek =
+                                  selectedDate.getDay();
                                 const selectedFullDate = `${Number(
                                   arrayDateFull[0]
                                 )}-${Number(arrayDateFull[1])}-${Number(
                                   arrayDateFull[2]
                                 )}`;
-                                const mapWorkerConstWorkingHours = selectedWorker.constantWorkingHours.map(
-                                  (item) => {
-                                    return {
-                                      _id: item._id,
-                                      dayOfTheWeek: item.dayOfTheWeek,
-                                      start: item.startWorking,
-                                      end: item.endWorking,
-                                      disabled: item.disabled,
-                                    };
-                                  }
-                                );
+                                const mapWorkerConstWorkingHours =
+                                  selectedWorker.constantWorkingHours.map(
+                                    (item) => {
+                                      return {
+                                        _id: item._id,
+                                        dayOfTheWeek: item.dayOfTheWeek,
+                                        start: item.startWorking,
+                                        end: item.endWorking,
+                                        disabled: item.disabled,
+                                      };
+                                    }
+                                  );
 
-                                const workerConstWorkingHours = mapWorkerConstWorkingHours.find(
-                                  (item) =>
-                                    item.dayOfTheWeek ===
-                                    selectedDateDayOfTheWeek
-                                );
-                                let workerNoConstWorkingHours = selectedWorker.noConstantWorkingHours.find(
-                                  (item) => item.fullDate == selectedFullDate
-                                );
+                                const workerConstWorkingHours =
+                                  mapWorkerConstWorkingHours.find(
+                                    (item) =>
+                                      item.dayOfTheWeek ===
+                                      selectedDateDayOfTheWeek
+                                  );
+                                let workerNoConstWorkingHours =
+                                  selectedWorker.noConstantWorkingHours.find(
+                                    (item) => item.fullDate == selectedFullDate
+                                  );
 
                                 if (!!workerNoConstWorkingHours) {
                                   const startDate = new Date(
@@ -424,18 +429,17 @@ exports.addReserwation = (req, res, next) => {
                                   };
                                   workerNoConstWorkingHours = newDateNoConst;
                                 }
-                                const selectedOpenTimeDay = !!workerNoConstWorkingHours
-                                  ? workerNoConstWorkingHours.holidays
-                                    ? null
-                                    : workerNoConstWorkingHours
-                                  : workerConstWorkingHours;
+                                const selectedOpenTimeDay =
+                                  !!workerNoConstWorkingHours
+                                    ? workerNoConstWorkingHours.holidays
+                                      ? null
+                                      : workerNoConstWorkingHours
+                                    : workerConstWorkingHours;
                                 /////////////////////////////////////////////////////////////
-                                const splitOpenWorker = selectedOpenTimeDay.start.split(
-                                  ":"
-                                );
-                                const splitCloseWorker = selectedOpenTimeDay.end.split(
-                                  ":"
-                                );
+                                const splitOpenWorker =
+                                  selectedOpenTimeDay.start.split(":");
+                                const splitCloseWorker =
+                                  selectedOpenTimeDay.end.split(":");
 
                                 const convertDateStartWorkWorker =
                                   Number(splitOpenWorker[0]) * 60 +
@@ -446,9 +450,8 @@ exports.addReserwation = (req, res, next) => {
                                   Number(splitCloseWorker[1]);
 
                                 allReserwations.forEach((workerReserwation) => {
-                                  const arrayDateStart = workerReserwation.dateStart.split(
-                                    ":"
-                                  );
+                                  const arrayDateStart =
+                                    workerReserwation.dateStart.split(":");
 
                                   const convertDateStartToMin =
                                     Number(arrayDateStart[0]) * 60 +
@@ -577,38 +580,40 @@ exports.addReserwation = (req, res, next) => {
                                         ? `0${Number(arrayDateFull[0])}`
                                         : Number(arrayDateFull[0])
                                     }`;
-                                    const newDateConvertToValidDateDateFull = new Date(
-                                      convertToValidDateDateFull
-                                    );
+                                    const newDateConvertToValidDateDateFull =
+                                      new Date(convertToValidDateDateFull);
 
-                                    const dayNewDateConvertToValidDateDateFull = newDateConvertToValidDateDateFull.getDay();
+                                    const dayNewDateConvertToValidDateDateFull =
+                                      newDateConvertToValidDateDateFull.getDay();
 
                                     //promotions
-                                    const filterSelectedPromotions = companyDocData.promotions.filter(
-                                      (promotionItem) => {
-                                        const dateStartPromotion = new Date(
-                                          promotionItem.start
-                                        );
-                                        const dateEndPromotion = new Date(
-                                          promotionItem.end
-                                        );
-                                        const isDayInPromotion =
-                                          dateStartPromotion <=
-                                            newDateConvertToValidDateDateFull &&
-                                          dateEndPromotion >=
-                                            newDateConvertToValidDateDateFull;
+                                    const filterSelectedPromotions =
+                                      companyDocData.promotions.filter(
+                                        (promotionItem) => {
+                                          const dateStartPromotion = new Date(
+                                            promotionItem.start
+                                          );
+                                          const dateEndPromotion = new Date(
+                                            promotionItem.end
+                                          );
+                                          const isDayInPromotion =
+                                            dateStartPromotion <=
+                                              newDateConvertToValidDateDateFull &&
+                                            dateEndPromotion >=
+                                              newDateConvertToValidDateDateFull;
 
-                                        const isServiceInPromotion = promotionItem.servicesInPromotion.some(
-                                          (promotionItemService) =>
-                                            promotionItemService ==
-                                            selectedServices._id
-                                        );
-                                        return (
-                                          isServiceInPromotion &&
-                                          isDayInPromotion
-                                        );
-                                      }
-                                    );
+                                          const isServiceInPromotion =
+                                            promotionItem.servicesInPromotion.some(
+                                              (promotionItemService) =>
+                                                promotionItemService ==
+                                                selectedServices._id
+                                            );
+                                          return (
+                                            isServiceInPromotion &&
+                                            isDayInPromotion
+                                          );
+                                        }
+                                      );
                                     let promotionNumber = null;
 
                                     if (filterSelectedPromotions.length > 0) {
@@ -630,50 +635,54 @@ exports.addReserwation = (req, res, next) => {
                                     }
 
                                     //happy hours
-                                    const filterSelectedHappyHours = companyDocData.happyHoursConst.filter(
-                                      (happyHourItem) => {
-                                        const isSelectedDayHappyHour = happyHourItem.dayWeekIndex.some(
-                                          (happyHourItemService) =>
-                                            happyHourItemService ===
-                                            dayNewDateConvertToValidDateDateFull
-                                        );
+                                    const filterSelectedHappyHours =
+                                      companyDocData.happyHoursConst.filter(
+                                        (happyHourItem) => {
+                                          const isSelectedDayHappyHour =
+                                            happyHourItem.dayWeekIndex.some(
+                                              (happyHourItemService) =>
+                                                happyHourItemService ===
+                                                dayNewDateConvertToValidDateDateFull
+                                            );
 
-                                        const isServiceInHappyHour = happyHourItem.servicesInPromotion.some(
-                                          (happyHourItemService) =>
-                                            happyHourItemService == serviceId
-                                        );
-                                        const splitDateStart = happyHourItem.start.split(
-                                          ":"
-                                        );
-                                        const splitDateEnd = happyHourItem.end.split(
-                                          ":"
-                                        );
-                                        const dateStartToValid = new Date(
-                                          new Date(
-                                            newDateConvertToValidDateDateFull.setHours(
-                                              Number(splitDateStart[0])
+                                          const isServiceInHappyHour =
+                                            happyHourItem.servicesInPromotion.some(
+                                              (happyHourItemService) =>
+                                                happyHourItemService ==
+                                                serviceId
+                                            );
+                                          const splitDateStart =
+                                            happyHourItem.start.split(":");
+                                          const splitDateEnd =
+                                            happyHourItem.end.split(":");
+                                          const dateStartToValid = new Date(
+                                            new Date(
+                                              newDateConvertToValidDateDateFull.setHours(
+                                                Number(splitDateStart[0])
+                                              )
+                                            ).setMinutes(
+                                              Number(splitDateStart[1])
                                             )
-                                          ).setMinutes(
-                                            Number(splitDateStart[1])
-                                          )
-                                        );
-                                        const dateEndToValid = new Date(
-                                          new Date(
-                                            newDateConvertToValidDateDateFull.setHours(
-                                              Number(splitDateEnd[0])
+                                          );
+                                          const dateEndToValid = new Date(
+                                            new Date(
+                                              newDateConvertToValidDateDateFull.setHours(
+                                                Number(splitDateEnd[0])
+                                              )
+                                            ).setMinutes(
+                                              Number(splitDateEnd[1])
                                             )
-                                          ).setMinutes(Number(splitDateEnd[1]))
-                                        );
-                                        const validHappyHourDate =
-                                          dateStartToValid <= actualDate &&
-                                          actualDate <= dateEndToValid;
-                                        return (
-                                          isSelectedDayHappyHour &&
-                                          isServiceInHappyHour &&
-                                          validHappyHourDate
-                                        );
-                                      }
-                                    );
+                                          );
+                                          const validHappyHourDate =
+                                            dateStartToValid <= actualDate &&
+                                            actualDate <= dateEndToValid;
+                                          return (
+                                            isSelectedDayHappyHour &&
+                                            isServiceInHappyHour &&
+                                            validHappyHourDate
+                                          );
+                                        }
+                                      );
                                     let happyHourNumber = null;
                                     if (filterSelectedHappyHours.length > 0) {
                                       filterSelectedHappyHours.sort((a, b) => {
@@ -702,9 +711,10 @@ exports.addReserwation = (req, res, next) => {
                                       !!!happyHourNumber &&
                                       !!isStampActive
                                     ) {
-                                      const filterCompanyStampsNoDisabled = companyDocData.companyStamps.filter(
-                                        (item) => item.disabled === false
-                                      );
+                                      const filterCompanyStampsNoDisabled =
+                                        companyDocData.companyStamps.filter(
+                                          (item) => item.disabled === false
+                                        );
 
                                       filterCompanyStampsNoDisabled.sort(
                                         (a, b) => {
@@ -725,27 +735,30 @@ exports.addReserwation = (req, res, next) => {
                                       );
 
                                       //was companyDoc.companyStamps <- filterCompanyStampsNoDisabled
-                                      const findCompanyStamp = filterCompanyStampsNoDisabled.find(
-                                        (itemStamp) => {
-                                          const isInStampsService = itemStamp.servicesId.some(
-                                            (stampService) =>
-                                              stampService.toString() ===
-                                              serviceId.toString()
-                                          );
-                                          return isInStampsService;
-                                        }
-                                      );
+                                      const findCompanyStamp =
+                                        filterCompanyStampsNoDisabled.find(
+                                          (itemStamp) => {
+                                            const isInStampsService =
+                                              itemStamp.servicesId.some(
+                                                (stampService) =>
+                                                  stampService.toString() ===
+                                                  serviceId.toString()
+                                              );
+                                            return isInStampsService;
+                                          }
+                                        );
 
                                       if (!!findCompanyStamp) {
                                         if (!!!findCompanyStamp.disabled) {
-                                          const findStampId = resultUserDoc.stamps.findIndex(
-                                            (itemStamp) => {
-                                              return (
-                                                itemStamp.companyId.toString() ===
-                                                companyId.toString()
-                                              );
-                                            }
-                                          );
+                                          const findStampId =
+                                            resultUserDoc.stamps.findIndex(
+                                              (itemStamp) => {
+                                                return (
+                                                  itemStamp.companyId.toString() ===
+                                                  companyId.toString()
+                                                );
+                                              }
+                                            );
 
                                           if (findStampId >= 0) {
                                             let numberOfActiveStamps = 0;
@@ -756,17 +769,19 @@ exports.addReserwation = (req, res, next) => {
                                               findStampId
                                             ].reserwations.forEach(
                                               (stampReserwation) => {
-                                                const splitDateEnd = stampReserwation.dateEnd.split(
-                                                  ""
-                                                );
-                                                const reserwationStampDateEnd = new Date(
-                                                  stampReserwation.dateYear,
-                                                  stampReserwation.dateMonth -
-                                                    1,
-                                                  stampReserwation.dateDay,
-                                                  Number(splitDateEnd[0]),
-                                                  Number(splitDateEnd[1])
-                                                );
+                                                const splitDateEnd =
+                                                  stampReserwation.dateEnd.split(
+                                                    ""
+                                                  );
+                                                const reserwationStampDateEnd =
+                                                  new Date(
+                                                    stampReserwation.dateYear,
+                                                    stampReserwation.dateMonth -
+                                                      1,
+                                                    stampReserwation.dateDay,
+                                                    Number(splitDateEnd[0]),
+                                                    Number(splitDateEnd[1])
+                                                  );
 
                                                 if (
                                                   !!!stampReserwation.visitCanceled &&
@@ -792,12 +807,10 @@ exports.addReserwation = (req, res, next) => {
                                             ) {
                                               goodDateReserwations.sort(
                                                 (a, b) => {
-                                                  const firstItemToSort = new Date(
-                                                    a.fullDate
-                                                  );
-                                                  const secondItemToSort = new Date(
-                                                    b.fullDate
-                                                  );
+                                                  const firstItemToSort =
+                                                    new Date(a.fullDate);
+                                                  const secondItemToSort =
+                                                    new Date(b.fullDate);
                                                   if (
                                                     firstItemToSort <
                                                     secondItemToSort
@@ -813,9 +826,10 @@ exports.addReserwation = (req, res, next) => {
                                               );
                                               stampNumber =
                                                 findCompanyStamp.promotionPercent;
-                                              const newGoodDateReserwation = goodDateReserwations.slice(
-                                                findCompanyStamp.countStampsToActive
-                                              );
+                                              const newGoodDateReserwation =
+                                                goodDateReserwations.slice(
+                                                  findCompanyStamp.countStampsToActive
+                                                );
                                               const newUserReserwations = [
                                                 ...badDateReserwations,
                                                 ...newGoodDateReserwation,
@@ -839,11 +853,12 @@ exports.addReserwation = (req, res, next) => {
                                         : happyHourNumber !== null
                                         ? happyHourNumber
                                         : 0;
-                                    const resultPriceAfterPromotion = Math.floor(
-                                      (selectedServices.serviceCost *
-                                        (100 - resultPromotion)) /
-                                        100
-                                    );
+                                    const resultPriceAfterPromotion =
+                                      Math.floor(
+                                        (selectedServices.serviceCost *
+                                          (100 - resultPromotion)) /
+                                          100
+                                      );
 
                                     return Reserwation.updateOne(
                                       {
@@ -857,7 +872,8 @@ exports.addReserwation = (req, res, next) => {
                                           isDraft: false,
                                           dateStart: dateStart,
                                           dateEnd: timeEndService,
-                                          costReserwation: resultPriceAfterPromotion,
+                                          costReserwation:
+                                            resultPriceAfterPromotion,
                                           timeReserwation:
                                             selectedServices.time,
                                           serviceName:
@@ -867,7 +883,8 @@ exports.addReserwation = (req, res, next) => {
                                           visitChanged: false,
                                           extraCost: selectedServices.extraCost,
                                           extraTime: selectedServices.extraTime,
-                                          reserwationMessage: reserwationMessage,
+                                          reserwationMessage:
+                                            reserwationMessage,
                                           workerReserwation: false,
                                           serviceId: selectedServices._id,
                                           fullDate: actualDate,
@@ -890,9 +907,12 @@ exports.addReserwation = (req, res, next) => {
                                         newReserwationDraftId.sendSMSNotifaction = false;
                                         newReserwationDraftId.sendSMSCanceled = false;
                                         newReserwationToValid.isDraft = false;
-                                        newReserwationToValid.dateStart = dateStart;
-                                        newReserwationToValid.dateEnd = timeEndService;
-                                        newReserwationToValid.costReserwation = resultPriceAfterPromotion;
+                                        newReserwationToValid.dateStart =
+                                          dateStart;
+                                        newReserwationToValid.dateEnd =
+                                          timeEndService;
+                                        newReserwationToValid.costReserwation =
+                                          resultPriceAfterPromotion;
                                         newReserwationToValid.timeReserwation =
                                           selectedServices.time;
                                         newReserwationToValid.serviceName =
@@ -904,20 +924,19 @@ exports.addReserwation = (req, res, next) => {
                                           selectedServices.extraCost;
                                         newReserwationToValid.extraTime =
                                           selectedServices.extraTime;
-                                        newReserwationToValid.reserwationMessage = reserwationMessage;
+                                        newReserwationToValid.reserwationMessage =
+                                          reserwationMessage;
                                         newReserwationToValid.workerReserwation = false;
                                         newReserwationToValid.serviceId =
                                           selectedServices._id;
-                                        newReserwationToValid.fullDate = actualDate;
-                                        newReserwationToValid.activePromotion = !!promotionNumber
-                                          ? true
-                                          : false;
-                                        newReserwationToValid.activeHappyHour = !!happyHourNumber
-                                          ? true
-                                          : false;
-                                        newReserwationToValid.activeStamp = !!stampNumber
-                                          ? true
-                                          : false;
+                                        newReserwationToValid.fullDate =
+                                          actualDate;
+                                        newReserwationToValid.activePromotion =
+                                          !!promotionNumber ? true : false;
+                                        newReserwationToValid.activeHappyHour =
+                                          !!happyHourNumber ? true : false;
+                                        newReserwationToValid.activeStamp =
+                                          !!stampNumber ? true : false;
                                         newReserwationToValid.basicPrice =
                                           selectedServices.serviceCost;
 
@@ -1042,53 +1061,7 @@ exports.addReserwation = (req, res, next) => {
     .then((result) => {
       if (!!result) {
         if (!!result.newReserwation) {
-          return Company.findOne({
-            _id: result.companyDoc._id,
-          })
-            .select("_id usersInformation")
-            .then((companyDoc) => {
-              if (!!companyDoc) {
-                const validCompanyUsersInfo = !!companyDoc.usersInformation
-                  ? companyDoc.usersInformation
-                  : [];
-
-                const findIndexUserInformations = validCompanyUsersInfo.findIndex(
-                  (infUser) => {
-                    return infUser.userId == userId;
-                  }
-                );
-
-                if (findIndexUserInformations >= 0) {
-                  Company.updateOne(
-                    {
-                      _id: companyId,
-                      "usersInformation.userId": userId,
-                    },
-                    {
-                      $inc: { "usersInformation.$.reserwationsCount": 1 },
-                    }
-                  ).then(() => {});
-                } else {
-                  const newUserInfo = {
-                    userId: userId,
-                    isBlocked: false,
-                    reserwationsCount: 1,
-                  };
-                  companyDoc.usersInformation.push(newUserInfo);
-                  companyDoc.save();
-                }
-                return result.newReserwation;
-              } else {
-                Reserwation.deleteOne({
-                  _id: newReserwationDraftId,
-                }).then(() => {});
-                const error = new Error(
-                  "Błąd podczas zapisywania informacji na temat użytkownika w firmie."
-                );
-                error.statusCode = 430;
-                throw error;
-              }
-            });
+          return result.newReserwation;
         } else {
           Reserwation.deleteOne({
             _id: newReserwationDraftId,
@@ -1285,16 +1258,18 @@ exports.addReserwation = (req, res, next) => {
                           resultReserwation.fromUser._id.toString()
                       ) {
                         if (!!resultReserwationPopulate.company.companyStamps) {
-                          const findCompanyStamp = resultReserwationPopulate.company.companyStamps.find(
-                            (itemStamp) => {
-                              const isInStampsService = itemStamp.servicesId.some(
-                                (stampService) =>
-                                  stampService.toString() ===
-                                  serviceId.toString()
-                              );
-                              return isInStampsService;
-                            }
-                          );
+                          const findCompanyStamp =
+                            resultReserwationPopulate.company.companyStamps.find(
+                              (itemStamp) => {
+                                const isInStampsService =
+                                  itemStamp.servicesId.some(
+                                    (stampService) =>
+                                      stampService.toString() ===
+                                      serviceId.toString()
+                                  );
+                                return isInStampsService;
+                              }
+                            );
 
                           if (!!findCompanyStamp) {
                             if (!!!findCompanyStamp.disabled) {
@@ -1812,8 +1787,8 @@ exports.getWorkerDisabledHours = (req, res, next) => {
               );
               const selectedDateDayOfTheWeek = selectedDate.getDay();
               const selectedFullDate = `${selectedDay}-${selectedMonth}-${selectedYear}`;
-              const mapWorkerConstWorkingHours = selectedWorker.constantWorkingHours.map(
-                (item) => {
+              const mapWorkerConstWorkingHours =
+                selectedWorker.constantWorkingHours.map((item) => {
                   return {
                     _id: item._id,
                     dayOfTheWeek: item.dayOfTheWeek,
@@ -1821,15 +1796,15 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                     end: item.endWorking,
                     disabled: item.disabled,
                   };
-                }
-              );
+                });
 
               const workerConstWorkingHours = mapWorkerConstWorkingHours.find(
                 (item) => item.dayOfTheWeek === selectedDateDayOfTheWeek
               );
-              let workerNoConstWorkingHours = selectedWorker.noConstantWorkingHours.find(
-                (item) => item.fullDate == selectedFullDate
-              );
+              let workerNoConstWorkingHours =
+                selectedWorker.noConstantWorkingHours.find(
+                  (item) => item.fullDate == selectedFullDate
+                );
 
               if (!!workerNoConstWorkingHours) {
                 const startDate = new Date(workerNoConstWorkingHours.start);
@@ -1872,9 +1847,8 @@ exports.getWorkerDisabledHours = (req, res, next) => {
               if (dateToReserwIsGood) {
                 if (!!selectedDayToValid && !!!findOffDay) {
                   if (!!!selectedDayToValid.disabled) {
-                    const workerStartWorkDate = selectedDayToValid.start.split(
-                      ":"
-                    );
+                    const workerStartWorkDate =
+                      selectedDayToValid.start.split(":");
                     const workerEndWorkDate = selectedDayToValid.end.split(":");
                     const workerStartWork =
                       Number(workerStartWorkDate[0]) * 60 +
@@ -1927,11 +1901,10 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                         ? `0${compareDateReserwation.getDate()}`
                         : compareDateReserwation.getDate()
                     }`;
-                    const dateConvertDateReserwationToDateInPromotions = new Date(
-                      convertDateReserwationToDateInPromotions
-                    );
-                    const filterSelectedPromotions = companyDocData.promotions.filter(
-                      (promotionItem) => {
+                    const dateConvertDateReserwationToDateInPromotions =
+                      new Date(convertDateReserwationToDateInPromotions);
+                    const filterSelectedPromotions =
+                      companyDocData.promotions.filter((promotionItem) => {
                         const dateStartPromotion = new Date(
                           promotionItem.start
                         );
@@ -1942,13 +1915,13 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                           dateEndPromotion >=
                             dateConvertDateReserwationToDateInPromotions;
 
-                        const isServiceInPromotion = promotionItem.servicesInPromotion.some(
-                          (promotionItemService) =>
-                            promotionItemService == serviceId
-                        );
+                        const isServiceInPromotion =
+                          promotionItem.servicesInPromotion.some(
+                            (promotionItemService) =>
+                              promotionItemService == serviceId
+                          );
                         return isServiceInPromotion && isDayInPromotion;
-                      }
-                    );
+                      });
                     //sort selected promotions
                     let promotionNumber = null;
 
@@ -1967,20 +1940,22 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                     const daysInHappyHours = [];
 
                     // happyhour promotions valid
-                    const selectedReserwationDay = dateConvertDateReserwationToDateInPromotions.getDay();
-                    const filterSelectedHappyHours = companyDocData.happyHoursConst.filter(
-                      (happyHourItem) => {
-                        const isSelectedDayHappyHour = happyHourItem.dayWeekIndex.some(
-                          (happyHourItemService) =>
-                            happyHourItemService === selectedReserwationDay
-                        );
-                        const isServiceInHappyHour = happyHourItem.servicesInPromotion.some(
-                          (happyHourItemService) =>
-                            happyHourItemService == serviceId
-                        );
+                    const selectedReserwationDay =
+                      dateConvertDateReserwationToDateInPromotions.getDay();
+                    const filterSelectedHappyHours =
+                      companyDocData.happyHoursConst.filter((happyHourItem) => {
+                        const isSelectedDayHappyHour =
+                          happyHourItem.dayWeekIndex.some(
+                            (happyHourItemService) =>
+                              happyHourItemService === selectedReserwationDay
+                          );
+                        const isServiceInHappyHour =
+                          happyHourItem.servicesInPromotion.some(
+                            (happyHourItemService) =>
+                              happyHourItemService == serviceId
+                          );
                         return isSelectedDayHappyHour && isServiceInHappyHour;
-                      }
-                    );
+                      });
                     if (filterSelectedHappyHours.length > 0) {
                       filterSelectedHappyHours.sort((a, b) => {
                         const firstItemToSort = a.promotionPercent;
@@ -1990,9 +1965,8 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                         return 0;
                       });
                       filterSelectedHappyHours.forEach((happyHour) => {
-                        const dateHappyHourStartSplit = happyHour.start.split(
-                          ":"
-                        );
+                        const dateHappyHourStartSplit =
+                          happyHour.start.split(":");
                         const dateHappyHourEndSplit = happyHour.end.split(":");
                         const dateStartHappyHourInNumber =
                           Number(dateHappyHourStartSplit[0]) * 60 +
@@ -2008,9 +1982,10 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                           i <= dateEndHappyHourInNumber;
                           i = i + timeReservationEveryTime
                         ) {
-                          const indexDaysInHappyHours = daysInHappyHours.findIndex(
-                            (itemHour) => itemHour.time === i
-                          );
+                          const indexDaysInHappyHours =
+                            daysInHappyHours.findIndex(
+                              (itemHour) => itemHour.time === i
+                            );
                           if (indexDaysInHappyHours >= 0) {
                             daysInHappyHours[indexDaysInHappyHours].happyHour =
                               happyHour.promotionPercent;
@@ -2064,40 +2039,39 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                     }
 
                     // filtrowanie i konwertowanie tablicy rezerwacji i porównywanie dostępnych godzin dla dat z promocjami
-                    avaibleHoursToConvertWithPromotions = avaibleHoursToConvertWithPromotions.filter(
-                      (itemAvaible) => {
-                        if (reserwationDoc.length > 0) {
-                          const isActive = reserwationDoc.some(
-                            (reserwation) => {
-                              const reserwationStartDate = reserwation.dateStart.split(
-                                ":"
-                              );
-                              const reserwationEndDate = reserwation.dateEnd.split(
-                                ":"
-                              );
-                              const reserwationStart =
-                                Number(reserwationStartDate[0]) * 60 +
-                                Number(reserwationStartDate[1]) -
-                                timeReserwation;
-                              const reserwationEnd =
-                                Number(reserwationEndDate[0]) * 60 +
-                                Number(reserwationEndDate[1]);
-                              return (
-                                itemAvaible.time >= reserwationStart &&
-                                itemAvaible.time < reserwationEnd
-                              );
-                            }
-                          );
-                          return !isActive;
-                        } else {
-                          return true;
+                    avaibleHoursToConvertWithPromotions =
+                      avaibleHoursToConvertWithPromotions.filter(
+                        (itemAvaible) => {
+                          if (reserwationDoc.length > 0) {
+                            const isActive = reserwationDoc.some(
+                              (reserwation) => {
+                                const reserwationStartDate =
+                                  reserwation.dateStart.split(":");
+                                const reserwationEndDate =
+                                  reserwation.dateEnd.split(":");
+                                const reserwationStart =
+                                  Number(reserwationStartDate[0]) * 60 +
+                                  Number(reserwationStartDate[1]) -
+                                  timeReserwation;
+                                const reserwationEnd =
+                                  Number(reserwationEndDate[0]) * 60 +
+                                  Number(reserwationEndDate[1]);
+                                return (
+                                  itemAvaible.time >= reserwationStart &&
+                                  itemAvaible.time < reserwationEnd
+                                );
+                              }
+                            );
+                            return !isActive;
+                          } else {
+                            return true;
+                          }
                         }
-                      }
-                    );
+                      );
 
                     // konwertowanie liczb na godziny oraz minuty wraz z promocjami
-                    const unConvertAvaibleHoursWithPromotions = avaibleHoursToConvertWithPromotions.map(
-                      (item) => {
+                    const unConvertAvaibleHoursWithPromotions =
+                      avaibleHoursToConvertWithPromotions.map((item) => {
                         let timeService = "";
                         if (Number(item.time) < 60) {
                           timeService = `0:${
@@ -2123,11 +2097,11 @@ exports.getWorkerDisabledHours = (req, res, next) => {
                           promotion: item.promotion,
                           happyHour: item.happyHour,
                         };
-                      }
-                    );
+                      });
 
                     res.status(201).json({
-                      avaibleHoursWithPromotions: unConvertAvaibleHoursWithPromotions,
+                      avaibleHoursWithPromotions:
+                        unConvertAvaibleHoursWithPromotions,
                     });
                   } else {
                     const error = new Error(
@@ -2706,9 +2680,8 @@ exports.updateWorkerReserwation = (req, res, next) => {
               const validDateStartReserwation = !!newTimeStart
                 ? newTimeStart
                 : reserwationsDoc.dateStart;
-              const splitDateStartReserwation = validDateStartReserwation.split(
-                ":"
-              );
+              const splitDateStartReserwation =
+                validDateStartReserwation.split(":");
               const splitNewDateReserwation = dateReserwation.split("-");
               const newDateReserwationToSave = new Date(
                 Number(splitNewDateReserwation[2]),
@@ -2802,15 +2775,16 @@ exports.updateWorkerReserwation = (req, res, next) => {
             .then((companyDoc) => {
               if (!!companyDoc) {
                 if (!!allUsers) {
-                  const reserwationStatus = !!resultReserwation.workerReserwation
-                    ? "rezerwation_worker"
-                    : resultReserwation.visitCanceled
-                    ? "rezerwation_canceled"
-                    : resultReserwation.visitChanged
-                    ? "rezerwation_changed"
-                    : resultReserwation.visitNotFinished
-                    ? "reserwation_not_finished"
-                    : "reserwation_finished";
+                  const reserwationStatus =
+                    !!resultReserwation.workerReserwation
+                      ? "rezerwation_worker"
+                      : resultReserwation.visitCanceled
+                      ? "rezerwation_canceled"
+                      : resultReserwation.visitChanged
+                      ? "rezerwation_changed"
+                      : resultReserwation.visitNotFinished
+                      ? "reserwation_not_finished"
+                      : "reserwation_finished";
 
                   const bulkArrayToUpdate = [];
 
@@ -3626,12 +3600,14 @@ exports.changeReserwation = (req, res, next) => {
                       .save()
                       .then((resultSavePreBooking) => {
                         let userIsBlocked = false;
-                        const validUserInformation = !!companyDocData.usersInformation
-                          ? companyDocData.usersInformation
-                          : [];
-                        const isUserInUsersInformations = validUserInformation.findIndex(
-                          (infUser) => infUser.userId == userId
-                        );
+                        const validUserInformation =
+                          !!companyDocData.usersInformation
+                            ? companyDocData.usersInformation
+                            : [];
+                        const isUserInUsersInformations =
+                          validUserInformation.findIndex(
+                            (infUser) => infUser.userId == userId
+                          );
 
                         if (isUserInUsersInformations >= 0) {
                           userIsBlocked =
@@ -3663,9 +3639,8 @@ exports.changeReserwation = (req, res, next) => {
                                 const disabledWorkerDate = [];
                                 let isEmptyDate = true;
 
-                                const arrayDateStartNewReserwation = dateStart.split(
-                                  ":"
-                                );
+                                const arrayDateStartNewReserwation =
+                                  dateStart.split(":");
 
                                 const convertDateStartToMinNewReserwation =
                                   Number(arrayDateStartNewReserwation[0]) * 60 +
@@ -3685,32 +3660,36 @@ exports.changeReserwation = (req, res, next) => {
                                   0,
                                   0
                                 );
-                                const selectedDateDayOfTheWeek = selectedDate.getDay();
+                                const selectedDateDayOfTheWeek =
+                                  selectedDate.getDay();
                                 const selectedFullDate = `${Number(
                                   arrayDateFull[0]
                                 )}-${Number(arrayDateFull[1])}-${Number(
                                   arrayDateFull[2]
                                 )}`;
-                                const mapWorkerConstWorkingHours = selectedWorker.constantWorkingHours.map(
-                                  (item) => {
-                                    return {
-                                      _id: item._id,
-                                      dayOfTheWeek: item.dayOfTheWeek,
-                                      start: item.startWorking,
-                                      end: item.endWorking,
-                                      disabled: item.disabled,
-                                    };
-                                  }
-                                );
+                                const mapWorkerConstWorkingHours =
+                                  selectedWorker.constantWorkingHours.map(
+                                    (item) => {
+                                      return {
+                                        _id: item._id,
+                                        dayOfTheWeek: item.dayOfTheWeek,
+                                        start: item.startWorking,
+                                        end: item.endWorking,
+                                        disabled: item.disabled,
+                                      };
+                                    }
+                                  );
 
-                                const workerConstWorkingHours = mapWorkerConstWorkingHours.find(
-                                  (item) =>
-                                    item.dayOfTheWeek ===
-                                    selectedDateDayOfTheWeek
-                                );
-                                let workerNoConstWorkingHours = selectedWorker.noConstantWorkingHours.find(
-                                  (item) => item.fullDate == selectedFullDate
-                                );
+                                const workerConstWorkingHours =
+                                  mapWorkerConstWorkingHours.find(
+                                    (item) =>
+                                      item.dayOfTheWeek ===
+                                      selectedDateDayOfTheWeek
+                                  );
+                                let workerNoConstWorkingHours =
+                                  selectedWorker.noConstantWorkingHours.find(
+                                    (item) => item.fullDate == selectedFullDate
+                                  );
 
                                 if (!!workerNoConstWorkingHours) {
                                   const startDate = new Date(
@@ -3732,18 +3711,17 @@ exports.changeReserwation = (req, res, next) => {
                                   };
                                   workerNoConstWorkingHours = newDateNoConst;
                                 }
-                                const selectedOpenTimeDay = !!workerNoConstWorkingHours
-                                  ? workerNoConstWorkingHours.holidays
-                                    ? null
-                                    : workerNoConstWorkingHours
-                                  : workerConstWorkingHours;
+                                const selectedOpenTimeDay =
+                                  !!workerNoConstWorkingHours
+                                    ? workerNoConstWorkingHours.holidays
+                                      ? null
+                                      : workerNoConstWorkingHours
+                                    : workerConstWorkingHours;
                                 /////////////////////////////////////////////////////////////
-                                const splitOpenWorker = selectedOpenTimeDay.start.split(
-                                  ":"
-                                );
-                                const splitCloseWorker = selectedOpenTimeDay.end.split(
-                                  ":"
-                                );
+                                const splitOpenWorker =
+                                  selectedOpenTimeDay.start.split(":");
+                                const splitCloseWorker =
+                                  selectedOpenTimeDay.end.split(":");
 
                                 const convertDateStartWorkWorker =
                                   Number(splitOpenWorker[0]) * 60 +
@@ -3754,9 +3732,8 @@ exports.changeReserwation = (req, res, next) => {
                                   Number(splitCloseWorker[1]);
 
                                 allReserwations.forEach((workerReserwation) => {
-                                  const arrayDateStart = workerReserwation.dateStart.split(
-                                    ":"
-                                  );
+                                  const arrayDateStart =
+                                    workerReserwation.dateStart.split(":");
 
                                   const convertDateStartToMin =
                                     Number(arrayDateStart[0]) * 60 +
@@ -3885,38 +3862,40 @@ exports.changeReserwation = (req, res, next) => {
                                         ? `0${Number(arrayDateFull[0])}`
                                         : Number(arrayDateFull[0])
                                     }`;
-                                    const newDateConvertToValidDateDateFull = new Date(
-                                      convertToValidDateDateFull
-                                    );
+                                    const newDateConvertToValidDateDateFull =
+                                      new Date(convertToValidDateDateFull);
 
-                                    const dayNewDateConvertToValidDateDateFull = newDateConvertToValidDateDateFull.getDay();
+                                    const dayNewDateConvertToValidDateDateFull =
+                                      newDateConvertToValidDateDateFull.getDay();
 
                                     //promotions
-                                    const filterSelectedPromotions = companyDocData.promotions.filter(
-                                      (promotionItem) => {
-                                        const dateStartPromotion = new Date(
-                                          promotionItem.start
-                                        );
-                                        const dateEndPromotion = new Date(
-                                          promotionItem.end
-                                        );
-                                        const isDayInPromotion =
-                                          dateStartPromotion <=
-                                            newDateConvertToValidDateDateFull &&
-                                          dateEndPromotion >=
-                                            newDateConvertToValidDateDateFull;
+                                    const filterSelectedPromotions =
+                                      companyDocData.promotions.filter(
+                                        (promotionItem) => {
+                                          const dateStartPromotion = new Date(
+                                            promotionItem.start
+                                          );
+                                          const dateEndPromotion = new Date(
+                                            promotionItem.end
+                                          );
+                                          const isDayInPromotion =
+                                            dateStartPromotion <=
+                                              newDateConvertToValidDateDateFull &&
+                                            dateEndPromotion >=
+                                              newDateConvertToValidDateDateFull;
 
-                                        const isServiceInPromotion = promotionItem.servicesInPromotion.some(
-                                          (promotionItemService) =>
-                                            promotionItemService ==
-                                            selectedServices._id
-                                        );
-                                        return (
-                                          isServiceInPromotion &&
-                                          isDayInPromotion
-                                        );
-                                      }
-                                    );
+                                          const isServiceInPromotion =
+                                            promotionItem.servicesInPromotion.some(
+                                              (promotionItemService) =>
+                                                promotionItemService ==
+                                                selectedServices._id
+                                            );
+                                          return (
+                                            isServiceInPromotion &&
+                                            isDayInPromotion
+                                          );
+                                        }
+                                      );
                                     let promotionNumber = null;
 
                                     if (filterSelectedPromotions.length > 0) {
@@ -3938,50 +3917,54 @@ exports.changeReserwation = (req, res, next) => {
                                     }
 
                                     //happy hours
-                                    const filterSelectedHappyHours = companyDocData.happyHoursConst.filter(
-                                      (happyHourItem) => {
-                                        const isSelectedDayHappyHour = happyHourItem.dayWeekIndex.some(
-                                          (happyHourItemService) =>
-                                            happyHourItemService ===
-                                            dayNewDateConvertToValidDateDateFull
-                                        );
+                                    const filterSelectedHappyHours =
+                                      companyDocData.happyHoursConst.filter(
+                                        (happyHourItem) => {
+                                          const isSelectedDayHappyHour =
+                                            happyHourItem.dayWeekIndex.some(
+                                              (happyHourItemService) =>
+                                                happyHourItemService ===
+                                                dayNewDateConvertToValidDateDateFull
+                                            );
 
-                                        const isServiceInHappyHour = happyHourItem.servicesInPromotion.some(
-                                          (happyHourItemService) =>
-                                            happyHourItemService == serviceId
-                                        );
-                                        const splitDateStart = happyHourItem.start.split(
-                                          ":"
-                                        );
-                                        const splitDateEnd = happyHourItem.end.split(
-                                          ":"
-                                        );
-                                        const dateStartToValid = new Date(
-                                          new Date(
-                                            newDateConvertToValidDateDateFull.setHours(
-                                              Number(splitDateStart[0])
+                                          const isServiceInHappyHour =
+                                            happyHourItem.servicesInPromotion.some(
+                                              (happyHourItemService) =>
+                                                happyHourItemService ==
+                                                serviceId
+                                            );
+                                          const splitDateStart =
+                                            happyHourItem.start.split(":");
+                                          const splitDateEnd =
+                                            happyHourItem.end.split(":");
+                                          const dateStartToValid = new Date(
+                                            new Date(
+                                              newDateConvertToValidDateDateFull.setHours(
+                                                Number(splitDateStart[0])
+                                              )
+                                            ).setMinutes(
+                                              Number(splitDateStart[1])
                                             )
-                                          ).setMinutes(
-                                            Number(splitDateStart[1])
-                                          )
-                                        );
-                                        const dateEndToValid = new Date(
-                                          new Date(
-                                            newDateConvertToValidDateDateFull.setHours(
-                                              Number(splitDateEnd[0])
+                                          );
+                                          const dateEndToValid = new Date(
+                                            new Date(
+                                              newDateConvertToValidDateDateFull.setHours(
+                                                Number(splitDateEnd[0])
+                                              )
+                                            ).setMinutes(
+                                              Number(splitDateEnd[1])
                                             )
-                                          ).setMinutes(Number(splitDateEnd[1]))
-                                        );
-                                        const validHappyHourDate =
-                                          dateStartToValid <= actualDate &&
-                                          actualDate <= dateEndToValid;
-                                        return (
-                                          isSelectedDayHappyHour &&
-                                          isServiceInHappyHour &&
-                                          validHappyHourDate
-                                        );
-                                      }
-                                    );
+                                          );
+                                          const validHappyHourDate =
+                                            dateStartToValid <= actualDate &&
+                                            actualDate <= dateEndToValid;
+                                          return (
+                                            isSelectedDayHappyHour &&
+                                            isServiceInHappyHour &&
+                                            validHappyHourDate
+                                          );
+                                        }
+                                      );
                                     let happyHourNumber = null;
                                     if (filterSelectedHappyHours.length > 0) {
                                       filterSelectedHappyHours.sort((a, b) => {
@@ -4010,9 +3993,10 @@ exports.changeReserwation = (req, res, next) => {
                                       !!!happyHourNumber &&
                                       !!isStampActive
                                     ) {
-                                      const filterCompanyStampsNoDisabled = companyDocData.companyStamps.filter(
-                                        (item) => item.disabled === false
-                                      );
+                                      const filterCompanyStampsNoDisabled =
+                                        companyDocData.companyStamps.filter(
+                                          (item) => item.disabled === false
+                                        );
 
                                       filterCompanyStampsNoDisabled.sort(
                                         (a, b) => {
@@ -4033,27 +4017,30 @@ exports.changeReserwation = (req, res, next) => {
                                       );
 
                                       //was companyDoc.companyStamps <- filterCompanyStampsNoDisabled
-                                      const findCompanyStamp = filterCompanyStampsNoDisabled.find(
-                                        (itemStamp) => {
-                                          const isInStampsService = itemStamp.servicesId.some(
-                                            (stampService) =>
-                                              stampService.toString() ===
-                                              serviceId.toString()
-                                          );
-                                          return isInStampsService;
-                                        }
-                                      );
+                                      const findCompanyStamp =
+                                        filterCompanyStampsNoDisabled.find(
+                                          (itemStamp) => {
+                                            const isInStampsService =
+                                              itemStamp.servicesId.some(
+                                                (stampService) =>
+                                                  stampService.toString() ===
+                                                  serviceId.toString()
+                                              );
+                                            return isInStampsService;
+                                          }
+                                        );
 
                                       if (!!findCompanyStamp) {
                                         if (!!!findCompanyStamp.disabled) {
-                                          const findStampId = resultUserDoc.stamps.findIndex(
-                                            (itemStamp) => {
-                                              return (
-                                                itemStamp.companyId.toString() ===
-                                                companyId.toString()
-                                              );
-                                            }
-                                          );
+                                          const findStampId =
+                                            resultUserDoc.stamps.findIndex(
+                                              (itemStamp) => {
+                                                return (
+                                                  itemStamp.companyId.toString() ===
+                                                  companyId.toString()
+                                                );
+                                              }
+                                            );
 
                                           if (findStampId >= 0) {
                                             let numberOfActiveStamps = 0;
@@ -4064,17 +4051,19 @@ exports.changeReserwation = (req, res, next) => {
                                               findStampId
                                             ].reserwations.forEach(
                                               (stampReserwation) => {
-                                                const splitDateEnd = stampReserwation.dateEnd.split(
-                                                  ""
-                                                );
-                                                const reserwationStampDateEnd = new Date(
-                                                  stampReserwation.dateYear,
-                                                  stampReserwation.dateMonth -
-                                                    1,
-                                                  stampReserwation.dateDay,
-                                                  Number(splitDateEnd[0]),
-                                                  Number(splitDateEnd[1])
-                                                );
+                                                const splitDateEnd =
+                                                  stampReserwation.dateEnd.split(
+                                                    ""
+                                                  );
+                                                const reserwationStampDateEnd =
+                                                  new Date(
+                                                    stampReserwation.dateYear,
+                                                    stampReserwation.dateMonth -
+                                                      1,
+                                                    stampReserwation.dateDay,
+                                                    Number(splitDateEnd[0]),
+                                                    Number(splitDateEnd[1])
+                                                  );
 
                                                 if (
                                                   !!!stampReserwation.visitCanceled &&
@@ -4100,12 +4089,10 @@ exports.changeReserwation = (req, res, next) => {
                                             ) {
                                               goodDateReserwations.sort(
                                                 (a, b) => {
-                                                  const firstItemToSort = new Date(
-                                                    a.fullDate
-                                                  );
-                                                  const secondItemToSort = new Date(
-                                                    b.fullDate
-                                                  );
+                                                  const firstItemToSort =
+                                                    new Date(a.fullDate);
+                                                  const secondItemToSort =
+                                                    new Date(b.fullDate);
                                                   if (
                                                     firstItemToSort <
                                                     secondItemToSort
@@ -4121,9 +4108,10 @@ exports.changeReserwation = (req, res, next) => {
                                               );
                                               stampNumber =
                                                 findCompanyStamp.promotionPercent;
-                                              const newGoodDateReserwation = goodDateReserwations.slice(
-                                                findCompanyStamp.countStampsToActive
-                                              );
+                                              const newGoodDateReserwation =
+                                                goodDateReserwations.slice(
+                                                  findCompanyStamp.countStampsToActive
+                                                );
                                               const newUserReserwations = [
                                                 ...badDateReserwations,
                                                 ...newGoodDateReserwation,
@@ -4147,11 +4135,12 @@ exports.changeReserwation = (req, res, next) => {
                                         : happyHourNumber !== null
                                         ? happyHourNumber
                                         : 0;
-                                    const resultPriceAfterPromotion = Math.floor(
-                                      (selectedServices.serviceCost *
-                                        (100 - resultPromotion)) /
-                                        100
-                                    );
+                                    const resultPriceAfterPromotion =
+                                      Math.floor(
+                                        (selectedServices.serviceCost *
+                                          (100 - resultPromotion)) /
+                                          100
+                                      );
 
                                     return Reserwation.updateOne(
                                       {
@@ -4165,7 +4154,8 @@ exports.changeReserwation = (req, res, next) => {
                                           isDraft: false,
                                           dateStart: dateStart,
                                           dateEnd: timeEndService,
-                                          costReserwation: resultPriceAfterPromotion,
+                                          costReserwation:
+                                            resultPriceAfterPromotion,
                                           timeReserwation:
                                             selectedServices.time,
                                           serviceName:
@@ -4175,7 +4165,8 @@ exports.changeReserwation = (req, res, next) => {
                                           visitChanged: true,
                                           extraCost: selectedServices.extraCost,
                                           extraTime: selectedServices.extraTime,
-                                          reserwationMessage: reserwationMessage,
+                                          reserwationMessage:
+                                            reserwationMessage,
                                           workerReserwation: false,
                                           serviceId: selectedServices._id,
                                           fullDate: actualDate,
@@ -4198,9 +4189,12 @@ exports.changeReserwation = (req, res, next) => {
                                         newReserwationDraftId.sendSMSNotifaction = false;
                                         newReserwationDraftId.sendSMSCanceled = false;
                                         newReserwationToValid.isDraft = false;
-                                        newReserwationToValid.dateStart = dateStart;
-                                        newReserwationToValid.dateEnd = timeEndService;
-                                        newReserwationToValid.costReserwation = resultPriceAfterPromotion;
+                                        newReserwationToValid.dateStart =
+                                          dateStart;
+                                        newReserwationToValid.dateEnd =
+                                          timeEndService;
+                                        newReserwationToValid.costReserwation =
+                                          resultPriceAfterPromotion;
                                         newReserwationToValid.timeReserwation =
                                           selectedServices.time;
                                         newReserwationToValid.serviceName =
@@ -4212,20 +4206,19 @@ exports.changeReserwation = (req, res, next) => {
                                           selectedServices.extraCost;
                                         newReserwationToValid.extraTime =
                                           selectedServices.extraTime;
-                                        newReserwationToValid.reserwationMessage = reserwationMessage;
+                                        newReserwationToValid.reserwationMessage =
+                                          reserwationMessage;
                                         newReserwationToValid.workerReserwation = false;
                                         newReserwationToValid.serviceId =
                                           selectedServices._id;
-                                        newReserwationToValid.fullDate = actualDate;
-                                        newReserwationToValid.activePromotion = !!promotionNumber
-                                          ? true
-                                          : false;
-                                        newReserwationToValid.activeHappyHour = !!happyHourNumber
-                                          ? true
-                                          : false;
-                                        newReserwationToValid.activeStamp = !!stampNumber
-                                          ? true
-                                          : false;
+                                        newReserwationToValid.fullDate =
+                                          actualDate;
+                                        newReserwationToValid.activePromotion =
+                                          !!promotionNumber ? true : false;
+                                        newReserwationToValid.activeHappyHour =
+                                          !!happyHourNumber ? true : false;
+                                        newReserwationToValid.activeStamp =
+                                          !!stampNumber ? true : false;
                                         newReserwationToValid.basicPrice =
                                           selectedServices.serviceCost;
 

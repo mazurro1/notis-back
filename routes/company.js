@@ -437,4 +437,51 @@ router.post(
   company.companyUpdateNipInfo
 );
 
+router.post(
+  "/company-get-services",
+  isAuth,
+  [body("companyId")],
+  [body("year")],
+  [body("month")],
+  [body("workerUserId")],
+  company.companyGetServices
+);
+
+router.post(
+  "/company-add-service",
+  isAuth,
+  [body("companyId")],
+  [body("name")],
+  [body("surname")],
+  [body("isActiveUser")],
+  [body("phone").isLength({ min: 9 })],
+  [body("objectName")],
+  [body("description")],
+  [body("cost")],
+  [body("statusValue")],
+  [body("workerUserId")],
+  company.companyAddService
+);
+
+router.post(
+  "/company-delete-service",
+  isAuth,
+  [body("companyId")],
+  [body("serviceId")],
+  company.companyDeleteServices
+);
+
+router.post(
+  "/company-update-service",
+  isAuth,
+  [body("companyId")],
+  [body("serviceId")],
+  [body("objectName")],
+  [body("description")],
+  [body("cost")],
+  [body("statusValue")],
+  [body("selectedWorkerUserId")],
+  company.companyUpdateServices
+);
+
 module.exports = router;
