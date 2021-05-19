@@ -26,6 +26,11 @@ const reserwationSchema = new Schema(
       required: true,
     },
 
+    hasCommuniting: {
+      type: Boolean,
+      required: false,
+    },
+
     dateYear: {
       type: Number,
       required: true,
@@ -128,12 +133,10 @@ const reserwationSchema = new Schema(
       type: Boolean,
       required: false,
     },
-
     sendSMSReserwation: {
       type: Boolean,
       required: false,
     },
-
     sendSMSNotifaction: {
       type: Boolean,
       required: false,

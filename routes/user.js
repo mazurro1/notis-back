@@ -249,4 +249,28 @@ router.post(
   user.userUpdateDefaultCompany
 );
 
+router.post(
+  "/user-history-services",
+  isAuth,
+  [body("month")],
+  [body("year")],
+  user.userHistoryServices
+);
+
+router.post(
+  "/user-history-communiting",
+  isAuth,
+  [body("month")],
+  [body("year")],
+  user.userHistoryCommuniting
+);
+
+router.post(
+  "/cancel-user-communiting",
+  isAuth,
+  [body("communityId")],
+  [body("reserwationId")],
+  user.userCancelCommuniting
+);
+
 module.exports = router;

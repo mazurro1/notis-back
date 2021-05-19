@@ -22,49 +22,82 @@ exports.addOpinion = (req, res, next) => {
   })
     .then((opinionDoc) => {
       if (!!!opinionDoc) {
-        return Reserwation.findOne({
-          _id: opinionData.reserwationId,
-          fromUser: userId,
-        })
-          .select("_id opinionId")
-          .then((reserwationData) => {
-            if (!!reserwationData) {
-              return Company.findOne({
-                _id: opinionData.company,
-              })
-                .select("_id opinionsCount opinionsValue")
-                .then((companyDoc) => {
-                  if (!!companyDoc) {
-                    const newOpinion = new Opinion({
-                      company: opinionData.company,
-                      opinionMessage: opinionData.opinionMessage,
-                      opinionStars: opinionData.opinionStars,
-                      replayOpinionMessage: null,
-                      reserwationId: opinionData.reserwationId,
-                      user: userId,
+        const actualDate = new Date();
+        const dateStartMonth = new Date(
+          actualDate.getFullYear(),
+          actualDate.getMonth(),
+          1,
+          2,
+          0
+        );
+        const dateEndMonth = new Date(
+          actualDate.getFullYear(),
+          actualDate.getMonth() + 1,
+          0,
+          0,
+          0
+        );
+
+        return Opinion.countDocuments({
+          user: userId,
+          createdAt: {
+            $gte: dateStartMonth.toISOString(),
+            $lte: dateEndMonth.toISOString(),
+          },
+        }).then((countOpinionMonth) => {
+          if (countOpinionMonth < 10) {
+            return Reserwation.findOne({
+              _id: opinionData.reserwationId,
+              fromUser: userId,
+            })
+              .select("_id opinionId")
+              .then((reserwationData) => {
+                if (!!reserwationData) {
+                  return Company.findOne({
+                    _id: opinionData.company,
+                  })
+                    .select("_id opinionsCount opinionsValue")
+                    .then((companyDoc) => {
+                      if (!!companyDoc) {
+                        const newOpinion = new Opinion({
+                          company: opinionData.company,
+                          opinionMessage: opinionData.opinionMessage,
+                          opinionStars: opinionData.opinionStars,
+                          replayOpinionMessage: null,
+                          reserwationId: opinionData.reserwationId,
+                          user: userId,
+                        });
+                        const validOpinionCount = !!companyDoc.opinionsCount
+                          ? companyDoc.opinionsCount
+                          : 0;
+                        const validOpinionValue = !!companyDoc.opinionsValue
+                          ? companyDoc.opinionsValue
+                          : 0;
+                        companyDoc.opinionsCount =
+                          Number(validOpinionCount) + 1;
+                        companyDoc.opinionsValue =
+                          Number(validOpinionValue) +
+                          Number(opinionData.opinionStars);
+                        reserwationData.opinionId = newOpinion._id;
+                        companyDoc.save();
+                        reserwationData.save();
+                        return newOpinion.save();
+                      }
                     });
-                    const validOpinionCount = !!companyDoc.opinionsCount
-                      ? companyDoc.opinionsCount
-                      : 0;
-                    const validOpinionValue = !!companyDoc.opinionsValue
-                      ? companyDoc.opinionsValue
-                      : 0;
-                    companyDoc.opinionsCount = Number(validOpinionCount) + 1;
-                    companyDoc.opinionsValue =
-                      Number(validOpinionValue) +
-                      Number(opinionData.opinionStars);
-                    reserwationData.opinionId = newOpinion._id;
-                    companyDoc.save();
-                    reserwationData.save();
-                    return newOpinion.save();
-                  }
-                });
-            } else {
-              const error = new Error("Brak firmy.");
-              error.statusCode = 412;
-              throw error;
-            }
-          });
+                } else {
+                  const error = new Error("Brak firmy.");
+                  error.statusCode = 412;
+                  throw error;
+                }
+              });
+          } else {
+            const error = new Error(
+              "Nie można wystawić więcej niż 10 opinii w ciągu miesiąca."
+            );
+            error.statusCode = 440;
+            throw error;
+          }
+        });
       } else {
         const error = new Error("Opinia jest już dodana.");
         error.statusCode = 412;

@@ -448,6 +448,16 @@ router.post(
 );
 
 router.post(
+  "/company-get-communitings",
+  isAuth,
+  [body("companyId")],
+  [body("year")],
+  [body("month")],
+  [body("workerUserId")],
+  company.companyGetCommunitings
+);
+
+router.post(
   "/company-add-service",
   isAuth,
   [body("companyId")],
@@ -458,6 +468,7 @@ router.post(
   [body("objectName")],
   [body("description")],
   [body("cost")],
+  [body("email")],
   [body("statusValue")],
   [body("workerUserId")],
   company.companyAddService
@@ -482,6 +493,69 @@ router.post(
   [body("statusValue")],
   [body("selectedWorkerUserId")],
   company.companyUpdateServices
+);
+
+router.post(
+  "/company-get-service-user-phone",
+  isAuth,
+  [body("companyId")],
+  [body("serviceId")],
+  company.getServiceCustomUserPhone
+);
+
+router.post(
+  "/company-get-communiting-user-phone",
+  isAuth,
+  [body("companyId")],
+  [body("communitingId")],
+  company.getServiceCustomUserPhoneCommuniting
+);
+
+router.post(
+  "/company-add-communiting",
+  isAuth,
+  [body("companyId")],
+  [body("name")],
+  [body("surname")],
+  [body("isActiveUser")],
+  [body("phone").isLength({ min: 9 })],
+  [body("description")],
+  [body("cost")],
+  [body("statusValue")],
+  [body("email")],
+  [body("workerUserId")],
+  [body("cityInput")],
+  [body("streetInput")],
+  [body("timeStart")],
+  [body("timeEnd")],
+  [body("addWorkerTime")],
+  [body("fullDate")],
+  company.companyAddCommuniting
+);
+
+router.post(
+  "/company-delete-communiting",
+  isAuth,
+  [body("companyId")],
+  [body("communitingId")],
+  [body("reserwationId")],
+  company.companyDeleteCommuniting
+);
+
+router.post(
+  "/company-update-communiting",
+  isAuth,
+  [body("companyId")],
+  [body("communitingId")],
+  [body("description")],
+  [body("cost")],
+  [body("statusValue")],
+  [body("selectedWorkerUserId")],
+  [body("timeStart")],
+  [body("timeEnd")],
+  [body("fullDate")],
+  [body("reserwationId")],
+  company.companyUpdateCommuniting
 );
 
 module.exports = router;

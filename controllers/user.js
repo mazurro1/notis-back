@@ -1,6 +1,8 @@
 const User = require("../models/user");
 const Company = require("../models/company");
 const Reserwation = require("../models/reserwation");
+const Service = require("../models/service");
+const Communiting = require("../models/Communiting");
 const CompanyUsersInformations = require("../models/companyUsersInformations");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
@@ -292,9 +294,8 @@ exports.login = (req, res, next) => {
             const isNotCompanyStamps = userWithToken.stamps.some(
               (stamp) => stamp.companyId === null
             );
-            const isNotCompanyFavourites = userWithToken.favouritesCompanys.some(
-              (fav) => fav === null
-            );
+            const isNotCompanyFavourites =
+              userWithToken.favouritesCompanys.some((fav) => fav === null);
             if (isNotCompanyStamps || isNotCompanyFavourites) {
               if (isNotCompanyStamps) {
                 const filterStampsUser = userWithToken.stamps.filter(
@@ -879,9 +880,10 @@ exports.edit = (req, res, next) => {
                 );
                 user.loginToken = token;
                 if (!!newPhone) {
-                  const validBlockUserChangePhoneNumber = !!user.blockUserChangePhoneNumber
-                    ? user.blockUserChangePhoneNumber
-                    : null;
+                  const validBlockUserChangePhoneNumber =
+                    !!user.blockUserChangePhoneNumber
+                      ? user.blockUserChangePhoneNumber
+                      : null;
                   if (validBlockUserChangePhoneNumber <= new Date()) {
                     const hashedPhoneNumber = Buffer.from(
                       newPhone,
@@ -891,9 +893,10 @@ exports.edit = (req, res, next) => {
                       phone: hashedPhoneNumber,
                     }).then((countUsersPhone) => {
                       if (!!!countUsersPhone) {
-                        const isPhoneInWhiteList = user.whiteListVerifiedPhones.some(
-                          (item) => item === hashedPhoneNumber
-                        );
+                        const isPhoneInWhiteList =
+                          user.whiteListVerifiedPhones.some(
+                            (item) => item === hashedPhoneNumber
+                          );
                         if (isPhoneInWhiteList) {
                           user.phoneVerified = true;
                         } else {
@@ -1710,9 +1713,10 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
     )
     .then((resultUserDoc) => {
       if (!!resultUserDoc) {
-        const validBlockUserSendVerifiedPhoneSms = !!resultUserDoc.blockUserSendVerifiedPhoneSms
-          ? resultUserDoc.blockUserSendVerifiedPhoneSms
-          : null;
+        const validBlockUserSendVerifiedPhoneSms =
+          !!resultUserDoc.blockUserSendVerifiedPhoneSms
+            ? resultUserDoc.blockUserSendVerifiedPhoneSms
+            : null;
         if (validBlockUserSendVerifiedPhoneSms <= new Date()) {
           const randomCode = makeid(6);
           const dateDeleteCompany = new Date(
@@ -2180,7 +2184,7 @@ exports.userUpdateDefaultCompany = (req, res, next) => {
           throw error;
         }
       } else {
-        const error = new Error("Brak firmy");
+        const error = new Error("Brak użytkownika");
         error.statusCode = 422;
         throw error;
       }
@@ -2189,6 +2193,151 @@ exports.userUpdateDefaultCompany = (req, res, next) => {
       res.status(201).json({
         message: "Zaktualizowano domyślną firmę",
       });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.userHistoryServices = (req, res, next) => {
+  const userId = req.userId;
+  const month = req.body.month;
+  const year = req.body.year;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id")
+    .then((userData) => {
+      if (!!userData) {
+        return Service.find({
+          userId: userId,
+          month: month,
+          year: year,
+        })
+          .select(
+            "_id companyId workerUserId userId objectName description cost statusValue dateStart dateService dateEnd createdAt updatedAt"
+          )
+          .populate("workerUserId", "name surname")
+          .populate("companyId", "_id name linkPath")
+          .then((resultsServices) => {
+            res.status(201).json({
+              userServices: resultsServices,
+            });
+          });
+      } else {
+        const error = new Error("Brak użytkownika");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.userHistoryCommuniting = (req, res, next) => {
+  const userId = req.userId;
+  const month = req.body.month;
+  const year = req.body.year;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id")
+    .then((userData) => {
+      if (!!userData) {
+        return Communiting.find({
+          userId: userId,
+          month: month,
+          year: year,
+        })
+          .select(
+            "_id year month day reserwationId companyId workerUserId userId description cost statusValue dateStartValid dateCommunitingValid dateEndValid timeStart timeEnd createdAt updatedAt city street"
+          )
+          .populate("workerUserId", "name surname")
+          .populate("companyId", "_id name linkPath")
+          .then((resultsCommunitings) => {
+            res.status(201).json({
+              userCommuniting: resultsCommunitings,
+            });
+          });
+      } else {
+        const error = new Error("Brak użytkownika");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.userCancelCommuniting = (req, res, next) => {
+  const userId = req.userId;
+  const communityId = req.body.communityId;
+  const reserwationId = req.body.reserwationId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id")
+    .then((userData) => {
+      if (!!userData) {
+        Reserwation.deleteOne({ _id: reserwationId }).then(() => {});
+        return Communiting.updateOne(
+          {
+            _id: communityId,
+            userId: userId,
+          },
+          {
+            $set: {
+              statusValue: 4,
+            },
+          }
+        ).then(() => {
+          res.status(200).json({
+            message: "Odwołano dojazd",
+          });
+        });
+      } else {
+        const error = new Error("Brak użytkownika");
+        error.statusCode = 422;
+        throw error;
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {

@@ -11,20 +11,16 @@ const opinionRoutes = require("./routes/opinion");
 const { startShedule } = require("./middleware/shedule");
 const cors = require("cors");
 const companyUsersInformationsRoutes = require("./routes/companyUsersInformations");
-const {
-  MONGODB_PASSWORD,
-  MONGODB_CLUSTER,
-  MONGODB_DATABASE,
-  MONGODB_USER,
-} = process.env;
+const { MONGODB_PASSWORD, MONGODB_CLUSTER, MONGODB_DATABASE, MONGODB_USER } =
+  process.env;
 app.use(
   cors({
     credentials: true,
     orgin: true,
     // origin: [
-    //   "https://api.nootis.pl",
-    //   "https://www.nootis.pl",
-    //   "https://nootis.pl/",
+    //   "https://api.meetsy.pl",
+    //   "https://www.meetsy.pl",
+    //   "https://meetsy.pl/",
     //   "https://dashboard.stripe.com/",
     // ],
     exposedHeaders: "*",

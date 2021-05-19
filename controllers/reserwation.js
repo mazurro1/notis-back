@@ -30,6 +30,195 @@ webpush.setVapidDetails(
   PRIVATE_KEY_VAPID
 );
 
+const addAllAlertsToUsers = async (
+  usersIds = [],
+  reserwationDoc = null,
+  notifactionType = null,
+  emailContent = [],
+  payloadWebPush = null,
+  docSMS = {
+    // sendSMSCompany = false,
+    // messageSMS = null,
+    // companyId
+    // smsTitleedd
+    //asdasddasd
+  },
+  sendToUserIdEmailWebPushSMS = null
+) => {
+  let bulkArrayToUpdate = [];
+  let smsSendDone = false;
+  return User.find({
+    _id: { $in: usersIds },
+    accountVerified: true,
+  })
+    .select(
+      "_id email vapidEndpoint phoneVerified phone whiteListVerifiedPhones"
+    )
+    .then(async (usersResult) => {
+      for (const userDoc of usersResult) {
+        let newAlertData = null;
+        if (!!reserwationDoc && !!notifactionType) {
+          newAlertData = {
+            reserwationId: reserwationDoc._id,
+            active: true,
+            type: notifactionType,
+            creationTime: new Date(),
+            companyChanged: false,
+          };
+
+          io.getIO().emit(`user${userDoc._id}`, {
+            action: "update-alerts",
+            alertData: {
+              reserwationId: reserwationDoc,
+              active: true,
+              type: notifactionType,
+              creationTime: new Date(),
+              companyChanged: false,
+            },
+          });
+        }
+
+        if (!!newAlertData) {
+          bulkArrayToUpdate.push({
+            updateOne: {
+              filter: {
+                _id: userDoc._id,
+              },
+              update: {
+                $inc: { alertActiveCount: 1 },
+                $push: {
+                  alerts: {
+                    $each: [newAlertData],
+                    $position: 0,
+                  },
+                },
+              },
+            },
+          });
+        }
+
+        if (
+          emailContent.length === 2 &&
+          !!userDoc.email &&
+          sendToUserIdEmailWebPushSMS == userDoc._id
+        ) {
+          await transporter.sendMail({
+            to: userDoc.email,
+            from: MAIL_INFO,
+            subject: emailContent[0],
+            html: emailContent[1],
+          });
+        }
+
+        if (
+          !!userDoc.vapidEndpoint &&
+          !!payloadWebPush &&
+          sendToUserIdEmailWebPushSMS === userDoc._id
+        ) {
+          await webpush
+            .sendNotification(
+              userDoc.vapidEndpoint,
+              JSON.stringify(payloadWebPush)
+            )
+            .then(() => {})
+            .catch(() => {});
+        }
+
+        if (!!docSMS) {
+          if (
+            !!docSMS.sendSMSCompany &&
+            !!docSMS.messageSMS &&
+            !!docSMS.smsTitle &&
+            sendToUserIdEmailWebPushSMS == userDoc._id
+          ) {
+            let selectedPhoneNumber = null;
+            if (!!userDoc.phoneVerified) {
+              selectedPhoneNumber = userDoc.phone;
+            } else {
+              if (!!userDoc.whiteListVerifiedPhones) {
+                if (userDoc.whiteListVerifiedPhones.length > 0) {
+                  selectedPhoneNumber =
+                    userDoc.whiteListVerifiedPhones[
+                      userDoc.whiteListVerifiedPhones.length - 1
+                    ];
+                }
+              }
+            }
+
+            if (!!selectedPhoneNumber) {
+              const userPhone = Buffer.from(
+                selectedPhoneNumber,
+                "base64"
+              ).toString("utf-8");
+              await Company.updateOne(
+                {
+                  _id: docSMS.companyId,
+                  sms: { $gt: 0 },
+                },
+                {
+                  $inc: {
+                    sms: -1,
+                  },
+                  $addToSet: {
+                    raportSMS: {
+                      year: new Date().getFullYear(),
+                      month: new Date().getMonth() + 1,
+                      count: 1,
+                      isAdd: false,
+                      title: docSMS.smsTitle,
+                    },
+                  },
+                },
+                { upsert: true, safe: true },
+                null
+              )
+                .then(async () => {
+                  const params = {
+                    Message: docSMS.messageSMS,
+                    MessageStructure: "string",
+                    PhoneNumber: `+48${userPhone}`,
+                    MessageAttributes: {
+                      "AWS.SNS.SMS.SenderID": {
+                        DataType: "String",
+                        StringValue: "Meetsy",
+                      },
+                    },
+                  };
+                  let snsResult = await sns
+                    .publish(params, (err, data) => {
+                      if (data) {
+                        return data;
+                      } else {
+                        return false;
+                      }
+                    })
+                    .promise();
+                  if (!!snsResult) {
+                    smsSendDone = true;
+                  }
+                })
+                .catch((err) => {});
+            }
+          }
+        }
+      }
+
+      if (bulkArrayToUpdate.length > 0) {
+        await User.bulkWrite(bulkArrayToUpdate)
+          .then(() => {})
+          .catch(() => {
+            const error = new Error("Błąd podczas aktualizacji powiadomień.");
+            error.statusCode = 422;
+            throw error;
+          });
+      }
+      return {
+        notifactionDone: true,
+        smsSendDone: smsSendDone,
+      };
+    });
+};
+
 const transporter = nodemailer.createTransport({
   host: MAIL_HOST,
   port: Number(MAIL_PORT),
@@ -310,6 +499,7 @@ exports.addReserwation = (req, res, next) => {
                       fullDate: actualDate,
                       workerReserwation: false,
                       isDraft: true,
+                      hasCommuniting: false,
                     });
                     newReserwationDraftId = newReserwationToValid._id;
                   }
@@ -1088,9 +1278,7 @@ exports.addReserwation = (req, res, next) => {
         _id: { $in: [userId, workerUserId] },
         accountVerified: true,
       })
-        .select(
-          "_id alerts alertActiveCount stamps whiteListVerifiedPhones phone phoneVerified vapidEndpoint"
-        )
+        .select("_id stamps")
         .then((allUsers) => {
           if (!!allUsers) {
             return resultReserwation
@@ -1104,40 +1292,15 @@ exports.addReserwation = (req, res, next) => {
                   select:
                     "name surname linkPath smsReserwationAvaible sms companyStamps",
                 },
-                function (err, resultReserwationPopulate) {
-                  const bulkArrayToUpdate = [];
-                  if (allUsers.length > 0) {
-                    allUsers.forEach((userResult) => {
-                      const newAlertData = {
-                        reserwationId: resultReserwation._id,
-                        active: true,
-                        type: "rezerwation_created",
-                        creationTime: new Date(),
-                        companyChanged: false,
-                      };
-                      io.getIO().emit(`user${userResult._id}`, {
-                        action: "update-alerts",
-                        alertData: {
-                          reserwationId: resultReserwationPopulate,
-                          active: true,
-                          type: "rezerwation_created",
-                          creationTime: new Date(),
-                          companyChanged: false,
-                        },
-                      });
-
-                      transporter.sendMail({
-                        to: userEmail,
-                        from: MAIL_INFO,
-                        subject: `Dokonano rezerwacji w firmie ${resultReserwationPopulate.company.name}`,
-                        html: `<h1>Termin rezerwacji:</h1>
+                async (err, resultReserwationPopulate) => {
+                  const emailContent = `<h1>Termin rezerwacji:</h1>
                       <h4>
                         Nazwa usługi: ${resultReserwationPopulate.serviceName}
                       </h4>
                       <h4>
                         Termin: ${resultReserwationPopulate.dateDay}-${
-                          resultReserwationPopulate.dateMonth
-                        }-${resultReserwationPopulate.dateYear}
+                    resultReserwationPopulate.dateMonth
+                  }-${resultReserwationPopulate.dateYear}
                       </h4>
                       <h4>
                         Godzina: ${resultReserwationPopulate.dateStart}
@@ -1151,105 +1314,67 @@ exports.addReserwation = (req, res, next) => {
                         Koszt: ${
                           resultReserwationPopulate.costReserwation
                         } zł ${resultReserwationPopulate.extraCost ? "+" : ""}
-                      </h4>
-                      `,
-                      });
+                      </h4>`;
 
-                      if (
-                        userId == userResult._id &&
-                        resultReserwationPopulate.company.smsReserwationAvaible
-                      ) {
-                        let selectedPhoneNumber = null;
-                        if (!!userResult.phoneVerified) {
-                          selectedPhoneNumber = userResult.phone;
-                        } else {
-                          if (!!userResult.whiteListVerifiedPhones) {
-                            if (userResult.whiteListVerifiedPhones.length > 0) {
-                              selectedPhoneNumber =
-                                userResult.whiteListVerifiedPhones[
-                                  userResult.whiteListVerifiedPhones.length - 1
-                                ];
-                            }
-                          }
-                        }
+                  const payload = {
+                    title: `Dokonano rezerwacji dnia: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}, na usługę: ${resultReserwationPopulate.serviceName}`,
+                    body: "this is the body",
+                    icon: "images/someImageInPath.png",
+                  };
 
-                        if (!!selectedPhoneNumber) {
-                          const userPhone = Buffer.from(
-                            selectedPhoneNumber,
-                            "base64"
-                          ).toString("utf-8");
-                          Company.updateOne(
-                            {
-                              _id: companyId,
-                              sms: { $gt: 0 },
-                            },
-                            {
-                              $inc: {
-                                sms: -1,
-                              },
-                              $addToSet: {
-                                raportSMS: {
-                                  year: new Date().getFullYear(),
-                                  month: new Date().getMonth() + 1,
-                                  count: 1,
-                                  isAdd: false,
-                                  title: "sms_add_reserwation",
-                                },
-                              },
-                            },
-                            { upsert: true, safe: true },
-                            null
-                          )
-                            .then((result) => {
-                              const params = {
-                                Message: `Dokonano rezerwacji w firmie: ${
-                                  resultReserwationPopulate.company.name
-                                } dnia: ${resultReserwationPopulate.dateDay}-${
-                                  resultReserwationPopulate.dateMonth
-                                }-${
-                                  resultReserwationPopulate.dateYear
-                                }, o godzine: ${
-                                  resultReserwationPopulate.dateStart
-                                }, na usługę: ${
-                                  resultReserwationPopulate.serviceName
-                                }. Czas trwania usługi: ${
-                                  resultReserwationPopulate.timeReserwation
-                                }min ${
-                                  resultReserwationPopulate.extraTime ? "+" : ""
-                                }. Koszt usługi: ${
-                                  resultReserwationPopulate.costReserwation
-                                } zł ${
-                                  resultReserwationPopulate.extraCost ? "+" : ""
-                                }`,
-                                MessageStructure: "string",
-                                PhoneNumber: `+48${userPhone}`,
-                                MessageAttributes: {
-                                  "AWS.SNS.SMS.SenderID": {
-                                    DataType: "String",
-                                    StringValue: "Meetsy",
-                                  },
-                                },
-                              };
-                              // sns.publish(params, function (err, data) {
-                              //   if (err) console.log(err, err.stack);
-                              // });
-                              Reserwation.updateOne(
-                                {
-                                  _id: resultReserwation._id,
-                                  sendSMSReserwation: false,
-                                },
-                                {
-                                  $set: {
-                                    sendSMSReserwation: true,
-                                  },
-                                }
-                              )
-                                .then(() => {})
-                                .catch(() => {});
-                            })
-                            .catch((err) => {});
-                        }
+                  const messageSMS = `Dokonano rezerwacji w firmie: ${
+                    resultReserwationPopulate.company.name
+                  } dnia: ${resultReserwationPopulate.dateDay}-${
+                    resultReserwationPopulate.dateMonth
+                  }-${resultReserwationPopulate.dateYear}, o godzine: ${
+                    resultReserwationPopulate.dateStart
+                  }, na usługę: ${
+                    resultReserwationPopulate.serviceName
+                  }. Czas trwania usługi: ${
+                    resultReserwationPopulate.timeReserwation
+                  }min ${
+                    resultReserwationPopulate.extraTime ? "+" : ""
+                  }. Koszt usługi: ${
+                    resultReserwationPopulate.costReserwation
+                  } zł ${resultReserwationPopulate.extraCost ? "+" : ""}`;
+
+                  const emailSubject = `Dokonano rezerwacji w firmie ${resultReserwationPopulate.company.name}`;
+
+                  const { smsSendDone } = await addAllAlertsToUsers(
+                    [userId, workerUserId],
+                    resultReserwationPopulate,
+                    "rezerwation_created",
+                    [emailSubject, emailContent],
+                    payload,
+                    {
+                      sendSMS:
+                        resultReserwationPopulate.company.smsReserwationAvaible,
+                      messageSMS: messageSMS,
+                      companyId: companyId,
+                      smsTitle: "sms_add_reserwation",
+                    },
+                    userId
+                  );
+
+                  if (!!smsSendDone) {
+                    Reserwation.updateOne(
+                      {
+                        _id: resultReserwation._id,
+                        sendSMSReserwation: false,
+                      },
+                      {
+                        $set: {
+                          sendSMSReserwation: true,
+                        },
                       }
+                    )
+                      .then(() => {})
+                      .catch(() => {});
+                  }
+
+                  const bulkArrayToUpdate = [];
+                  if (allUsers.length > 0) {
+                    allUsers.forEach((userResult) => {
                       if (
                         !!!resultReserwation.activePromotion &&
                         !!!resultReserwation.activeHappyHour &&
@@ -1321,39 +1446,6 @@ exports.addReserwation = (req, res, next) => {
                           }
                         }
                       }
-
-                      const payload = {
-                        title: `Dokonano rezerwacji dnia: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}, na usługę: ${resultReserwationPopulate.serviceName}`,
-                        body: "this is the body",
-                        icon: "images/someImageInPath.png",
-                      };
-
-                      if (!!userResult.vapidEndpoint) {
-                        webpush
-                          .sendNotification(
-                            userResult.vapidEndpoint,
-                            JSON.stringify(payload)
-                          )
-                          .then(() => {})
-                          .catch(() => {});
-                      }
-
-                      bulkArrayToUpdate.push({
-                        updateOne: {
-                          filter: {
-                            _id: userResult._id,
-                          },
-                          update: {
-                            $inc: { alertActiveCount: 1 },
-                            $push: {
-                              alerts: {
-                                $each: [newAlertData],
-                                $position: 0,
-                              },
-                            },
-                          },
-                        },
-                      });
                     });
                   } else {
                     Reserwation.deleteOne({
@@ -1504,6 +1596,7 @@ exports.addReserwationWorker = (req, res, next) => {
             costReserwation: 0,
             timeReserwation: 0,
             fullDate: actualDate,
+            hasCommuniting: false,
           });
           return newReserwationWorker.save();
         })
@@ -2308,6 +2401,10 @@ exports.getUserReserwationsAll = (req, res, next) => {
         workerReserwation: false,
         opinionId: null,
         isDraft: { $in: [false, null] },
+        visitCanceled: false,
+        fullDate: {
+          $lte: new Date().toISOString(),
+        },
       }
     : {
         fromUser: userId,
@@ -2315,6 +2412,9 @@ exports.getUserReserwationsAll = (req, res, next) => {
         dateMonth: selectedMonth,
         workerReserwation: false,
         isDraft: { $in: [false, null] },
+        fullDate: {
+          $lte: new Date().toISOString(),
+        },
       };
 
   Reserwation.find(queryToReserwation)
@@ -3592,6 +3692,7 @@ exports.changeReserwation = (req, res, next) => {
                       fullDate: actualDate,
                       workerReserwation: false,
                       isDraft: true,
+                      hasCommuniting: false,
                     });
                     newReserwationDraftId = newReserwationToValid._id;
                   }

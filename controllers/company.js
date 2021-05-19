@@ -7,6 +7,7 @@ const RegisterCompany = require("../models/registerCompany");
 const Opinion = require("../models/opinion");
 const Report = require("../models/reports");
 const Service = require("../models/service");
+const Communiting = require("../models/Communiting");
 const mongoose = require("mongoose");
 const User = require("../models/user");
 const { validationResult } = require("express-validator");
@@ -6319,7 +6320,7 @@ exports.companyAddService = (req, res, next) => {
       $gte: new Date().toISOString(),
     },
   })
-    .select("_id owner workers._id workers.user")
+    .select("_id owner workers._id workers.user workers.permissions")
     .then((companyData) => {
       if (!!companyData) {
         let hasPermission = companyData.owner == userId;
@@ -6462,7 +6463,7 @@ exports.companyGetServices = (req, res, next) => {
       $gte: new Date().toISOString(),
     },
   })
-    .select("_id owner workers._id workers.user")
+    .select("_id owner workers._id workers.user workers.permissions")
     .populate("workers.user", "_id name surname")
     .then((companyData) => {
       if (!!companyData) {
@@ -6581,7 +6582,7 @@ exports.companyUpdateServices = (req, res, next) => {
       $gte: new Date().toISOString(),
     },
   })
-    .select("_id owner workers._id workers.user")
+    .select("_id owner workers._id workers.user workers.permissions")
     .then((companyData) => {
       if (!!companyData) {
         let hasPermission = companyData.owner == userId;
@@ -6621,6 +6622,657 @@ exports.companyUpdateServices = (req, res, next) => {
         ).then(() => {
           res.status(200).json({
             message: "Zaktualizowano serwis",
+          });
+        });
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.getServiceCustomUserPhone = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const userId = req.userId;
+  const serviceId = req.body.serviceId;
+
+  Company.findOne({ _id: companyId })
+    .select("_id workers.permissions workers.user owner workers._id")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          return Service.findOne({
+            _id: serviceId,
+          })
+            .select("_id userId phone")
+            .populate(
+              "userId",
+              "_id phone whiteListVerifiedPhones phoneVerified"
+            )
+            .then((serviceDoc) => {
+              if (!!serviceDoc) {
+                if (!!serviceDoc.userId) {
+                  let selectedPhoneNumber = null;
+                  if (!!serviceDoc.userId.phoneVerified) {
+                    selectedPhoneNumber = serviceDoc.userId.phone;
+                  } else {
+                    if (!!serviceDoc.userId.whiteListVerifiedPhones) {
+                      if (
+                        serviceDoc.userId.whiteListVerifiedPhones.length > 0
+                      ) {
+                        selectedPhoneNumber =
+                          serviceDoc.userId.whiteListVerifiedPhones[
+                            serviceDoc.userId.whiteListVerifiedPhones.length - 1
+                          ];
+                      }
+                    }
+                  }
+                  if (!!selectedPhoneNumber) {
+                    const userPhone = Buffer.from(
+                      selectedPhoneNumber,
+                      "base64"
+                    ).toString("utf-8");
+                    res.status(201).json({
+                      userPhone: userPhone,
+                    });
+                  } else {
+                    res.status(201).json({
+                      userPhone: "None",
+                    });
+                  }
+                } else if (!!serviceDoc.phone) {
+                  const userPhoneService = Buffer.from(
+                    serviceDoc.phone,
+                    "base64"
+                  ).toString("utf-8");
+                  res.status(201).json({
+                    userPhone: userPhoneService,
+                  });
+                } else {
+                  const error = new Error("Brak podanego użytkownika.");
+                  error.statusCode = 401;
+                  throw error;
+                }
+              } else {
+                const error = new Error("Brak usługi.");
+                error.statusCode = 422;
+                throw error;
+              }
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas wysyłania numeru użytkownika.";
+              }
+              next(err);
+            });
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak podanej firmy.";
+      }
+      next(err);
+    });
+};
+
+exports.getServiceCustomUserPhoneCommuniting = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const userId = req.userId;
+  const communitingId = req.body.communitingId;
+
+  Company.findOne({ _id: companyId })
+    .select("_id workers._id workers.permissions workers.user owner")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 6
+            );
+          }
+        }
+        if (hasPermission) {
+          return Communiting.findOne({
+            _id: communitingId,
+          })
+            .select("_id userId phone")
+            .populate(
+              "userId",
+              "_id phone whiteListVerifiedPhones phoneVerified"
+            )
+            .then((serviceDoc) => {
+              if (!!serviceDoc) {
+                if (!!serviceDoc.userId) {
+                  let selectedPhoneNumber = null;
+                  if (!!serviceDoc.userId.phoneVerified) {
+                    selectedPhoneNumber = serviceDoc.userId.phone;
+                  } else {
+                    if (!!serviceDoc.userId.whiteListVerifiedPhones) {
+                      if (
+                        serviceDoc.userId.whiteListVerifiedPhones.length > 0
+                      ) {
+                        selectedPhoneNumber =
+                          serviceDoc.userId.whiteListVerifiedPhones[
+                            serviceDoc.userId.whiteListVerifiedPhones.length - 1
+                          ];
+                      }
+                    }
+                  }
+                  if (!!selectedPhoneNumber) {
+                    const userPhone = Buffer.from(
+                      selectedPhoneNumber,
+                      "base64"
+                    ).toString("utf-8");
+                    res.status(201).json({
+                      userPhone: userPhone,
+                    });
+                  } else {
+                    res.status(201).json({
+                      userPhone: "None",
+                    });
+                  }
+                } else if (!!serviceDoc.phone) {
+                  const userPhoneService = Buffer.from(
+                    serviceDoc.phone,
+                    "base64"
+                  ).toString("utf-8");
+                  res.status(201).json({
+                    userPhone: userPhoneService,
+                  });
+                } else {
+                  const error = new Error("Brak podanego użytkownika.");
+                  error.statusCode = 401;
+                  throw error;
+                }
+              } else {
+                const error = new Error("Brak usługi.");
+                error.statusCode = 422;
+                throw error;
+              }
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas wysyłania numeru użytkownika.";
+              }
+              next(err);
+            });
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak wybranej firmy.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak podanej firmy.";
+      }
+      next(err);
+    });
+};
+
+exports.companyGetCommunitings = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const year = req.body.year;
+  const month = req.body.month;
+  const workerUserId = req.body.workerUserId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select("_id owner workers._id workers.user workers.permissions")
+    .populate("workers.user", "_id name surname")
+    .then((companyData) => {
+      if (!!companyData) {
+        let hasPermission = companyData.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = companyData.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 10
+            );
+          }
+        }
+        return Communiting.find({
+          year: year,
+          month: month,
+          workerUserId: hasPermission ? workerUserId : userId,
+          companyId: companyData._id,
+        })
+          .select("-phone")
+          .populate("workerUserId userId", "_id name surname")
+          .then((resultCommuniting) => {
+            res.status(200).json({
+              communitings: resultCommuniting,
+              workers: hasPermission ? companyData.workers : null,
+            });
+          });
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyAddCommuniting = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const name = req.body.name;
+  const surname = req.body.surname;
+  const email = req.body.email;
+  const isActiveUser = req.body.isActiveUser;
+  const phone = req.body.phone;
+  const description = req.body.description;
+  const cost = req.body.cost;
+  const statusValue = req.body.statusValue;
+  const workerUserId = req.body.workerUserId;
+  const cityInput = req.body.cityInput;
+  const streetInput = req.body.streetInput;
+  const timeStart = req.body.timeStart;
+  const timeEnd = req.body.timeEnd;
+  const addWorkerTime = req.body.addWorkerTime;
+  const fullDate = req.body.fullDate;
+
+  const arrayDateFull = fullDate.split("-");
+  const splitDateStart = timeStart.split(":");
+
+  const actualDate = new Date(
+    Number(arrayDateFull[2]),
+    Number(arrayDateFull[1]) - 1,
+    Number(arrayDateFull[0]),
+    Number(splitDateStart[0]),
+    Number(splitDateStart[1])
+  );
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select("_id owner workers._id workers.user workers.permissions")
+    .then((companyData) => {
+      if (!!companyData) {
+        let hasPermission = companyData.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = companyData.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 10
+            );
+          }
+        }
+
+        const hashedPhoneNumber = Buffer.from(
+          phone.toString(),
+          "utf-8"
+        ).toString("base64");
+
+        return User.findOne({
+          phone: hashedPhoneNumber,
+          phoneVerified: true,
+        })
+          .select("_id")
+          .then((resultToUser) => {
+            let newReserwationWorker = null;
+            if (addWorkerTime) {
+              newReserwationWorker = new Reserwation({
+                fromUser: userId,
+                toWorkerUserId: workerUserId,
+                company: companyId,
+                dateStart: timeStart,
+                dateEnd: timeEnd,
+                costReserwation: null,
+                timeReserwation: null,
+                visitNotFinished: false,
+                visitCanceled: false,
+                visitChanged: false,
+                workerReserwation: true,
+                dateYear: Number(arrayDateFull[2]),
+                dateMonth: Number(arrayDateFull[1]),
+                dateDay: Number(arrayDateFull[0]),
+                reserwationMessage: ``,
+                costReserwation: 0,
+                timeReserwation: 0,
+                fullDate: actualDate,
+                hasCommuniting: true,
+              });
+              newReserwationWorker.save();
+            }
+            if (isActiveUser) {
+              if (!!resultToUser) {
+                const newCommuniting = new Communiting({
+                  userId: !!resultToUser ? resultToUser._id : null,
+                  companyId: companyData._id,
+                  workerUserId: hasPermission ? workerUserId : userId,
+                  description: description,
+                  cost: cost,
+                  statusValue: statusValue,
+                  dateStartValid: statusValue >= 1 ? new Date() : null,
+                  dateCommunitingValid: statusValue >= 2 ? new Date() : null,
+                  dateEndValid: statusValue >= 3 ? new Date() : null,
+                  month: actualDate.getMonth() + 1,
+                  year: actualDate.getFullYear(),
+                  day: actualDate.getDate(),
+                  timeStart: timeStart,
+                  timeEnd: timeEnd,
+                  city: cityInput,
+                  street: streetInput,
+                  reserwationId: !!newReserwationWorker
+                    ? newReserwationWorker._id
+                    : null,
+                });
+                return newCommuniting.save();
+              } else {
+                const error = new Error("Brak użytkownika");
+                error.statusCode = 440;
+                throw error;
+              }
+            } else {
+              const hashedName = Buffer.from(name.toString(), "utf-8").toString(
+                "base64"
+              );
+              const hashedSurname = Buffer.from(
+                surname.toString(),
+                "utf-8"
+              ).toString("base64");
+
+              const newCommuniting = new Communiting({
+                userId: !!resultToUser ? resultToUser._id : null,
+                companyId: companyData._id,
+                workerUserId: hasPermission ? workerUserId : userId,
+                name: hashedName,
+                surname: hashedSurname,
+                email: !!email ? email : null,
+                phone: hashedPhoneNumber,
+                description: description,
+                cost: cost,
+                statusValue: statusValue,
+                dateStartValid: statusValue >= 1 ? new Date() : null,
+                dateCommunitingValid: statusValue >= 2 ? new Date() : null,
+                dateEndValid: statusValue >= 3 ? new Date() : null,
+                month: actualDate.getMonth() + 1,
+                year: actualDate.getFullYear(),
+                day: actualDate.getDate(),
+                timeStart: timeStart,
+                timeEnd: timeEnd,
+                city: cityInput,
+                street: streetInput,
+                reserwationId: !!newReserwationWorker
+                  ? newReserwationWorker._id
+                  : null,
+              });
+              return newCommuniting.save();
+            }
+          });
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((resultSaveCommuniting) => {
+      return CompanyUsersInformations.findOne({
+        userId: userId,
+        companyId: companyId,
+      }).then((resultCompanyUsersInformations) => {
+        if (!!!resultCompanyUsersInformations) {
+          const newUserCompanyInfo = new CompanyUsersInformations({
+            userId: userId,
+            companyId: companyId,
+            messages: [],
+          });
+          newUserCompanyInfo.save();
+        }
+        return resultSaveCommuniting;
+      });
+    })
+    .then((resultSaveCommuniting) => {
+      return resultSaveCommuniting.populate(
+        {
+          path: "userId workerUserId",
+          select: "name surname _id",
+        },
+        function (err, populateCommuniting) {
+          populateCommuniting.phone = null;
+          res.status(200).json({
+            newCommuniting: populateCommuniting,
+          });
+        }
+      );
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyDeleteCommuniting = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const communitingId = req.body.communitingId;
+  const reserwationId = req.body.reserwationId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id owner workers._id workers.user")
+    .then((companyData) => {
+      if (!!companyData) {
+        let hasPermission = companyData.owner == userId;
+        if (!hasPermission) {
+          hasPermission = companyData.workers.some((worker) => {
+            return worker.user == userId;
+          });
+        }
+        if (!!hasPermission) {
+          if (!!reserwationId) {
+            Reserwation.deleteOne({
+              _id: reserwationId,
+            }).then(() => {});
+          }
+          return Communiting.deleteOne({
+            _id: communitingId,
+          }).then(() => {
+            res.status(200).json({
+              message: "Usunieto serwis",
+            });
+          });
+        } else {
+          const error = new Error("Brak uprawnień");
+          error.statusCode = 422;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak firmy");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyUpdateCommuniting = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const communitingId = req.body.communitingId;
+  const description = req.body.description;
+  const cost = req.body.cost;
+  const statusValue = req.body.statusValue;
+  const selectedWorkerUserId = req.body.selectedWorkerUserId;
+  const timeStart = req.body.timeStart;
+  const timeEnd = req.body.timeEnd;
+  const fullDate = req.body.fullDate;
+  const reserwationId = req.body.reserwationId;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select("_id owner workers._id workers.user workers.permissions")
+    .then((companyData) => {
+      if (!!companyData) {
+        let hasPermission = companyData.owner == userId;
+        if (!hasPermission) {
+          const selectedWorker = companyData.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = selectedWorker.permissions.some(
+              (perm) => perm === 10
+            );
+          }
+        }
+        const validPermission = !!hasPermission ? {} : { workerUserId: userId };
+        const validDateService =
+          statusValue == 2 ? { dateCommunitingValid: new Date() } : {};
+        const validDateServiceEnd =
+          statusValue == 3 ? { dateEndValid: new Date() } : {};
+
+        const splitFullDate = fullDate.split("-");
+
+        if (statusValue == 4) {
+          Reserwation.deleteOne({
+            _id: reserwationId,
+            company: companyId,
+          }).then(() => {});
+        } else {
+          Reserwation.updateOne(
+            {
+              _id: reserwationId,
+              company: companyId,
+            },
+            {
+              $set: {
+                dateYear: Number(splitFullDate[2]),
+                dateMonth: Number(splitFullDate[1]),
+                dateDay: Number(splitFullDate[0]),
+                dateStart: timeStart,
+                dateEnd: timeEnd,
+              },
+            }
+          ).then(() => {});
+        }
+
+        return Communiting.updateOne(
+          {
+            _id: communitingId,
+            companyId: companyId,
+            ...validPermission,
+          },
+          {
+            $set: {
+              workerUserId: selectedWorkerUserId,
+              description: description,
+              cost: cost,
+              statusValue: statusValue,
+              timeStart: timeStart,
+              timeEnd: timeEnd,
+              day: Number(splitFullDate[0]),
+              month: Number(splitFullDate[1]),
+              year: Number(splitFullDate[2]),
+              ...validDateService,
+              ...validDateServiceEnd,
+            },
+          }
+        ).then(() => {
+          res.status(200).json({
+            message: "Zaktualizowano dojazd",
           });
         });
       } else {
