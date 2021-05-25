@@ -19,6 +19,7 @@ const io = require("../socket");
 const bcrypt = require("bcryptjs");
 const rp = require("request-promise");
 const Bir = require("bir1");
+const generateNotifications = require("../middleware/generateNotifications");
 
 const {
   AWS_ACCESS_KEY_ID_APP,
@@ -735,6 +736,23 @@ exports.getCompanyData = (req, res, next) => {
             populate: {
               path: "toWorkerUserId",
               select: "name surname",
+            },
+          })
+          .populate({
+            path: "serviceId",
+            select:
+              "workerUserId companyId userId createdAt objectName description",
+            populate: {
+              path: "workerUserId",
+              select: "name surname linkPath",
+            },
+          })
+          .populate({
+            path: "communitingId",
+            select: "workerUserId companyId userId createdAt description city",
+            populate: {
+              path: "workerUserId",
+              select: "name surname linkPath",
             },
           })
           .limit(10)
@@ -1592,6 +1610,23 @@ exports.companyPath = (req, res, next) => {
             populate: {
               path: "toWorkerUserId",
               select: "name surname",
+            },
+          })
+          .populate({
+            path: "serviceId",
+            select:
+              "workerUserId companyId userId createdAt objectName description",
+            populate: {
+              path: "workerUserId",
+              select: "name surname linkPath",
+            },
+          })
+          .populate({
+            path: "communitingId",
+            select: "workerUserId companyId userId createdAt description city",
+            populate: {
+              path: "workerUserId",
+              select: "name surname linkPath",
             },
           })
           .limit(10)
@@ -6483,6 +6518,7 @@ exports.companyGetServices = (req, res, next) => {
           month: month,
           workerUserId: hasPermission ? workerUserId : userId,
           companyId: companyData._id,
+          isDeleted: { $in: [false, null] },
         })
           .select("-phone")
           .populate("workerUserId userId", "_id name surname")
@@ -6891,6 +6927,7 @@ exports.companyGetCommunitings = (req, res, next) => {
           month: month,
           workerUserId: hasPermission ? workerUserId : userId,
           companyId: companyData._id,
+          isDeleted: { $in: [false, null] },
         })
           .select("-phone")
           .populate("workerUserId userId", "_id name surname")
@@ -7098,18 +7135,56 @@ exports.companyAddCommuniting = (req, res, next) => {
       });
     })
     .then((resultSaveCommuniting) => {
-      return resultSaveCommuniting.populate(
-        {
-          path: "userId workerUserId",
-          select: "name surname _id",
-        },
-        function (err, populateCommuniting) {
-          populateCommuniting.phone = null;
-          res.status(200).json({
-            newCommuniting: populateCommuniting,
-          });
-        }
-      );
+      return resultSaveCommuniting
+        .populate({
+          path: "companyId",
+          select: "_id linkPath name",
+        })
+        .populate(
+          {
+            path: "userId workerUserId",
+            select: "name surname _id",
+          },
+          async function (err, populateCommuniting) {
+            const emailContent = `<h1>Dodano dojazd:</h1>
+                      <h4>dojazd pod linkiem: xd</h4>`;
+
+            const payload = {
+              title: `Dodano dojazd dnia: ${populateCommuniting.day}-${populateCommuniting.month}-${populateCommuniting.year}, o godzine: ${populateCommuniting.timeStart}`,
+              body: "this is the body",
+              icon: "images/someImageInPath.png",
+            };
+
+            const emailSubject = `Dodano dojazd`;
+
+            const { notifactionDone } = await generateNotifications(
+              [
+                !!resultSaveCommuniting.userId
+                  ? resultSaveCommuniting.userId._id
+                  : null,
+                !!resultSaveCommuniting.workerUserId
+                  ? resultSaveCommuniting.workerUserId._id
+                  : null,
+              ],
+              populateCommuniting,
+              "commuting_created",
+              [emailSubject, emailContent],
+              payload,
+              null,
+              !!resultSaveCommuniting.userId
+                ? resultSaveCommuniting.userId._id
+                : null,
+              !!email ? email : null,
+              "communitingId"
+            );
+            populateCommuniting.phone = null;
+            if (notifactionDone) {
+              res.status(200).json({
+                newCommuniting: populateCommuniting,
+              });
+            }
+          }
+        );
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -7125,6 +7200,7 @@ exports.companyDeleteCommuniting = (req, res, next) => {
   const companyId = req.body.companyId;
   const communitingId = req.body.communitingId;
   const reserwationId = req.body.reserwationId;
+  const opinionId = req.body.opinionId;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -7146,18 +7222,71 @@ exports.companyDeleteCommuniting = (req, res, next) => {
           });
         }
         if (!!hasPermission) {
+          if (!!opinionId) {
+            Opinion.deleteOne({
+              _id: opinionId,
+            }).then(() => {});
+          }
           if (!!reserwationId) {
             Reserwation.deleteOne({
               _id: reserwationId,
             }).then(() => {});
           }
-          return Communiting.deleteOne({
+          return Communiting.findOne({
             _id: communitingId,
-          }).then(() => {
-            res.status(200).json({
-              message: "Usunieto serwis",
+          })
+            .select(
+              "workerUserId companyId userId createdAt description city timeStart timeEnd day month year"
+            )
+            .populate("companyId", "name linkPath")
+            .populate("workerUserId userId", "name surname")
+            .then(async (populateCommuniting) => {
+              const emailContent = `<h1>Dodano dojazd:</h1>
+                      <h4>dojazd pod linkiem: xd</h4>`;
+
+              const payload = {
+                title: `Usunięto dojazd dnia: ${populateCommuniting.day}-${populateCommuniting.month}-${populateCommuniting.year}, o godzine: ${populateCommuniting.timeStart}`,
+                body: "this is the body",
+                icon: "images/someImageInPath.png",
+              };
+
+              const emailSubject = `Usunięto dojazd`;
+
+              const { notifactionDone } = await generateNotifications(
+                [
+                  !!populateCommuniting.userId
+                    ? populateCommuniting.userId._id
+                    : null,
+                  !!populateCommuniting.workerUserId
+                    ? populateCommuniting.workerUserId._id
+                    : null,
+                ],
+                populateCommuniting,
+                "commuting_deleted",
+                [emailSubject, emailContent],
+                payload,
+                null,
+                !!populateCommuniting.userId
+                  ? populateCommuniting.userId._id
+                  : null,
+                !!populateCommuniting.email ? populateCommuniting.email : null,
+                "communitingId"
+              );
+              return Communiting.updateOne(
+                {
+                  _id: communitingId,
+                },
+                {
+                  $set: {
+                    isDeleted: true,
+                  },
+                }
+              ).then(() => {
+                res.status(200).json({
+                  message: "Usunieto serwis",
+                });
+              });
             });
-          });
         } else {
           const error = new Error("Brak uprawnień");
           error.statusCode = 422;

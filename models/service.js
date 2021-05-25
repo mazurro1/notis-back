@@ -70,6 +70,15 @@ const serviceSchema = new Schema(
       type: Date,
       required: false,
     },
+    opinionId: {
+      type: Schema.Types.ObjectId,
+      ref: "Opinions",
+      required: false,
+    },
+    isDeleted: {
+      type: Boolean,
+      required: false,
+    },
   },
   {
     timestamps: true,

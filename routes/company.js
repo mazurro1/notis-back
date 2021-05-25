@@ -539,6 +539,7 @@ router.post(
   [body("companyId")],
   [body("communitingId")],
   [body("reserwationId")],
+  [body("opinionId")],
   company.companyDeleteCommuniting
 );
 

@@ -91,6 +91,15 @@ const communitingSchema = new Schema(
       ref: "Reserwations",
       required: true,
     },
+    opinionId: {
+      type: Schema.Types.ObjectId,
+      ref: "Opinions",
+      required: false,
+    },
+    isDeleted: {
+      type: Boolean,
+      required: false,
+    },
   },
   {
     timestamps: true,

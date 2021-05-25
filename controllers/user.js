@@ -257,6 +257,24 @@ exports.login = (req, res, next) => {
         select: "name surname linkPath",
       },
     })
+    .populate({
+      path: "alerts.serviceId",
+      select:
+        "_id objectName description userId companyId month year day createdAt",
+      populate: {
+        path: "companyId userId",
+        select: "name surname linkPath",
+      },
+    })
+    .populate({
+      path: "alerts.communitingId",
+      select:
+        "_id city description userId companyId month year day timeStart timeEnd",
+      populate: {
+        path: "companyId userId",
+        select: "name surname linkPath",
+      },
+    })
     .then((user) => {
       if (!!user) {
         bcrypt
@@ -682,6 +700,24 @@ exports.getMoreAlerts = (req, res, next) => {
         select: "name surname linkPath",
       },
     })
+    .populate({
+      path: "alerts.serviceId",
+      select:
+        "_id objectName description userId companyId month year day createdAt",
+      populate: {
+        path: "companyId userId",
+        select: "name surname linkPath",
+      },
+    })
+    .populate({
+      path: "alerts.communitingId",
+      select:
+        "_id city description userId companyId month year day timeStart timeEnd",
+      populate: {
+        path: "companyId userId",
+        select: "name surname linkPath",
+      },
+    })
     .then((user) => {
       if (!!user) {
         res.status(200).json({
@@ -744,6 +780,24 @@ exports.autoLogin = (req, res, next) => {
         select: "name surname linkPath",
       },
     })
+    .populate({
+      path: "alerts.serviceId",
+      select:
+        "_id objectName description userId companyId month year day createdAt",
+      populate: {
+        path: "companyId userId",
+        select: "name surname linkPath",
+      },
+    })
+    .populate({
+      path: "alerts.communitingId",
+      select:
+        "_id city description userId companyId month year day timeStart timeEnd",
+      populate: {
+        path: "companyId userId",
+        select: "name surname linkPath",
+      },
+    })
     .then((user) => {
       if (!!user) {
         const userName = Buffer.from(user.name, "base64").toString("utf-8");
@@ -797,6 +851,28 @@ exports.autoLogin = (req, res, next) => {
             return itemCompany._id.toString() == user.company.toString();
           });
         }
+
+        // const params = {
+        //   PhoneNumber: "+48515873009",
+        //   Message: `Kod potwierdzający numer telefonu: $`,
+        //   MessageStructure: "string",
+        //   MessageAttributes: {
+        //     "AWS.SNS.SMS.SenderID": {
+        //       DataType: "String",
+        //       StringValue: "Meetsy",
+        //     },
+        //     // "AWS.SNS.SMS.SMSType": {
+        //     //   DataType: "String",
+        //     //   StringValue: "Transactional",
+        //     //   // StringValue: "Promotional",
+        //     // },
+        //   },
+        // };
+
+        // sns.publish(params, function (err, data) {
+        //   if (err) console.log(err, err.stack);
+        //   else console.log(data);
+        // });
 
         res.status(200).json({
           userId: user._id.toString(),
@@ -2225,12 +2301,14 @@ exports.userHistoryServices = (req, res, next) => {
           userId: userId,
           month: month,
           year: year,
+          isDeleted: { $in: [false, null] },
         })
           .select(
-            "_id companyId workerUserId userId objectName description cost statusValue dateStart dateService dateEnd createdAt updatedAt"
+            "_id companyId workerUserId userId objectName description cost statusValue dateStart dateService dateEnd createdAt updatedAt opinionId"
           )
           .populate("workerUserId", "name surname")
           .populate("companyId", "_id name linkPath")
+          .populate("opinionId", "")
           .then((resultsServices) => {
             res.status(201).json({
               userServices: resultsServices,
@@ -2273,12 +2351,14 @@ exports.userHistoryCommuniting = (req, res, next) => {
           userId: userId,
           month: month,
           year: year,
+          isDeleted: { $in: [false, null] },
         })
           .select(
-            "_id year month day reserwationId companyId workerUserId userId description cost statusValue dateStartValid dateCommunitingValid dateEndValid timeStart timeEnd createdAt updatedAt city street"
+            "_id year month day reserwationId opinionId companyId workerUserId userId description cost statusValue dateStartValid dateCommunitingValid dateEndValid timeStart timeEnd createdAt updatedAt city street"
           )
           .populate("workerUserId", "name surname")
           .populate("companyId", "_id name linkPath")
+          .populate("opinionId", "")
           .then((resultsCommunitings) => {
             res.status(201).json({
               userCommuniting: resultsCommunitings,

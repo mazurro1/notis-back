@@ -9,6 +9,7 @@ const mongoose = require("mongoose");
 const AWS = require("aws-sdk");
 const company = require("../models/company");
 const webpush = require("web-push");
+const generateNotifications = require("../middleware/generateNotifications");
 require("dotenv").config();
 const {
   MAIL_HOST,
@@ -30,195 +31,6 @@ webpush.setVapidDetails(
   PRIVATE_KEY_VAPID
 );
 
-const addAllAlertsToUsers = async (
-  usersIds = [],
-  reserwationDoc = null,
-  notifactionType = null,
-  emailContent = [],
-  payloadWebPush = null,
-  docSMS = {
-    // sendSMSCompany = false,
-    // messageSMS = null,
-    // companyId
-    // smsTitleedd
-    //asdasddasd
-  },
-  sendToUserIdEmailWebPushSMS = null
-) => {
-  let bulkArrayToUpdate = [];
-  let smsSendDone = false;
-  return User.find({
-    _id: { $in: usersIds },
-    accountVerified: true,
-  })
-    .select(
-      "_id email vapidEndpoint phoneVerified phone whiteListVerifiedPhones"
-    )
-    .then(async (usersResult) => {
-      for (const userDoc of usersResult) {
-        let newAlertData = null;
-        if (!!reserwationDoc && !!notifactionType) {
-          newAlertData = {
-            reserwationId: reserwationDoc._id,
-            active: true,
-            type: notifactionType,
-            creationTime: new Date(),
-            companyChanged: false,
-          };
-
-          io.getIO().emit(`user${userDoc._id}`, {
-            action: "update-alerts",
-            alertData: {
-              reserwationId: reserwationDoc,
-              active: true,
-              type: notifactionType,
-              creationTime: new Date(),
-              companyChanged: false,
-            },
-          });
-        }
-
-        if (!!newAlertData) {
-          bulkArrayToUpdate.push({
-            updateOne: {
-              filter: {
-                _id: userDoc._id,
-              },
-              update: {
-                $inc: { alertActiveCount: 1 },
-                $push: {
-                  alerts: {
-                    $each: [newAlertData],
-                    $position: 0,
-                  },
-                },
-              },
-            },
-          });
-        }
-
-        if (
-          emailContent.length === 2 &&
-          !!userDoc.email &&
-          sendToUserIdEmailWebPushSMS == userDoc._id
-        ) {
-          await transporter.sendMail({
-            to: userDoc.email,
-            from: MAIL_INFO,
-            subject: emailContent[0],
-            html: emailContent[1],
-          });
-        }
-
-        if (
-          !!userDoc.vapidEndpoint &&
-          !!payloadWebPush &&
-          sendToUserIdEmailWebPushSMS === userDoc._id
-        ) {
-          await webpush
-            .sendNotification(
-              userDoc.vapidEndpoint,
-              JSON.stringify(payloadWebPush)
-            )
-            .then(() => {})
-            .catch(() => {});
-        }
-
-        if (!!docSMS) {
-          if (
-            !!docSMS.sendSMSCompany &&
-            !!docSMS.messageSMS &&
-            !!docSMS.smsTitle &&
-            sendToUserIdEmailWebPushSMS == userDoc._id
-          ) {
-            let selectedPhoneNumber = null;
-            if (!!userDoc.phoneVerified) {
-              selectedPhoneNumber = userDoc.phone;
-            } else {
-              if (!!userDoc.whiteListVerifiedPhones) {
-                if (userDoc.whiteListVerifiedPhones.length > 0) {
-                  selectedPhoneNumber =
-                    userDoc.whiteListVerifiedPhones[
-                      userDoc.whiteListVerifiedPhones.length - 1
-                    ];
-                }
-              }
-            }
-
-            if (!!selectedPhoneNumber) {
-              const userPhone = Buffer.from(
-                selectedPhoneNumber,
-                "base64"
-              ).toString("utf-8");
-              await Company.updateOne(
-                {
-                  _id: docSMS.companyId,
-                  sms: { $gt: 0 },
-                },
-                {
-                  $inc: {
-                    sms: -1,
-                  },
-                  $addToSet: {
-                    raportSMS: {
-                      year: new Date().getFullYear(),
-                      month: new Date().getMonth() + 1,
-                      count: 1,
-                      isAdd: false,
-                      title: docSMS.smsTitle,
-                    },
-                  },
-                },
-                { upsert: true, safe: true },
-                null
-              )
-                .then(async () => {
-                  const params = {
-                    Message: docSMS.messageSMS,
-                    MessageStructure: "string",
-                    PhoneNumber: `+48${userPhone}`,
-                    MessageAttributes: {
-                      "AWS.SNS.SMS.SenderID": {
-                        DataType: "String",
-                        StringValue: "Meetsy",
-                      },
-                    },
-                  };
-                  let snsResult = await sns
-                    .publish(params, (err, data) => {
-                      if (data) {
-                        return data;
-                      } else {
-                        return false;
-                      }
-                    })
-                    .promise();
-                  if (!!snsResult) {
-                    smsSendDone = true;
-                  }
-                })
-                .catch((err) => {});
-            }
-          }
-        }
-      }
-
-      if (bulkArrayToUpdate.length > 0) {
-        await User.bulkWrite(bulkArrayToUpdate)
-          .then(() => {})
-          .catch(() => {
-            const error = new Error("Błąd podczas aktualizacji powiadomień.");
-            error.statusCode = 422;
-            throw error;
-          });
-      }
-      return {
-        notifactionDone: true,
-        smsSendDone: smsSendDone,
-      };
-    });
-};
-
 const transporter = nodemailer.createTransport({
   host: MAIL_HOST,
   port: Number(MAIL_PORT),
@@ -235,16 +47,8 @@ AWS.config.update({
   region: AWS_REGION_APP,
 });
 
-const s3Bucket = new AWS.S3({
-  params: {
-    Bucket: AWS_BUCKET,
-  },
-});
-const sns = new AWS.SNS();
-
 exports.addReserwation = (req, res, next) => {
   const userId = req.userId;
-  const userEmail = req.userEmail;
   const workerId = req.body.workerId;
   const workerUserId = req.body.workerUserId;
   const companyId = req.body.companyId;
@@ -252,7 +56,6 @@ exports.addReserwation = (req, res, next) => {
   const dateFull = req.body.dateFull;
   const reserwationMessage = req.body.reserwationMessage;
   const serviceId = req.body.serviceId;
-  const numberPhone = req.body.numberPhone;
   const isStampActive = req.body.isStampActive;
 
   const errors = validationResult(req);
@@ -1340,15 +1143,15 @@ exports.addReserwation = (req, res, next) => {
 
                   const emailSubject = `Dokonano rezerwacji w firmie ${resultReserwationPopulate.company.name}`;
 
-                  const { smsSendDone } = await addAllAlertsToUsers(
+                  const { smsSendDone } = await generateNotifications(
                     [userId, workerUserId],
                     resultReserwationPopulate,
                     "rezerwation_created",
                     [emailSubject, emailContent],
                     payload,
                     {
-                      sendSMS:
-                        resultReserwationPopulate.company.smsReserwationAvaible,
+                      sendSMSCompany: false,
+                      // resultReserwationPopulate.company.smsReserwationAvaible,
                       messageSMS: messageSMS,
                       companyId: companyId,
                       smsTitle: "sms_add_reserwation",
@@ -2636,42 +2439,19 @@ exports.updateReserwation = (req, res, next) => {
         ? "reserwation_not_finished"
         : "reserwation_finished";
 
-      const bulkArrayToUpdate = [];
-
-      [userId, resultReserwation.toWorkerUserId._id].forEach((userResult) => {
-        const newAlertData = {
-          reserwationId: resultReserwation._id,
-          active: true,
-          type: reserwationStatus,
-          creationTime: new Date(),
-          companyChanged: false,
-        };
-        resultReserwation
-          .populate(
-            "reserwationId",
-            "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
-          )
-          .populate(
-            {
-              path: "company fromUser",
-              select: "name surname linkPath email",
-            },
-            function (err, resultReserwationPopulate) {
-              io.getIO().emit(`user${userResult}`, {
-                action: "update-alerts",
-                alertData: {
-                  reserwationId: resultReserwationPopulate,
-                  active: true,
-                  type: reserwationStatus,
-                  creationTime: new Date(),
-                  companyChanged: false,
-                },
-              });
-              transporter.sendMail({
-                to: resultReserwationPopulate.fromUser.email,
-                from: MAIL_INFO,
-                subject: `Odwołano / zaktualizowano rezerwację w firmie ${resultReserwationPopulate.company.name}`,
-                html: `
+      resultReserwation
+        .populate(
+          "reserwationId",
+          "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
+        )
+        .populate(
+          {
+            path: "company fromUser",
+            select: "name surname linkPath email",
+          },
+          async (err, resultReserwationPopulate) => {
+            const emailSubject = `Odwołano / zaktualizowano rezerwację w firmie ${resultReserwationPopulate.company.name}`;
+            const emailContent = `
                 <h4>
                   Nazwa usługi: ${resultReserwationPopulate.serviceName}
                 </h4>
@@ -2681,42 +2461,25 @@ exports.updateReserwation = (req, res, next) => {
                 <h4>
                   Godzina: ${resultReserwationPopulate.dateStart}
                 </h4>
-                `,
+                `;
+
+            const { notifactionDone } = await generateNotifications(
+              [userId, resultReserwation.toWorkerUserId._id],
+              resultReserwationPopulate,
+              reserwationStatus,
+              [emailSubject, emailContent],
+              null,
+              null,
+              userId
+            );
+
+            if (notifactionDone) {
+              res.status(201).json({
+                reserwation: resultReserwation,
               });
             }
-          );
-
-        bulkArrayToUpdate.push({
-          updateOne: {
-            filter: {
-              _id: userResult,
-            },
-            update: {
-              $inc: { alertActiveCount: 1 },
-              $push: {
-                alerts: {
-                  $each: [newAlertData],
-                  $position: 0,
-                },
-              },
-            },
-          },
-        });
-      });
-      return User.bulkWrite(bulkArrayToUpdate)
-        .then(() => {
-          res.status(201).json({
-            reserwation: resultReserwation,
-          });
-        })
-        .catch((err) => {
-          console.log(err);
-          const error = new Error(
-            "Błąd podczas wysyłania powiadomień użytkownikom. Rezerwaca została odwołana."
-          );
-          error.statusCode = 422;
-          throw error;
-        });
+          }
+        );
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -2863,377 +2626,141 @@ exports.updateWorkerReserwation = (req, res, next) => {
       }
     })
     .then((resultReserwation) => {
-      return User.find({
-        _id: { $in: [resultReserwation.fromUser, workerUserId] },
+      return Company.findOne({
+        _id: resultReserwation.company._id,
       })
-        .select("_id whiteListVerifiedPhones phone phoneVerified email")
-        .then((allUsers) => {
-          return Company.findOne({
-            _id: resultReserwation.company._id,
-          })
-            .select("_id smsCanceledAvaible smsChangedAvaible")
-            .then((companyDoc) => {
-              if (!!companyDoc) {
-                if (!!allUsers) {
-                  const reserwationStatus =
-                    !!resultReserwation.workerReserwation
-                      ? "rezerwation_worker"
-                      : resultReserwation.visitCanceled
-                      ? "rezerwation_canceled"
-                      : resultReserwation.visitChanged
-                      ? "rezerwation_changed"
-                      : resultReserwation.visitNotFinished
-                      ? "reserwation_not_finished"
-                      : "reserwation_finished";
+        .select("_id smsCanceledAvaible smsChangedAvaible")
+        .then((companyDoc) => {
+          if (!!companyDoc) {
+            const reserwationStatus = !!resultReserwation.workerReserwation
+              ? "rezerwation_worker"
+              : resultReserwation.visitCanceled
+              ? "rezerwation_canceled"
+              : resultReserwation.visitChanged
+              ? "rezerwation_changed"
+              : resultReserwation.visitNotFinished
+              ? "reserwation_not_finished"
+              : "reserwation_finished";
 
-                  const bulkArrayToUpdate = [];
+            let isAccessToSentAlert = true;
+            if (!!resultReserwation.workerReserwation) {
+              isAccessToSentAlert = !(
+                workerUserId === resultReserwation.toWorkerUserId._id
+              );
+            }
+            if (isAccessToSentAlert) {
+              resultReserwation
+                .populate(
+                  "reserwationId",
+                  "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
+                )
+                .populate(
+                  {
+                    path: "company fromUser",
+                    select: "name surname linkPath",
+                  },
+                  async (err, resultReserwationPopulate) => {
+                    const validIsChange =
+                      !!!resultReserwation.visitNotFinished &&
+                      !!!resultReserwation.workerReserwation &&
+                      !!!resultReserwation.visitCanceled &&
+                      !!resultReserwation.visitChanged;
 
-                  allUsers.forEach((userResult) => {
-                    let isAccessToSentAlert = true;
-                    if (!!resultReserwation.workerReserwation) {
-                      isAccessToSentAlert = !(
-                        workerUserId === resultReserwation.toWorkerUserId._id
-                      );
-                    }
-                    if (isAccessToSentAlert) {
-                      const newAlertData = {
-                        reserwationId: resultReserwation._id,
-                        active: true,
-                        type: reserwationStatus,
-                        creationTime: new Date(),
-                        companyChanged: true,
-                      };
-                      resultReserwation
-                        .populate(
-                          "reserwationId",
-                          "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
-                        )
-                        .populate(
-                          {
-                            path: "company fromUser",
-                            select: "name surname linkPath",
-                          },
-                          function (err, resultReserwationPopulate) {
-                            io.getIO().emit(`user${userResult._id}`, {
-                              action: "update-alerts",
-                              alertData: {
-                                reserwationId: resultReserwationPopulate,
-                                active: true,
-                                type: reserwationStatus,
-                                creationTime: new Date(),
-                                companyChanged: true,
-                              },
-                            });
-                          }
-                        );
-                      if (
-                        !!!resultReserwation.visitNotFinished &&
-                        !!companyDoc.smsChangedAvaible &&
-                        resultReserwation.fromUser.toString() ==
-                          userResult._id.toString() &&
-                        !!!resultReserwation.workerReserwation &&
-                        !!!resultReserwation.visitCanceled &&
-                        !!resultReserwation.visitChanged
-                      ) {
-                        Company.updateOne(
-                          {
-                            _id: resultReserwation.company._id,
-                            sms: { $gt: 0 },
-                          },
-                          {
-                            $inc: {
-                              sms: -1,
-                            },
-                            $addToSet: {
-                              raportSMS: {
-                                year: new Date().getFullYear(),
-                                month: new Date().getMonth() + 1,
-                                count: 1,
-                                isAdd: false,
-                                title: "sms_update_worker_reserwation",
-                              },
-                            },
-                          },
-                          { upsert: true, safe: true },
-                          null
-                        )
-                          .then(() => {
-                            let selectedPhoneNumber = null;
-                            if (!!userResult.phoneVerified) {
-                              selectedPhoneNumber = userResult.phone;
-                            } else {
-                              if (!!userResult.whiteListVerifiedPhones) {
-                                if (
-                                  userResult.whiteListVerifiedPhones.length > 0
-                                ) {
-                                  selectedPhoneNumber =
-                                    userResult.whiteListVerifiedPhones[
-                                      userResult.whiteListVerifiedPhones
-                                        .length - 1
-                                    ];
-                                }
-                              }
-                            }
+                    const validIsCancel =
+                      !!!resultReserwation.visitNotFinished &&
+                      !!!resultReserwation.workerReserwation &&
+                      !!resultReserwation.visitCanceled &&
+                      !!!resultReserwation.visitChanged;
 
-                            if (!!selectedPhoneNumber) {
-                              const userPhone = Buffer.from(
-                                selectedPhoneNumber,
-                                "base64"
-                              ).toString("utf-8");
-
-                              const params = {
-                                Message: `Dokonano zmianę rezerwacji w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
-                                MessageStructure: "string",
-                                PhoneNumber: `+48${userPhone}`,
-                                MessageAttributes: {
-                                  "AWS.SNS.SMS.SenderID": {
-                                    DataType: "String",
-                                    StringValue: "Meetsy",
-                                  },
-                                },
-                              };
-
-                              // sns.publish(params, function (err, data) {
-                              //   if (err) console.log(err, err.stack);
-                              // });
-
-                              Reserwation.updateOne(
-                                {
-                                  _id: resultReserwation._id,
-                                  sendSMSCanceled: false,
-                                },
-                                {
-                                  $set: {
-                                    sendSMSCanceled: true,
-                                  },
-                                }
-                              )
-                                .then(() => {})
-                                .catch(() => {});
-                            }
-                          })
-                          .catch(() => {});
-                      }
-                      if (
-                        !!!resultReserwation.visitNotFinished &&
-                        !!companyDoc.smsCanceledAvaible &&
-                        resultReserwation.fromUser.toString() ==
-                          userResult._id.toString() &&
-                        !!!resultReserwation.workerReserwation &&
-                        !!resultReserwation.visitCanceled &&
-                        !!!resultReserwation.visitChanged
-                      ) {
-                        Company.updateOne(
-                          {
-                            _id: resultReserwation.company._id,
-                            sms: { $gt: 0 },
-                          },
-                          {
-                            $inc: {
-                              sms: -1,
-                            },
-                            $addToSet: {
-                              raportSMS: {
-                                year: new Date().getFullYear(),
-                                month: new Date().getMonth() + 1,
-                                count: 1,
-                                isAdd: false,
-                                title: "sms_canceled_worker_reserwation",
-                              },
-                            },
-                          },
-                          { upsert: true, safe: true },
-                          null
-                        )
-                          .then(() => {
-                            let selectedPhoneNumber = null;
-                            if (!!userResult.phoneVerified) {
-                              selectedPhoneNumber = userResult.phone;
-                            } else {
-                              if (!!userResult.whiteListVerifiedPhones) {
-                                if (
-                                  userResult.whiteListVerifiedPhones.length > 0
-                                ) {
-                                  selectedPhoneNumber =
-                                    userResult.whiteListVerifiedPhones[
-                                      userResult.whiteListVerifiedPhones
-                                        .length - 1
-                                    ];
-                                }
-                              }
-                            }
-
-                            if (!!selectedPhoneNumber) {
-                              const userPhone = Buffer.from(
-                                selectedPhoneNumber,
-                                "base64"
-                              ).toString("utf-8");
-
-                              const params = {
-                                Message: `Rezerwacja została odwołana w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
-                                MessageStructure: "string",
-                                PhoneNumber: `+48${userPhone}`,
-                                MessageAttributes: {
-                                  "AWS.SNS.SMS.SenderID": {
-                                    DataType: "String",
-                                    StringValue: "Meetsy",
-                                  },
-                                },
-                              };
-
-                              // sns.publish(params, function (err, data) {
-                              //   if (err) console.log(err, err.stack);
-                              // });
-
-                              Reserwation.updateOne(
-                                {
-                                  _id: resultReserwation._id,
-                                  sendSMSCanceled: false,
-                                },
-                                {
-                                  $set: {
-                                    sendSMSCanceled: true,
-                                  },
-                                }
-                              )
-                                .then(() => {})
-                                .catch(() => {});
-                            }
-                          })
-                          .catch(() => {});
-                      }
-
-                      if (
-                        !!!resultReserwation.visitNotFinished &&
-                        resultReserwation.fromUser.toString() ==
-                          userResult._id.toString() &&
-                        !!!resultReserwation.workerReserwation &&
-                        !!!resultReserwation.visitCanceled &&
-                        !!resultReserwation.visitChanged
-                      ) {
-                        transporter.sendMail({
-                          to: userResult.email,
-                          from: MAIL_INFO,
-                          subject: `Zmieniono rezerwację`,
-                          html: `<h1>Zmieniono rezerwację w firmie: ${resultReserwation.company.name}</h1>
-                        <h4>
-                          Nazwa usługi: ${resultReserwation.serviceName}
-                        </h4>
-                        <h4>
-                          Termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}
-                        </h4>
-                        <h4>
-                          Godzina: ${resultReserwation.dateStart}
-                        </h4>
-                        `,
-                        });
-                      }
-
-                      if (
-                        !!!resultReserwation.visitNotFinished &&
-                        resultReserwation.fromUser.toString() ==
-                          userResult._id.toString() &&
-                        !!!resultReserwation.workerReserwation &&
-                        !!resultReserwation.visitCanceled &&
-                        !!!resultReserwation.visitChanged
-                      ) {
-                        transporter.sendMail({
-                          to: userResult.email,
-                          from: MAIL_INFO,
-                          subject: `Odwołano rezerwację`,
-                          html: `<h1>Odwołano rezerwację w firmie: ${resultReserwation.company.name}</h1>
-                        <h4>
-                          Nazwa usługi: ${resultReserwation.serviceName}
-                        </h4>
-                        <h4>
-                          Termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}
-                        </h4>
-                        <h4>
-                          Godzina: ${resultReserwation.dateStart}
-                        </h4>
-                        `,
-                        });
-                      }
-
-                      if (
-                        !!!resultReserwation.visitNotFinished &&
-                        !!!resultReserwation.workerReserwation &&
-                        !!!resultReserwation.visitCanceled &&
-                        !!resultReserwation.visitChanged
-                      ) {
-                        const payload = {
+                    const payload = validIsCancel
+                      ? {
+                          title: `Odwołano rezerwację dnia: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, o godzine: ${resultReserwation.dateStart}, na usługę: ${resultReserwation.serviceName}`,
+                          body: "this is the body",
+                          icon: "images/someImageInPath.png",
+                        }
+                      : validIsChange && {
                           title: `Dokonano zmianę w rezerwacji dnia: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, o godzine: ${resultReserwation.dateStart}, na usługę: ${resultReserwation.serviceName}`,
                           body: "this is the body",
                           icon: "images/someImageInPath.png",
                         };
 
-                        if (!!userResult.vapidEndpoint) {
-                          webpush
-                            .sendNotification(
-                              userResult.vapidEndpoint,
-                              JSON.stringify(payload)
-                            )
-                            .then(() => {})
-                            .catch(() => {});
-                        }
-                      } else if (
-                        !!!resultReserwation.visitNotFinished &&
-                        !!!resultReserwation.workerReserwation &&
-                        !!resultReserwation.visitCanceled &&
-                        !!!resultReserwation.visitChanged
-                      ) {
-                        const payload = {
-                          title: `Odwołano rezerwację dnia: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, o godzine: ${resultReserwation.dateStart}, na usługę: ${resultReserwation.serviceName}`,
-                          body: "this is the body",
-                          icon: "images/someImageInPath.png",
-                        };
+                    const emailSubject = validIsChange
+                      ? `Zmieniono rezerwację`
+                      : validIsCancel && `Odwołano rezerwację`;
+                    const emailContent = validIsChange
+                      ? `<h1>Zmieniono rezerwację w firmie: ${resultReserwation.company.name}</h1>
+                              <h4>
+                                Nazwa usługi: ${resultReserwation.serviceName}
+                              </h4>
+                              <h4>
+                                Termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}
+                              </h4>
+                              <h4>
+                                Godzina: ${resultReserwation.dateStart}
+                              </h4>
+                              `
+                      : validIsCancel &&
+                        `<h1>Odwołano rezerwację w firmie: ${resultReserwation.company.name}</h1>
+                              <h4>
+                                Nazwa usługi: ${resultReserwation.serviceName}
+                              </h4>
+                              <h4>
+                                Termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}
+                              </h4>
+                              <h4>
+                                Godzina: ${resultReserwation.dateStart}
+                              </h4>
+                              `;
 
-                        if (!!userResult.vapidEndpoint) {
-                          webpush
-                            .sendNotification(
-                              userResult.vapidEndpoint,
-                              JSON.stringify(payload)
-                            )
-                            .then(() => {})
-                            .catch(() => {});
-                        }
-                      }
+                    const contentSMS =
+                      validIsChange && !!companyDoc.smsChangedAvaible
+                        ? {
+                            sendSMSCompany: companyDoc.smsChangedAvaible,
+                            messageSMS: `Dokonano zmianę rezerwacji w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
+                            companyId: resultReserwation.company._id,
+                            smsTitle: "sms_update_worker_reserwation",
+                          }
+                        : validIsCancel &&
+                          !!companyDoc.smsCanceledAvaible && {
+                            sendSMSCompany: companyDoc.smsCanceledAvaible,
+                            messageSMS: `Rezerwacja została odwołana w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
+                            companyId: resultReserwation.company._id,
+                            smsTitle: "sms_canceled_worker_reserwation",
+                          };
 
-                      bulkArrayToUpdate.push({
-                        updateOne: {
-                          filter: {
-                            _id: userResult._id,
-                          },
-                          update: {
-                            $inc: { alertActiveCount: 1 },
-                            $push: {
-                              alerts: {
-                                $each: [newAlertData],
-                                $position: 0,
-                              },
-                            },
-                          },
+                    const { smsSendDone } = await generateNotifications(
+                      [resultReserwation.fromUser._id, workerUserId],
+                      resultReserwationPopulate,
+                      reserwationStatus,
+                      [emailSubject, emailContent],
+                      payload,
+                      contentSMS,
+                      resultReserwation.fromUser._id
+                    );
+
+                    if (smsSendDone) {
+                      Reserwation.updateOne(
+                        {
+                          _id: resultReserwation._id,
+                          sendSMSCanceled: false,
                         },
-                      });
+                        {
+                          $set: {
+                            sendSMSCanceled: true,
+                          },
+                        }
+                      )
+                        .then(() => {})
+                        .catch(() => {});
                     }
-                  });
-                  User.bulkWrite(bulkArrayToUpdate)
-                    .then(() => {})
-                    .catch((err) => {
-                      console.log(err);
-                      const error = new Error(
-                        "Błąd podczas wysyłania powiadomień użytkownikom."
-                      );
-                      error.statusCode = 422;
-                      throw error;
-                    });
+                  }
+                );
+            }
 
-                  res.status(201).json({
-                    reserwation: resultReserwation,
-                  });
-                }
-              }
+            res.status(201).json({
+              reserwation: resultReserwation,
             });
+          }
         });
     })
     .catch((err) => {
@@ -4447,244 +3974,97 @@ exports.changeReserwation = (req, res, next) => {
     })
     .then((result) => {
       const resultReserwation = result.newReserwation;
-      return User.find({
-        _id: { $in: [userId, workerUserId] },
-        accountVerified: true,
-      })
-        .select(
-          "_id alerts alertActiveCount stamps whiteListVerifiedPhones phone phoneVerified"
+      return resultReserwation
+        .populate(
+          "reserwationId",
+          "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
         )
-        .then((allUsers) => {
-          if (!!allUsers) {
-            return resultReserwation
-              .populate(
-                "reserwationId",
-                "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
-              )
-              .populate(
+        .populate(
+          {
+            path: "company fromUser",
+            select: "name surname linkPath smsChangedAvaible sms companyStamps",
+          },
+          async (err, resultReserwationPopulate) => {
+            const emailContent = `<h1>Termin rezerwacji:</h1>
+              <h4>
+                Nazwa usługi: ${resultReserwationPopulate.serviceName}
+              </h4>
+              <h4>
+                Termin: ${resultReserwationPopulate.dateDay}-${
+              resultReserwationPopulate.dateMonth
+            }-${resultReserwationPopulate.dateYear}
+              </h4>
+              <h4>
+                Godzina: ${resultReserwationPopulate.dateStart}
+              </h4>
+              <h4>
+                Czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
+              resultReserwationPopulate.extraTime ? "+" : ""
+            }
+              </h4>
+              <h4>
+                Koszt: ${resultReserwationPopulate.costReserwation} zł ${
+              resultReserwationPopulate.extraCost ? "+" : ""
+            }
+              </h4>`;
+
+            const payload = {
+              title: `Dokonano zmiany rezerwacji na: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}, na usługę: ${resultReserwationPopulate.serviceName}`,
+              body: "this is the body",
+              icon: "images/someImageInPath.png",
+            };
+
+            const messageSMS = `Dokonano zmiany rezerwacji w firmie: ${
+              resultReserwationPopulate.company.name
+            } dnia: ${resultReserwationPopulate.dateDay}-${
+              resultReserwationPopulate.dateMonth
+            }-${resultReserwationPopulate.dateYear}, o godzine: ${
+              resultReserwationPopulate.dateStart
+            }, na usługę: ${
+              resultReserwationPopulate.serviceName
+            }. Czas trwania usługi: ${
+              resultReserwationPopulate.timeReserwation
+            }min ${
+              resultReserwationPopulate.extraTime ? "+" : ""
+            }. Koszt usługi: ${resultReserwationPopulate.costReserwation} zł ${
+              resultReserwationPopulate.extraCost ? "+" : ""
+            }`;
+
+            const emailSubject = `Dokonano zmiany rezerwacji w firmie ${resultReserwationPopulate.company.name}`;
+
+            const { smsSendDone } = await generateNotifications(
+              [userId, workerUserId],
+              resultReserwationPopulate,
+              "rezerwation_created",
+              [emailSubject, emailContent],
+              payload,
+              {
+                sendSMSCompany: false,
+                // resultReserwationPopulate.company.smsReserwationAvaible,
+                messageSMS: messageSMS,
+                companyId: companyId,
+                smsTitle: "sms_add_reserwation",
+              },
+              userId
+            );
+
+            if (!!smsSendDone) {
+              Reserwation.updateOne(
                 {
-                  path: "company fromUser",
-                  select:
-                    "name surname linkPath smsChangedAvaible sms companyStamps",
+                  _id: resultReserwation._id,
+                  sendSMSReserwation: false,
                 },
-                function (err, resultReserwationPopulate) {
-                  const bulkArrayToUpdate = [];
-                  if (allUsers.length > 0) {
-                    allUsers.forEach((userResult) => {
-                      const newAlertData = {
-                        reserwationId: resultReserwation._id,
-                        active: true,
-                        type: "rezerwation_changed",
-                        creationTime: new Date(),
-                        companyChanged: false,
-                      };
-                      io.getIO().emit(`user${userResult._id}`, {
-                        action: "update-alerts",
-                        alertData: {
-                          reserwationId: resultReserwationPopulate,
-                          active: true,
-                          type: "rezerwation_changed",
-                          creationTime: new Date(),
-                          companyChanged: false,
-                        },
-                      });
-
-                      transporter.sendMail({
-                        to: userEmail,
-                        from: MAIL_INFO,
-                        subject: `Dokonano zmiany rezerwacji w firmie ${resultReserwationPopulate.company.name}`,
-                        html: `<h1>Termin rezerwacji:</h1>
-                      <h4>
-                        Nazwa usługi: ${resultReserwationPopulate.serviceName}
-                      </h4>
-                      <h4>
-                        Termin: ${resultReserwationPopulate.dateDay}-${
-                          resultReserwationPopulate.dateMonth
-                        }-${resultReserwationPopulate.dateYear}
-                      </h4>
-                      <h4>
-                        Godzina: ${resultReserwationPopulate.dateStart}
-                      </h4>
-                      <h4>
-                        Czas trwania: ${
-                          resultReserwationPopulate.timeReserwation
-                        }min ${resultReserwationPopulate.extraTime ? "+" : ""}
-                      </h4>
-                      <h4>
-                        Koszt: ${
-                          resultReserwationPopulate.costReserwation
-                        } zł ${resultReserwationPopulate.extraCost ? "+" : ""}
-                      </h4>
-                      `,
-                      });
-
-                      if (
-                        userId == userResult._id &&
-                        resultReserwationPopulate.company.smsChangedAvaible
-                      ) {
-                        let selectedPhoneNumber = null;
-                        if (!!userResult.phoneVerified) {
-                          selectedPhoneNumber = userResult.phone;
-                        } else {
-                          if (!!userResult.whiteListVerifiedPhones) {
-                            if (userResult.whiteListVerifiedPhones.length > 0) {
-                              selectedPhoneNumber =
-                                userResult.whiteListVerifiedPhones[
-                                  userResult.whiteListVerifiedPhones.length - 1
-                                ];
-                            }
-                          }
-                        }
-
-                        if (!!selectedPhoneNumber) {
-                          const userPhone = Buffer.from(
-                            selectedPhoneNumber,
-                            "base64"
-                          ).toString("utf-8");
-                          Company.updateOne(
-                            {
-                              _id: companyId,
-                              sms: { $gt: 0 },
-                            },
-                            {
-                              $inc: {
-                                sms: -1,
-                              },
-                              $addToSet: {
-                                raportSMS: {
-                                  year: new Date().getFullYear(),
-                                  month: new Date().getMonth() + 1,
-                                  count: 1,
-                                  isAdd: false,
-                                  title: "sms_change_reserwation",
-                                },
-                              },
-                            },
-                            { upsert: true, safe: true },
-                            null
-                          )
-                            .then((result) => {
-                              const params = {
-                                Message: `Dokonano zmiany rezerwacji w firmie: ${
-                                  resultReserwationPopulate.company.name
-                                } dnia: ${resultReserwationPopulate.dateDay}-${
-                                  resultReserwationPopulate.dateMonth
-                                }-${
-                                  resultReserwationPopulate.dateYear
-                                }, o godzine: ${
-                                  resultReserwationPopulate.dateStart
-                                }, na usługę: ${
-                                  resultReserwationPopulate.serviceName
-                                }. Czas trwania usługi: ${
-                                  resultReserwationPopulate.timeReserwation
-                                }min ${
-                                  resultReserwationPopulate.extraTime ? "+" : ""
-                                }. Koszt usługi: ${
-                                  resultReserwationPopulate.costReserwation
-                                } zł ${
-                                  resultReserwationPopulate.extraCost ? "+" : ""
-                                }`,
-                                MessageStructure: "string",
-                                PhoneNumber: `+48${userPhone}`,
-                                MessageAttributes: {
-                                  "AWS.SNS.SMS.SenderID": {
-                                    DataType: "String",
-                                    StringValue: "Meetsy",
-                                  },
-                                },
-                              };
-                              // sns.publish(params, function (err, data) {
-                              //   if (err) console.log(err, err.stack);
-                              // });
-                              Reserwation.updateOne(
-                                {
-                                  _id: resultReserwation._id,
-                                  sendSMSReserwation: false,
-                                },
-                                {
-                                  $set: {
-                                    sendSMSReserwation: true,
-                                  },
-                                }
-                              )
-                                .then(() => {})
-                                .catch(() => {});
-                            })
-                            .catch((err) => {});
-                        }
-                      }
-
-                      const payload = {
-                        title: `Dokonano zmiany rezerwacji na: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}, na usługę: ${resultReserwationPopulate.serviceName}`,
-                        body: "this is the body",
-                        icon: "images/someImageInPath.png",
-                      };
-
-                      if (!!userResult.vapidEndpoint) {
-                        webpush
-                          .sendNotification(
-                            userResult.vapidEndpoint,
-                            JSON.stringify(payload)
-                          )
-                          .then(() => {})
-                          .catch(() => {});
-                      }
-
-                      bulkArrayToUpdate.push({
-                        updateOne: {
-                          filter: {
-                            _id: userResult._id,
-                          },
-                          update: {
-                            $inc: { alertActiveCount: 1 },
-                            $push: {
-                              alerts: {
-                                $each: [newAlertData],
-                                $position: 0,
-                              },
-                            },
-                          },
-                        },
-                      });
-                      bulkArrayToUpdate.push({
-                        updateOne: {
-                          filter: {
-                            _id: userResult._id,
-                          },
-                          update: {
-                            $pull: {
-                              alerts: {
-                                reserwationId: selectedReserwationId,
-                              },
-                            },
-                          },
-                        },
-                      });
-                    });
-                  } else {
-                    const error = new Error(
-                      "Błąd podczas wysyłania powiadomień użytkownikom. Rezerwaca została odwołana."
-                    );
-                    error.statusCode = 422;
-                    throw error;
-                  }
-
-                  return User.bulkWrite(bulkArrayToUpdate)
-                    .then(() => {
-                      return true;
-                    })
-                    .catch((err) => {
-                      console.log(err);
-                      const error = new Error(
-                        "Błąd podczas wysyłania powiadomień użytkownikom. Rezerwaca została odwołana."
-                      );
-                      error.statusCode = 422;
-                      throw error;
-                    });
+                {
+                  $set: {
+                    sendSMSReserwation: true,
+                  },
                 }
-              );
+              )
+                .then(() => {})
+                .catch(() => {});
+            }
           }
-        });
+        );
     })
     .then(() => {
       CompanyUsersInformations.findOne({

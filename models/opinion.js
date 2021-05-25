@@ -32,7 +32,17 @@ const opinionSchema = new Schema(
     reserwationId: {
       type: Schema.Types.ObjectId,
       ref: "Reserwations",
-      required: true,
+      required: false,
+    },
+    communitingId: {
+      type: Schema.Types.ObjectId,
+      ref: "Communitings",
+      required: false,
+    },
+    serviceId: {
+      type: Schema.Types.ObjectId,
+      ref: "Services",
+      required: false,
     },
   },
   {

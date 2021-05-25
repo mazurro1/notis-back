@@ -143,6 +143,16 @@ const userSchema = new Schema(
           ref: "Reserwations",
           required: false,
         },
+        serviceId: {
+          type: Schema.Types.ObjectId,
+          ref: "Services",
+          required: false,
+        },
+        communitingId: {
+          type: Schema.Types.ObjectId,
+          ref: "Communitings",
+          required: false,
+        },
         active: {
           type: Boolean,
           required: false,
