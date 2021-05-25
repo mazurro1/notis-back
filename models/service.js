@@ -26,6 +26,10 @@ const serviceSchema = new Schema(
       type: Number,
       required: true,
     },
+    day: {
+      type: Number,
+      required: true,
+    },
     name: {
       type: String,
       required: false,

@@ -56,7 +56,7 @@ exports.addOpinion = (req, res, next) => {
             $lte: dateEndMonth.toISOString(),
           },
         }).then((countOpinionMonth) => {
-          if (countOpinionMonth < 100) {
+          if (countOpinionMonth < 10) {
             if (!!opinionData.reserwationId) {
               return Reserwation.findOne({
                 _id: opinionData.reserwationId,

@@ -114,7 +114,6 @@ module.exports = async (
             sendToUserIdEmailSMS.toString() == userDoc._id.toString();
         }
         if (emailContent.length === 2 && !!userDoc.email && validIsUserToSend) {
-          console.log("email");
           transporter.sendMail({
             to: !!defaultEmail ? defaultEmail : userDoc.email,
             from: MAIL_INFO,

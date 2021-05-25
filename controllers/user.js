@@ -13,6 +13,7 @@ const AWS = require("aws-sdk");
 const io = require("../socket");
 const getImgBuffer = require("../getImgBuffer");
 const webpush = require("web-push");
+const generateNotifications = require("../middleware/generateNotifications");
 
 require("dotenv").config();
 const {
@@ -2409,9 +2410,56 @@ exports.userCancelCommuniting = (req, res, next) => {
             },
           }
         ).then(() => {
-          res.status(200).json({
-            message: "Odwołano dojazd",
-          });
+          return Communiting.findOne({
+            _id: communityId,
+            userId: userId,
+          })
+            .select(
+              "_id city description userId companyId month year day timeStart timeEnd email"
+            )
+            .populate("companyId userId", "name surname linkPath")
+            .then(async (resultSavetCommuniting) => {
+              if (!!resultSavetCommuniting) {
+                const emailContent = `<h1>Odwołano dojazd:</h1>
+                      <h4>dojazd pod linkiem: xd</h4>`;
+
+                const payload = {
+                  title: `Odwołano dojazd dnia: ${resultSavetCommuniting.day}-${resultSavetCommuniting.month}-${resultSavetCommuniting.year}, o godzine: ${resultSavetCommuniting.timeStart}`,
+                  body: "this is the body",
+                  icon: "images/someImageInPath.png",
+                };
+
+                const emailSubject = `Odwołano dojazd`;
+
+                const { notifactionDone } = await generateNotifications(
+                  [
+                    !!resultSavetCommuniting.userId
+                      ? resultSavetCommuniting.userId._id
+                      : null,
+                    !!resultSavetCommuniting.workerUserId
+                      ? resultSavetCommuniting.workerUserId._id
+                      : null,
+                  ],
+                  resultSavetCommuniting,
+                  "commuting_canceled",
+                  [emailSubject, emailContent],
+                  payload,
+                  null,
+                  !!resultSavetCommuniting.userId
+                    ? resultSavetCommuniting.userId._id
+                    : null,
+                  !!resultSavetCommuniting.email
+                    ? resultSavetCommuniting.email
+                    : null,
+                  "communitingId"
+                );
+                if (notifactionDone) {
+                  res.status(200).json({
+                    message: "Odwołano dojazd",
+                  });
+                }
+              }
+            });
         });
       } else {
         const error = new Error("Brak użytkownika");

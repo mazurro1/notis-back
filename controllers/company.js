@@ -6383,21 +6383,38 @@ exports.companyAddService = (req, res, next) => {
           .then((resultToUser) => {
             if (isActiveUser) {
               if (!!resultToUser) {
-                const newService = new Service({
-                  userId: !!resultToUser ? resultToUser._id : null,
-                  companyId: companyData._id,
-                  workerUserId: hasPermission ? workerUserId : userId,
-                  objectName: objectName,
-                  description: description,
-                  cost: cost,
-                  statusValue: statusValue,
-                  dateStart: statusValue >= 1 ? new Date() : null,
-                  dateService: statusValue >= 2 ? new Date() : null,
-                  dateEnd: statusValue >= 3 ? new Date() : null,
-                  month: new Date().getMonth() + 1,
-                  year: new Date().getFullYear(),
-                });
-                return newService.save();
+                let userIsInWorkersInCompany = companyData.owner == userId;
+                if (!!resultToUser) {
+                  if (!userIsInWorkersInCompany) {
+                    userIsInWorkersInCompany = companyData.workers.some(
+                      (worker) => {
+                        return worker.user == resultToUser._id;
+                      }
+                    );
+                  }
+                }
+                if (!userIsInWorkersInCompany) {
+                  const newService = new Service({
+                    userId: !!resultToUser ? resultToUser._id : null,
+                    companyId: companyData._id,
+                    workerUserId: hasPermission ? workerUserId : userId,
+                    objectName: objectName,
+                    description: description,
+                    cost: cost,
+                    statusValue: statusValue,
+                    dateStart: statusValue >= 1 ? new Date() : null,
+                    dateService: statusValue >= 2 ? new Date() : null,
+                    dateEnd: statusValue >= 3 ? new Date() : null,
+                    month: new Date().getMonth() + 1,
+                    year: new Date().getFullYear(),
+                    day: new Date().getDate(),
+                  });
+                  return newService.save();
+                } else {
+                  const error = new Error("Użytkownik pracuje w działalności");
+                  error.statusCode = 441;
+                  throw error;
+                }
               } else {
                 const error = new Error("Brak użytkownika");
                 error.statusCode = 440;
@@ -6411,6 +6428,24 @@ exports.companyAddService = (req, res, next) => {
                 surname.toString(),
                 "utf-8"
               ).toString("base64");
+
+              if (!!resultToUser) {
+                let userIsInWorkersInCompany = companyData.owner == userId;
+                if (!!resultToUser) {
+                  if (!userIsInWorkersInCompany) {
+                    userIsInWorkersInCompany = companyData.workers.some(
+                      (worker) => {
+                        return worker.user == resultToUser._id;
+                      }
+                    );
+                  }
+                }
+                if (userIsInWorkersInCompany) {
+                  const error = new Error("Użytkownik pracuje w działalności");
+                  error.statusCode = 441;
+                  throw error;
+                }
+              }
 
               const newService = new Service({
                 userId: !!resultToUser ? resultToUser._id : null,
@@ -6429,6 +6464,7 @@ exports.companyAddService = (req, res, next) => {
                 dateEnd: statusValue >= 3 ? new Date() : null,
                 month: new Date().getMonth() + 1,
                 year: new Date().getFullYear(),
+                day: new Date().getDate(),
               });
               return newService.save();
             }
@@ -6456,18 +6492,64 @@ exports.companyAddService = (req, res, next) => {
       });
     })
     .then((resultSaveService) => {
-      return resultSaveService.populate(
-        {
-          path: "userId workerUserId",
-          select: "name surname _id",
-        },
-        function (err, populateService) {
-          populateService.phone = null;
-          res.status(200).json({
-            newService: populateService,
-          });
-        }
-      );
+      // return resultSaveService.populate(
+      //   {
+      //     path: "userId workerUserId",
+      //     select: "name surname _id",
+      //   },
+      //   function (err, populateService) {
+      //     populateService.phone = null;
+      //     res.status(200).json({
+      //       newService: populateService,
+      //     });
+      //   }
+      // );
+      return resultSaveService
+        .populate({
+          path: "companyId",
+          select: "_id linkPath name",
+        })
+        .populate(
+          {
+            path: "userId workerUserId",
+            select: "name surname _id",
+          },
+          async function (err, populateService) {
+            const emailContent = `<h1>Dodano serwis:</h1>
+                      <h4>serwis pod linkiem: xd</h4>`;
+
+            const payload = {
+              title: `Dodano serwis dnia: ${populateService.day}-${populateService.month}-${populateService.year}, o godzine: ${populateService.timeStart}`,
+              body: "this is the body",
+              icon: "images/someImageInPath.png",
+            };
+
+            const emailSubject = `Dodano serwis`;
+
+            const { notifactionDone } = await generateNotifications(
+              [
+                !!populateService.userId ? populateService.userId._id : null,
+                !!populateService.workerUserId
+                  ? populateService.workerUserId._id
+                  : null,
+              ],
+              populateService,
+              "service_created",
+              [emailSubject, emailContent],
+              payload,
+              null,
+              !!populateService.userId ? populateService.userId._id : null,
+              !!email ? email : null,
+              "serviceId"
+            );
+            populateService.phone = null;
+            if (notifactionDone) {
+              res.status(200).json({
+                newService: populateService,
+              });
+            }
+          }
+        );
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -6568,13 +6650,38 @@ exports.companyDeleteServices = (req, res, next) => {
           });
         }
         if (!!hasPermission) {
-          return Service.deleteOne({
+          return Service.findOne({
             _id: serviceId,
-          }).then(() => {
-            res.status(200).json({
-              message: "Usunieto serwis",
+          })
+            .select(
+              "workerUserId companyId userId createdAt objectName description city timeStart timeEnd day month year"
+            )
+            .populate("companyId", "name linkPath")
+            .populate("workerUserId userId", "name surname")
+            .then((serviceDoc) => {
+              if (!!serviceDoc) {
+                if (!!serviceDoc.statusValue !== 3) {
+                  serviceDoc.isDeleted = true;
+
+                  if (!!serviceDoc.opinionId) {
+                    Opinion.deleteOne({
+                      _id: serviceDoc.opinionId,
+                    }).then(() => {});
+                  }
+                  return serviceDoc.save();
+                } else {
+                  const error = new Error(
+                    "Nie można usunąć zakończonego serwisu"
+                  );
+                  error.statusCode = 442;
+                  throw error;
+                }
+              } else {
+                const error = new Error("Brak serwisu");
+                error.statusCode = 402;
+                throw error;
+              }
             });
-          });
         } else {
           const error = new Error("Brak uprawnień");
           error.statusCode = 422;
@@ -6584,6 +6691,40 @@ exports.companyDeleteServices = (req, res, next) => {
         const error = new Error("Brak firmy");
         error.statusCode = 422;
         throw error;
+      }
+    })
+    .then(async (savedServiceDoc) => {
+      const emailContent = `<h1>Usunieto serwis:</h1>
+                      <h4>dojazd pod linkiem: xd</h4>`;
+
+      const payload = {
+        title: `Usunieto serwis dnia: ${savedServiceDoc.day}-${savedServiceDoc.month}-${savedServiceDoc.year}, o godzine: ${savedServiceDoc.timeStart}`,
+        body: "this is the body",
+        icon: "images/someImageInPath.png",
+      };
+
+      const emailSubject = `Usunieto serwis`;
+
+      const { notifactionDone } = await generateNotifications(
+        [
+          !!savedServiceDoc.userId ? savedServiceDoc.userId._id : null,
+          !!savedServiceDoc.workerUserId
+            ? savedServiceDoc.workerUserId._id
+            : null,
+        ],
+        savedServiceDoc,
+        "service_deleted",
+        [emailSubject, emailContent],
+        payload,
+        null,
+        !!savedServiceDoc.userId ? savedServiceDoc.userId._id : null,
+        !!savedServiceDoc.email ? savedServiceDoc.email : null,
+        "serviceId"
+      );
+      if (notifactionDone) {
+        res.status(200).json({
+          message: "Usunieto serwis",
+        });
       }
     })
     .catch((err) => {
@@ -6656,9 +6797,57 @@ exports.companyUpdateServices = (req, res, next) => {
             },
           }
         ).then(() => {
-          res.status(200).json({
-            message: "Zaktualizowano serwis",
-          });
+          return Service.findOne({
+            _id: serviceId,
+            companyId: companyId,
+            ...validPermission,
+          })
+            .select(
+              "_id city description userId companyId month year day objectName email"
+            )
+            .populate("companyId userId", "name surname linkPath")
+            .then(async (resultSavetService) => {
+              if (!!resultSavetService) {
+                const emailContent = `<h1>Zaktualizowano serwis:</h1>
+                      <h4>serwis pod linkiem: xd</h4>`;
+
+                const payload = {
+                  title: `Zaktualizowano serwis dnia: ${Number(
+                    resultSavetService.day
+                  )}-${resultSavetService.month}-${resultSavetService.year}`,
+                  body: "this is the body",
+                  icon: "images/someImageInPath.png",
+                };
+
+                const emailSubject = `Zaktualizowano serwis`;
+
+                const { notifactionDone } = await generateNotifications(
+                  [
+                    !!resultSavetService.userId
+                      ? resultSavetService.userId._id
+                      : null,
+                    !!resultSavetService.workerUserId
+                      ? resultSavetService.workerUserId._id
+                      : null,
+                  ],
+                  resultSavetService,
+                  "service_changed",
+                  [emailSubject, emailContent],
+                  payload,
+                  null,
+                  !!resultSavetService.userId
+                    ? resultSavetService.userId._id
+                    : null,
+                  !!resultSavetService.email ? resultSavetService.email : null,
+                  "serviceId"
+                );
+                if (notifactionDone) {
+                  res.status(200).json({
+                    message: "Zaktualizowano serwis",
+                  });
+                }
+              }
+            });
         });
       } else {
         const error = new Error("Brak firmy");
@@ -7022,54 +7211,72 @@ exports.companyAddCommuniting = (req, res, next) => {
           .select("_id")
           .then((resultToUser) => {
             let newReserwationWorker = null;
-            if (addWorkerTime) {
-              newReserwationWorker = new Reserwation({
-                fromUser: userId,
-                toWorkerUserId: workerUserId,
-                company: companyId,
-                dateStart: timeStart,
-                dateEnd: timeEnd,
-                costReserwation: null,
-                timeReserwation: null,
-                visitNotFinished: false,
-                visitCanceled: false,
-                visitChanged: false,
-                workerReserwation: true,
-                dateYear: Number(arrayDateFull[2]),
-                dateMonth: Number(arrayDateFull[1]),
-                dateDay: Number(arrayDateFull[0]),
-                reserwationMessage: ``,
-                costReserwation: 0,
-                timeReserwation: 0,
-                fullDate: actualDate,
-                hasCommuniting: true,
-              });
-              newReserwationWorker.save();
-            }
+
             if (isActiveUser) {
               if (!!resultToUser) {
-                const newCommuniting = new Communiting({
-                  userId: !!resultToUser ? resultToUser._id : null,
-                  companyId: companyData._id,
-                  workerUserId: hasPermission ? workerUserId : userId,
-                  description: description,
-                  cost: cost,
-                  statusValue: statusValue,
-                  dateStartValid: statusValue >= 1 ? new Date() : null,
-                  dateCommunitingValid: statusValue >= 2 ? new Date() : null,
-                  dateEndValid: statusValue >= 3 ? new Date() : null,
-                  month: actualDate.getMonth() + 1,
-                  year: actualDate.getFullYear(),
-                  day: actualDate.getDate(),
-                  timeStart: timeStart,
-                  timeEnd: timeEnd,
-                  city: cityInput,
-                  street: streetInput,
-                  reserwationId: !!newReserwationWorker
-                    ? newReserwationWorker._id
-                    : null,
-                });
-                return newCommuniting.save();
+                let userIsInWorkersInCompany = companyData.owner == userId;
+                if (!!resultToUser) {
+                  if (!userIsInWorkersInCompany) {
+                    userIsInWorkersInCompany = companyData.workers.some(
+                      (worker) => {
+                        return worker.user == resultToUser._id;
+                      }
+                    );
+                  }
+                }
+                if (!userIsInWorkersInCompany) {
+                  if (addWorkerTime) {
+                    newReserwationWorker = new Reserwation({
+                      fromUser: userId,
+                      toWorkerUserId: workerUserId,
+                      company: companyId,
+                      dateStart: timeStart,
+                      dateEnd: timeEnd,
+                      costReserwation: null,
+                      timeReserwation: null,
+                      visitNotFinished: false,
+                      visitCanceled: false,
+                      visitChanged: false,
+                      workerReserwation: true,
+                      dateYear: Number(arrayDateFull[2]),
+                      dateMonth: Number(arrayDateFull[1]),
+                      dateDay: Number(arrayDateFull[0]),
+                      reserwationMessage: ``,
+                      costReserwation: 0,
+                      timeReserwation: 0,
+                      fullDate: actualDate,
+                      hasCommuniting: true,
+                    });
+                    newReserwationWorker.save();
+                  }
+
+                  const newCommuniting = new Communiting({
+                    userId: !!resultToUser ? resultToUser._id : null,
+                    companyId: companyData._id,
+                    workerUserId: hasPermission ? workerUserId : userId,
+                    description: description,
+                    cost: cost,
+                    statusValue: statusValue,
+                    dateStartValid: statusValue >= 1 ? new Date() : null,
+                    dateCommunitingValid: statusValue >= 2 ? new Date() : null,
+                    dateEndValid: statusValue >= 3 ? new Date() : null,
+                    month: actualDate.getMonth() + 1,
+                    year: actualDate.getFullYear(),
+                    day: actualDate.getDate(),
+                    timeStart: timeStart,
+                    timeEnd: timeEnd,
+                    city: cityInput,
+                    street: streetInput,
+                    reserwationId: !!newReserwationWorker
+                      ? newReserwationWorker._id
+                      : null,
+                  });
+                  return newCommuniting.save();
+                } else {
+                  const error = new Error("Użytkownik pracuje w działalności");
+                  error.statusCode = 441;
+                  throw error;
+                }
               } else {
                 const error = new Error("Brak użytkownika");
                 error.statusCode = 440;
@@ -7083,6 +7290,49 @@ exports.companyAddCommuniting = (req, res, next) => {
                 surname.toString(),
                 "utf-8"
               ).toString("base64");
+
+              if (!!resultToUser) {
+                let userIsInWorkersInCompany = companyData.owner == userId;
+                if (!!resultToUser) {
+                  if (!userIsInWorkersInCompany) {
+                    userIsInWorkersInCompany = companyData.workers.some(
+                      (worker) => {
+                        return worker.user == resultToUser._id;
+                      }
+                    );
+                  }
+                }
+                if (userIsInWorkersInCompany) {
+                  const error = new Error("Użytkownik pracuje w działalności");
+                  error.statusCode = 441;
+                  throw error;
+                }
+              }
+
+              if (addWorkerTime) {
+                newReserwationWorker = new Reserwation({
+                  fromUser: userId,
+                  toWorkerUserId: workerUserId,
+                  company: companyId,
+                  dateStart: timeStart,
+                  dateEnd: timeEnd,
+                  costReserwation: null,
+                  timeReserwation: null,
+                  visitNotFinished: false,
+                  visitCanceled: false,
+                  visitChanged: false,
+                  workerReserwation: true,
+                  dateYear: Number(arrayDateFull[2]),
+                  dateMonth: Number(arrayDateFull[1]),
+                  dateDay: Number(arrayDateFull[0]),
+                  reserwationMessage: ``,
+                  costReserwation: 0,
+                  timeReserwation: 0,
+                  fullDate: actualDate,
+                  hasCommuniting: true,
+                });
+                newReserwationWorker.save();
+              }
 
               const newCommuniting = new Communiting({
                 userId: !!resultToUser ? resultToUser._id : null,
@@ -7252,26 +7502,6 @@ exports.companyDeleteCommuniting = (req, res, next) => {
 
               const emailSubject = `Usunięto dojazd`;
 
-              const { notifactionDone } = await generateNotifications(
-                [
-                  !!populateCommuniting.userId
-                    ? populateCommuniting.userId._id
-                    : null,
-                  !!populateCommuniting.workerUserId
-                    ? populateCommuniting.workerUserId._id
-                    : null,
-                ],
-                populateCommuniting,
-                "commuting_deleted",
-                [emailSubject, emailContent],
-                payload,
-                null,
-                !!populateCommuniting.userId
-                  ? populateCommuniting.userId._id
-                  : null,
-                !!populateCommuniting.email ? populateCommuniting.email : null,
-                "communitingId"
-              );
               return Communiting.updateOne(
                 {
                   _id: communitingId,
@@ -7281,10 +7511,34 @@ exports.companyDeleteCommuniting = (req, res, next) => {
                     isDeleted: true,
                   },
                 }
-              ).then(() => {
-                res.status(200).json({
-                  message: "Usunieto serwis",
-                });
+              ).then(async () => {
+                const { notifactionDone } = await generateNotifications(
+                  [
+                    !!populateCommuniting.userId
+                      ? populateCommuniting.userId._id
+                      : null,
+                    !!populateCommuniting.workerUserId
+                      ? populateCommuniting.workerUserId._id
+                      : null,
+                  ],
+                  populateCommuniting,
+                  "commuting_deleted",
+                  [emailSubject, emailContent],
+                  payload,
+                  null,
+                  !!populateCommuniting.userId
+                    ? populateCommuniting.userId._id
+                    : null,
+                  !!populateCommuniting.email
+                    ? populateCommuniting.email
+                    : null,
+                  "communitingId"
+                );
+                if (notifactionDone) {
+                  res.status(200).json({
+                    message: "Usunieto serwis",
+                  });
+                }
               });
             });
         } else {
@@ -7400,9 +7654,61 @@ exports.companyUpdateCommuniting = (req, res, next) => {
             },
           }
         ).then(() => {
-          res.status(200).json({
-            message: "Zaktualizowano dojazd",
-          });
+          return Communiting.findOne({
+            _id: communitingId,
+            companyId: companyId,
+            ...validPermission,
+          })
+            .select(
+              "_id city description userId companyId month year day timeStart timeEnd email"
+            )
+            .populate("companyId userId", "name surname linkPath")
+            .then(async (resultSavetCommuniting) => {
+              if (!!resultSavetCommuniting) {
+                const emailContent = `<h1>Zaktualizowano dojazd:</h1>
+                      <h4>dojazd pod linkiem: xd</h4>`;
+
+                const payload = {
+                  title: `Zaktualizowano dojazd dnia: ${Number(
+                    splitFullDate[0]
+                  )}-${Number(splitFullDate[1])}-${Number(
+                    splitFullDate[2]
+                  )}, o godzine: ${statusValue}`,
+                  body: "this is the body",
+                  icon: "images/someImageInPath.png",
+                };
+
+                const emailSubject = `Zaktualizowano dojazd`;
+
+                const { notifactionDone } = await generateNotifications(
+                  [
+                    !!resultSavetCommuniting.userId
+                      ? resultSavetCommuniting.userId._id
+                      : null,
+                    !!resultSavetCommuniting.workerUserId
+                      ? resultSavetCommuniting.workerUserId._id
+                      : null,
+                  ],
+                  resultSavetCommuniting,
+                  "commuting_changed",
+                  [emailSubject, emailContent],
+                  payload,
+                  null,
+                  !!resultSavetCommuniting.userId
+                    ? resultSavetCommuniting.userId._id
+                    : null,
+                  !!resultSavetCommuniting.email
+                    ? resultSavetCommuniting.email
+                    : null,
+                  "communitingId"
+                );
+                if (notifactionDone) {
+                  res.status(200).json({
+                    message: "Zaktualizowano dojazd",
+                  });
+                }
+              }
+            });
         });
       } else {
         const error = new Error("Brak firmy");
