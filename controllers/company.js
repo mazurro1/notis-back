@@ -1263,17 +1263,25 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                   .compare(password, user.password)
                   .then((doMatch) => {
                     if (doMatch) {
-                      User.findOne({
+                      return User.findOne({
                         _id: workerUserId,
                       })
-                        .select("_id email")
+                        .select("_id email company allCompanys _id")
                         .then((userWorkerDoc) => {
+                          const filterUserCompanys =
+                            userWorkerDoc.allCompanys.filter(
+                              (itemCompany) => itemCompany != companyId
+                            );
+                          userWorkerDoc.company = null;
+                          userWorkerDoc.allCompanys = filterUserCompanys;
+
                           transporter.sendMail({
                             to: userWorkerDoc.email,
                             from: MAIL_INFO,
                             subject: `Usunięto z firmy ${companyDoc.name}`,
                             html: `<h1>Konto zostało usunięte z firmy</h1>`,
                           });
+
                           return Company.updateOne(
                             {
                               _id: companyId,
@@ -1285,7 +1293,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                             }
                           )
                             .then(() => {
-                              return companyDoc;
+                              return userWorkerDoc.save();
                             })
                             .catch(() => {
                               const error = new Error(
@@ -1318,22 +1326,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         error.statusCode = 501;
         throw error;
       }
-    })
-    .then(() => {
-      return User.findOne({
-        _id: workerUserId,
-      })
-        .select("email company _id")
-        .then((userDoc) => {
-          if (!!userDoc) {
-            userDoc.company = null;
-            return userDoc.save();
-          } else {
-            const error = new Error("Nie znaleziono pracownika.");
-            error.statusCode = 501;
-            throw error;
-          }
-        });
     })
     .then((userDoc) => {
       return Reserwation.aggregate([
@@ -1458,6 +1450,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             return {
               allUsersReserwation: allUsersReserwations,
               allWorkerReserwations: allWorkerReserwations,
+              userDoc: userDoc,
             };
           })
           .catch((err) => {
@@ -1469,108 +1462,344 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
           });
       });
     })
-    .then(({ allUsersReserwation, allWorkerReserwations }) => {
-      const bulkArrayToUpdate = [];
-      allUsersReserwation.forEach((userDoc) => {
-        const allUserAlertsToSave = [];
-
-        userDoc.items.forEach((itemReserwation) => {
-          const userAlertToSave = {
-            reserwationId: itemReserwation._id,
-            active: true,
-            type: "rezerwation_canceled",
-            creationTime: new Date(),
-            companyChanged: true,
-          };
-
-          io.getIO().emit(`user${userDoc.userId}`, {
-            action: "update-alerts",
-            alertData: {
-              reserwationId: itemReserwation,
-              active: true,
-              type: "rezerwation_canceled",
-              creationTime: new Date(),
-              companyChanged: true,
-            },
-          });
-
-          allUserAlertsToSave.push(userAlertToSave);
-        });
-
-        bulkArrayToUpdate.push({
-          updateOne: {
-            filter: {
-              _id: userDoc.userId._id,
-            },
-            update: {
-              $inc: { alertActiveCount: allUserAlertsToSave.length },
-              $push: {
-                alerts: {
-                  $each: allUserAlertsToSave,
-                  $position: 0,
+    .then(({ allUsersReserwation, allWorkerReserwations, userDoc }) => {
+      return Service.find({
+        workerUserId: userDoc._id,
+        companyId: companyId,
+        isDeleted: { $in: [false, null] },
+        statusValue: { $in: [1, 2] },
+      })
+        .select(
+          "_id objectName description userId companyId month year day createdAt workerUserId"
+        )
+        .populate("userId", "name surname")
+        .populate("companyId", "name linkPath")
+        .then((workerServices) => {
+          const bulkArrayToUpdateUsers = [];
+          const bulkArrayToUpdateServices = [];
+          workerServices.forEach((workerService) => {
+            bulkArrayToUpdateServices.push({
+              updateOne: {
+                filter: {
+                  _id: workerService._id,
+                },
+                update: {
+                  $set: { isDeleted: true },
                 },
               },
-            },
-          },
-        });
-      });
-      allWorkerReserwations.forEach((userDoc) => {
-        const allWorkerAlertsToSave = [];
+            });
 
-        userDoc.items.forEach((itemReserwation) => {
-          const userAlertToSave = {
-            reserwationId: itemReserwation._id,
-            active: true,
-            type: "rezerwation_canceled",
-            creationTime: new Date(),
-            companyChanged: true,
-          };
-
-          io.getIO().emit(`user${userDoc.workerUserId}`, {
-            action: "update-alerts",
-            alertData: {
-              reserwationId: itemReserwation,
+            const userAlertToSave = {
+              serviceId: workerService._id,
               active: true,
-              type: "rezerwation_canceled",
+              type: "service_deleted",
               creationTime: new Date(),
               companyChanged: true,
-            },
-          });
+            };
 
-          allWorkerAlertsToSave.push(userAlertToSave);
-        });
-
-        bulkArrayToUpdate.push({
-          updateOne: {
-            filter: {
-              _id: userDoc.workerUserId,
-            },
-            update: {
-              $inc: { alertActiveCount: allWorkerAlertsToSave.length },
-              $push: {
-                alerts: {
-                  $each: allWorkerAlertsToSave,
-                  $position: 0,
+            io.getIO().emit(`user${workerService.workerUserId}`, {
+              action: "update-alerts",
+              alertData: {
+                serviceId: workerService,
+                active: true,
+                type: "service_deleted",
+                creationTime: new Date(),
+                companyChanged: true,
+              },
+            });
+            if (!!workerService.userId) {
+              io.getIO().emit(`user${workerService.userId._id}`, {
+                action: "update-alerts",
+                alertData: {
+                  serviceId: workerService,
+                  active: true,
+                  type: "service_deleted",
+                  creationTime: new Date(),
+                  companyChanged: true,
+                },
+              });
+              bulkArrayToUpdateUsers.push({
+                updateOne: {
+                  filter: {
+                    _id: workerService.userId._id,
+                  },
+                  update: {
+                    $inc: { alertActiveCount: 1 },
+                    $push: {
+                      alerts: {
+                        $each: [userAlertToSave],
+                        $position: 0,
+                      },
+                    },
+                  },
+                },
+              });
+            }
+            bulkArrayToUpdateUsers.push({
+              updateOne: {
+                filter: {
+                  _id: workerService.workerUserId,
+                },
+                update: {
+                  $inc: { alertActiveCount: 1 },
+                  $push: {
+                    alerts: {
+                      $each: [userAlertToSave],
+                      $position: 0,
+                    },
+                  },
                 },
               },
-            },
-          },
-        });
-      });
-      return User.bulkWrite(bulkArrayToUpdate)
-        .then(() => {
-          res.status(201).json({
-            message: "Użytkownik został usunięty",
+            });
           });
-        })
-        .catch((err) => {
-          if (!err.statusCode) {
-            err.statusCode = 501;
-            err.message = "Błąd podczas wysyłania powiadomień.";
-          }
-          next(err);
+          return Service.bulkWrite(bulkArrayToUpdateServices)
+            .then(() => {
+              return {
+                allUsersReserwation: allUsersReserwation,
+                allWorkerReserwations: allWorkerReserwations,
+                userDoc: userDoc,
+                bulkArrayToUpdateUsers: bulkArrayToUpdateUsers,
+              };
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas wysyłania powiadomień.";
+              }
+              next(err);
+            });
         });
     })
+    .then(
+      ({
+        allUsersReserwation,
+        allWorkerReserwations,
+        userDoc,
+        bulkArrayToUpdateUsers,
+      }) => {
+        return Communiting.find({
+          workerUserId: userDoc._id,
+          companyId: companyId,
+          isDeleted: { $in: [false, null] },
+          statusValue: { $in: [1, 2] },
+          fullDate: {
+            $gte: new Date().toISOString(),
+          },
+        })
+          .select(
+            "_id city description userId companyId month year day createdAt workerUserId dateEndValid"
+          )
+          .populate("companyId userId", "_id name surname linkPath")
+          .then((communitingItems) => {
+            const bulkArrayToUpdateUsersCommuniting = [
+              ...bulkArrayToUpdateUsers,
+            ];
+            const bulkArrayToUpdate = [];
+            communitingItems.forEach((communitingItem) => {
+              bulkArrayToUpdate.push({
+                updateOne: {
+                  filter: {
+                    _id: communitingItem._id,
+                  },
+                  update: {
+                    $set: { isDeleted: true },
+                  },
+                },
+              });
+
+              const userAlertToSave = {
+                communitingId: communitingItem._id,
+                active: true,
+                type: "commuting_deleted",
+                creationTime: new Date(),
+                companyChanged: true,
+              };
+
+              io.getIO().emit(`user${communitingItem.workerUserId}`, {
+                action: "update-alerts",
+                alertData: {
+                  communitingId: communitingItem,
+                  active: true,
+                  type: "commuting_deleted",
+                  creationTime: new Date(),
+                  companyChanged: true,
+                },
+              });
+              if (!!communitingItem.userId) {
+                io.getIO().emit(`user${communitingItem.userId._id}`, {
+                  action: "update-alerts",
+                  alertData: {
+                    reserwationId: communitingItem,
+                    active: true,
+                    type: "commuting_deleted",
+                    creationTime: new Date(),
+                    companyChanged: true,
+                  },
+                });
+                bulkArrayToUpdateUsersCommuniting.push({
+                  updateOne: {
+                    filter: {
+                      _id: communitingItem.userId._id,
+                    },
+                    update: {
+                      $inc: { alertActiveCount: 1 },
+                      $push: {
+                        alerts: {
+                          $each: [userAlertToSave],
+                          $position: 0,
+                        },
+                      },
+                    },
+                  },
+                });
+              }
+              bulkArrayToUpdateUsersCommuniting.push({
+                updateOne: {
+                  filter: {
+                    _id: communitingItem.workerUserId,
+                  },
+                  update: {
+                    $inc: { alertActiveCount: 1 },
+                    $push: {
+                      alerts: {
+                        $each: [userAlertToSave],
+                        $position: 0,
+                      },
+                    },
+                  },
+                },
+              });
+            });
+
+            return Communiting.bulkWrite(bulkArrayToUpdate)
+              .then(() => {
+                return {
+                  allUsersReserwation: allUsersReserwation,
+                  allWorkerReserwations: allWorkerReserwations,
+                  userDoc: userDoc,
+                  bulkArrayToUpdateUsers: bulkArrayToUpdateUsersCommuniting,
+                };
+              })
+              .catch((err) => {
+                if (!err.statusCode) {
+                  err.statusCode = 501;
+                  err.message = "Błąd podczas wysyłania powiadomień.";
+                }
+                next(err);
+              });
+          });
+      }
+    )
+    .then(
+      ({
+        allUsersReserwation,
+        allWorkerReserwations,
+        bulkArrayToUpdateUsers,
+      }) => {
+        const bulkArrayToUpdate = [...bulkArrayToUpdateUsers];
+        allUsersReserwation.forEach((userDoc) => {
+          const allUserAlertsToSave = [];
+
+          userDoc.items.forEach((itemReserwation) => {
+            const userAlertToSave = {
+              reserwationId: itemReserwation._id,
+              active: true,
+              type: "rezerwation_canceled",
+              creationTime: new Date(),
+              companyChanged: true,
+            };
+
+            io.getIO().emit(`user${userDoc.userId}`, {
+              action: "update-alerts",
+              alertData: {
+                reserwationId: itemReserwation,
+                active: true,
+                type: "rezerwation_canceled",
+                creationTime: new Date(),
+                companyChanged: true,
+              },
+            });
+
+            allUserAlertsToSave.push(userAlertToSave);
+          });
+          if (!!userDoc.userId) {
+            bulkArrayToUpdate.push({
+              updateOne: {
+                filter: {
+                  _id: userDoc.userId._id,
+                },
+                update: {
+                  $inc: { alertActiveCount: allUserAlertsToSave.length },
+                  $push: {
+                    alerts: {
+                      $each: allUserAlertsToSave,
+                      $position: 0,
+                    },
+                  },
+                },
+              },
+            });
+          }
+        });
+        allWorkerReserwations.forEach((userDoc) => {
+          const allWorkerAlertsToSave = [];
+
+          userDoc.items.forEach((itemReserwation) => {
+            const userAlertToSave = {
+              reserwationId: itemReserwation._id,
+              active: true,
+              type: "rezerwation_canceled",
+              creationTime: new Date(),
+              companyChanged: true,
+            };
+
+            io.getIO().emit(`user${userDoc.workerUserId}`, {
+              action: "update-alerts",
+              alertData: {
+                reserwationId: itemReserwation,
+                active: true,
+                type: "rezerwation_canceled",
+                creationTime: new Date(),
+                companyChanged: true,
+              },
+            });
+
+            allWorkerAlertsToSave.push(userAlertToSave);
+          });
+
+          bulkArrayToUpdate.push({
+            updateOne: {
+              filter: {
+                _id: userDoc.workerUserId,
+              },
+              update: {
+                $inc: { alertActiveCount: allWorkerAlertsToSave.length },
+                $push: {
+                  alerts: {
+                    $each: allWorkerAlertsToSave,
+                    $position: 0,
+                  },
+                },
+              },
+            },
+          });
+        });
+
+        return User.bulkWrite(bulkArrayToUpdate)
+          .then(() => {
+            res.status(201).json({
+              message: "Użytkownik został usunięty",
+            });
+          })
+          .catch((err) => {
+            if (!err.statusCode) {
+              err.statusCode = 501;
+              err.message = "Błąd podczas wysyłania powiadomień.";
+            }
+            next(err);
+          });
+      }
+    )
     .catch((err) => {
       if (!err.statusCode) {
         err.statusCode = 501;
@@ -6393,7 +6622,8 @@ exports.companyAddService = (req, res, next) => {
                     );
                   }
                 }
-                if (!userIsInWorkersInCompany) {
+                // if (!userIsInWorkersInCompany) {
+                if (true) {
                   const newService = new Service({
                     userId: !!resultToUser ? resultToUser._id : null,
                     companyId: companyData._id,
@@ -7214,16 +7444,17 @@ exports.companyAddCommuniting = (req, res, next) => {
 
             if (isActiveUser) {
               if (!!resultToUser) {
-                let userIsInWorkersInCompany = companyData.owner == userId;
-                if (!!resultToUser) {
-                  if (!userIsInWorkersInCompany) {
-                    userIsInWorkersInCompany = companyData.workers.some(
-                      (worker) => {
-                        return worker.user == resultToUser._id;
-                      }
-                    );
-                  }
-                }
+                let userIsInWorkersInCompany = false;
+                // let userIsInWorkersInCompany = companyData.owner == userId;
+                // if (!!resultToUser) {
+                //   if (!userIsInWorkersInCompany) {
+                //     userIsInWorkersInCompany = companyData.workers.some(
+                //       (worker) => {
+                //         return worker.user == resultToUser._id;
+                //       }
+                //     );
+                //   }
+                // }
                 if (!userIsInWorkersInCompany) {
                   if (addWorkerTime) {
                     newReserwationWorker = new Reserwation({
@@ -7265,6 +7496,7 @@ exports.companyAddCommuniting = (req, res, next) => {
                     day: actualDate.getDate(),
                     timeStart: timeStart,
                     timeEnd: timeEnd,
+                    fullDate: actualDate,
                     city: cityInput,
                     street: streetInput,
                     reserwationId: !!newReserwationWorker
@@ -7631,7 +7863,14 @@ exports.companyUpdateCommuniting = (req, res, next) => {
             }
           ).then(() => {});
         }
-
+        const splitDateStart = timeStart.split(":");
+        const newFullDate = new Date(
+          Number(splitFullDate[2]),
+          Number(splitFullDate[1]) - 1,
+          Number(splitFullDate[0]),
+          Number(splitDateStart[0]),
+          Number(splitDateStart[1])
+        );
         return Communiting.updateOne(
           {
             _id: communitingId,
@@ -7651,6 +7890,7 @@ exports.companyUpdateCommuniting = (req, res, next) => {
               year: Number(splitFullDate[2]),
               ...validDateService,
               ...validDateServiceEnd,
+              fullDate: newFullDate,
             },
           }
         ).then(() => {

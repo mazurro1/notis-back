@@ -18,6 +18,10 @@ const communitingSchema = new Schema(
       ref: "Users",
       required: true,
     },
+    fullDate: {
+      type: Date,
+      required: true,
+    },
     month: {
       type: Number,
       required: true,
