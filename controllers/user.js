@@ -1916,133 +1916,230 @@ exports.deleteUserAccount = (req, res, next) => {
       }
     })
     .then(() => {
-      return Reserwation.aggregate([
-        {
-          $match: {
-            fromUser: mongoose.Types.ObjectId(userId),
-            isDraft: { $in: [false, null] },
-            visitNotFinished: false,
-            visitCanceled: false,
-            fullDate: {
-              $gte: new Date(),
-            },
-          },
+      return Reserwation.find({
+        fromUser: mongoose.Types.ObjectId(userId),
+        isDraft: { $in: [false, null] },
+        visitNotFinished: false,
+        visitCanceled: false,
+        fullDate: {
+          $gte: new Date().toISOString(),
         },
-        {
-          $lookup: {
-            from: "users",
-            localField: "toWorkerUserId",
-            foreignField: "_id",
-            as: "toWorkerUserId",
-          },
-        },
-        { $unwind: "$toWorkerUserId" },
-        {
-          $lookup: {
-            from: "users",
-            localField: "fromUser",
-            foreignField: "_id",
-            as: "fromUser",
-          },
-        },
-        { $unwind: "$fromUser" },
-        {
-          $lookup: {
-            from: "companys",
-            localField: "company",
-            foreignField: "_id",
-            as: "company",
-          },
-        },
-        { $unwind: "$company" },
-        {
-          $sort: { fullDate: 1 },
-        },
-        {
-          $project: {
-            _id: 1,
-            fromUser: {
-              name: 1,
-              surname: 1,
-              _id: 1,
-            },
-            company: {
-              name: 1,
-              _id: 1,
-              linkPath: 1,
-            },
-            toWorkerUserId: {
-              name: 1,
-              _id: 1,
-              surname: 1,
-            },
-            dateYear: 1,
-            dateMonth: 1,
-            dateDay: 1,
-            dateStart: 1,
-            dateEnd: 1,
-            serviceName: 1,
-            visitNotFinished: 1,
-            visitCanceled: 1,
-            visitChanged: 1,
-            workerReserwation: 1,
-            fullDate: 1,
-          },
-        },
-      ]).then((allWorkerReserwations) => {
-        const allUsersReserwations = [];
-        const bulkArrayToUpdate = [];
-        if (!!allWorkerReserwations) {
-          allWorkerReserwations.forEach((item) => {
-            bulkArrayToUpdate.push({
-              updateOne: {
-                filter: { _id: item._id },
-                update: {
-                  $set: {
-                    visitCanceled: true,
+      })
+        .populate("company", "name linkPath _id")
+        .populate("fromUser toWorkerUserId", "name surname _id")
+        .then((allWorkerReserwations) => {
+          const allUsersReserwations = [];
+          const bulkArrayToUpdate = [];
+          if (!!allWorkerReserwations) {
+            allWorkerReserwations.forEach((item) => {
+              bulkArrayToUpdate.push({
+                updateOne: {
+                  filter: { _id: item._id },
+                  update: {
+                    $set: {
+                      visitCanceled: true,
+                    },
                   },
+                },
+              });
+
+              const findUserReserwations = allUsersReserwations.findIndex(
+                (reserwation) => {
+                  return (
+                    reserwation.userId.toString() ==
+                    item.toWorkerUserId.toString()
+                  );
+                }
+              );
+              if (findUserReserwations >= 0) {
+                allUsersReserwations[findUserReserwations].items.push(item);
+              } else {
+                const newUserData = {
+                  userId: item.toWorkerUserId,
+                  items: [item],
+                };
+                allUsersReserwations.push(newUserData);
+              }
+            });
+          }
+          return Reserwation.bulkWrite(bulkArrayToUpdate)
+            .then(() => {
+              return {
+                allUsersReserwations: allUsersReserwations,
+              };
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas aktualizacji rezerwacji.";
+              }
+              next(err);
+            });
+        });
+    })
+    .then(({ allUsersReserwations }) => {
+      return Service.find({
+        userId: userId,
+        isDeleted: { $in: [false, null] },
+        statusValue: { $in: [1, 2] },
+      })
+        .select(
+          "_id objectName description userId companyId month year day createdAt workerUserId"
+        )
+        .populate("userId", "name surname")
+        .populate("companyId", "name linkPath")
+        .then((workerServices) => {
+          const bulkArrayToUpdateUsers = [];
+          const bulkArrayToUpdateServices = [];
+          workerServices.forEach((workerService) => {
+            bulkArrayToUpdateServices.push({
+              updateOne: {
+                filter: {
+                  _id: workerService._id,
+                },
+                update: {
+                  $set: { statusValue: 4 },
                 },
               },
             });
 
-            const findUserReserwations = allUsersReserwations.findIndex(
-              (reserwation) => {
-                return (
-                  reserwation.userId.toString() ==
-                  item.toWorkerUserId.toString()
-                );
-              }
-            );
-            if (findUserReserwations >= 0) {
-              allUsersReserwations[findUserReserwations].items.push(item);
-            } else {
-              const newUserData = {
-                userId: item.toWorkerUserId,
-                items: [item],
-              };
-              allUsersReserwations.push(newUserData);
-            }
-          });
-        }
-        return Reserwation.bulkWrite(bulkArrayToUpdate)
-          .then(() => {
-            return allUsersReserwations;
-          })
-          .catch((err) => {
-            if (!err.statusCode) {
-              err.statusCode = 501;
-              err.message = "Błąd podczas aktualizacji rezerwacji.";
-            }
-            next(err);
-          });
-      });
-    })
-    .then((result) => {
-      const bulkArrayToUpdate = [];
-      result.forEach((userDoc) => {
-        const allUserAlertsToSave = [];
+            const userAlertToSave = {
+              serviceId: workerService._id,
+              active: true,
+              type: "service_deleted",
+              creationTime: new Date(),
+              companyChanged: true,
+            };
 
+            io.getIO().emit(`user${workerService.workerUserId}`, {
+              action: "update-alerts",
+              alertData: {
+                serviceId: workerService,
+                active: true,
+                type: "service_deleted",
+                creationTime: new Date(),
+                companyChanged: true,
+              },
+            });
+            bulkArrayToUpdateUsers.push({
+              updateOne: {
+                filter: {
+                  _id: workerService.workerUserId,
+                },
+                update: {
+                  $inc: { alertActiveCount: 1 },
+                  $push: {
+                    alerts: {
+                      $each: [userAlertToSave],
+                      $position: 0,
+                    },
+                  },
+                },
+              },
+            });
+          });
+          return Service.bulkWrite(bulkArrayToUpdateServices)
+            .then(() => {
+              return {
+                allUsersReserwations: allUsersReserwations,
+                bulkArrayToUpdateUsers: bulkArrayToUpdateUsers,
+              };
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas wysyłania powiadomień.";
+              }
+              next(err);
+            });
+        });
+    })
+    .then(({ allUsersReserwations, bulkArrayToUpdateUsers }) => {
+      return Communiting.find({
+        userId: userId,
+        isDeleted: { $in: [false, null] },
+        statusValue: { $in: [1, 2] },
+        fullDate: {
+          $gte: new Date().toISOString(),
+        },
+      })
+        .select(
+          "_id city description userId companyId month year day createdAt workerUserId dateEndValid"
+        )
+        .populate("companyId userId", "_id name surname linkPath")
+        .then((communitingItems) => {
+          const bulkArrayToUpdateUsersCommuniting = [...bulkArrayToUpdateUsers];
+          const bulkArrayToUpdate = [];
+          communitingItems.forEach((communitingItem) => {
+            bulkArrayToUpdate.push({
+              updateOne: {
+                filter: {
+                  _id: communitingItem._id,
+                },
+                update: {
+                  $set: { statusValue: 4 },
+                },
+              },
+            });
+
+            const userAlertToSave = {
+              communitingId: communitingItem._id,
+              active: true,
+              type: "commuting_deleted",
+              creationTime: new Date(),
+              companyChanged: true,
+            };
+
+            io.getIO().emit(`user${communitingItem.workerUserId}`, {
+              action: "update-alerts",
+              alertData: {
+                communitingId: communitingItem,
+                active: true,
+                type: "commuting_deleted",
+                creationTime: new Date(),
+                companyChanged: true,
+              },
+            });
+            bulkArrayToUpdateUsersCommuniting.push({
+              updateOne: {
+                filter: {
+                  _id: communitingItem.workerUserId,
+                },
+                update: {
+                  $inc: { alertActiveCount: 1 },
+                  $push: {
+                    alerts: {
+                      $each: [userAlertToSave],
+                      $position: 0,
+                    },
+                  },
+                },
+              },
+            });
+          });
+
+          return Communiting.bulkWrite(bulkArrayToUpdate)
+            .then(() => {
+              return {
+                allUsersReserwations: allUsersReserwations,
+                bulkArrayToUpdateUsers: bulkArrayToUpdateUsersCommuniting,
+              };
+            })
+            .catch((err) => {
+              if (!err.statusCode) {
+                err.statusCode = 501;
+                err.message = "Błąd podczas wysyłania powiadomień.";
+              }
+              next(err);
+            });
+        });
+    })
+    .then(({ allUsersReserwations, bulkArrayToUpdateUsers }) => {
+      const bulkArrayToUpdate = [...bulkArrayToUpdateUsers];
+      allUsersReserwations.forEach((userDoc) => {
+        const allUserAlertsToSave = [];
         userDoc.items.forEach((itemReserwation) => {
+          console.log(itemReserwation);
           const userAlertToSave = {
             reserwationId: itemReserwation._id,
             active: true,
@@ -2099,7 +2196,7 @@ exports.deleteUserAccount = (req, res, next) => {
       return CompanyUsersInformations.deleteMany({ userId: userId });
     })
     .then(() => {
-      return User.findOne({ _id: userId })
+      return User.findOneAndDelete({ _id: userId })
         .select("_id email")
         .then((userDoc) => {
           if (!!userDoc) {
@@ -2116,9 +2213,6 @@ exports.deleteUserAccount = (req, res, next) => {
             throw error;
           }
         });
-    })
-    .then(() => {
-      return User.deleteOne({ _id: userId });
     })
     .then(() => {
       res.status(201).json({
@@ -2467,6 +2561,80 @@ exports.userCancelCommuniting = (req, res, next) => {
         throw error;
       }
     })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.downloadCommuniting = (req, res, next) => {
+  const communitingId = req.body.communitingId;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Communiting.findOne({
+    _id: communitingId,
+  })
+    .select(
+      "_id city description cost companyId month year day timeStart timeEnd street statusValue isDeleted"
+    )
+    .populate("companyId", "name linkPath")
+    .then((communitingData) => {
+      if (!!communitingData) {
+        res.status(200).json({
+          communiting: communitingData,
+        });
+      } else {
+        const error = new Error("Brak dojazdu");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.downloadService = (req, res, next) => {
+  const serviceId = req.body.serviceId;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Service.findOne({
+    _id: serviceId,
+  })
+    .select(
+      "_id objectName description cost companyId month year day statusValue isDeleted"
+    )
+    .populate("companyId", "name linkPath")
+    .then((serviceData) => {
+      if (!!serviceData) {
+        res.status(200).json({
+          service: serviceData,
+        });
+      } else {
+        const error = new Error("Brak dojazdu");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+
     .catch((err) => {
       if (!err.statusCode) {
         err.statusCode = 501;

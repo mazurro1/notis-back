@@ -273,4 +273,12 @@ router.post(
   user.userCancelCommuniting
 );
 
+router.post(
+  "/download-communiting",
+  [body("communitingId")],
+  user.downloadCommuniting
+);
+
+router.post("/download-service", [body("serviceId")], user.downloadService);
+
 module.exports = router;
