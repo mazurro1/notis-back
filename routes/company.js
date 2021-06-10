@@ -385,9 +385,22 @@ router.patch(
   isAuth,
   [body("companyId")],
   [body("smsReserwationAvaible")],
+  [body("smsReserwationChangedUserAvaible")],
   [body("smsNotifactionAvaible")],
   [body("smsCanceledAvaible")],
   [body("smsChangedAvaible")],
+
+  [body("smsServiceCreatedAvaible")],
+  [body("smsServiceChangedAvaible")],
+  [body("smsServiceFinishedAvaible")],
+  [body("smsServiceCanceledAvaible")],
+  [body("smsServiceDeletedAvaible")],
+  [body("smsCommunitingNotificationAvaible")],
+  [body("smsCommunitingCreatedAvaible")],
+  [body("smsCommunitingChangedAvaible")],
+  [body("smsCommunitingCanceledAvaible")],
+  [body("smsCommunitingDeletedAvaible")],
+
   company.companySMSUpdate
 );
 

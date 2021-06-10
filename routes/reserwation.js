@@ -94,8 +94,6 @@ router.patch(
   isAuth,
   [body("reserwationId")],
   [body("canceled")],
-  [body("changed")],
-  [body("noFinished")],
   reserwation.updateReserwation
 );
 

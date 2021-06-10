@@ -104,6 +104,26 @@ const communitingSchema = new Schema(
       type: Boolean,
       required: false,
     },
+    notificationSMS: {
+      type: Boolean,
+      required: false,
+    },
+    createdSMS: {
+      type: Boolean,
+      required: false,
+    },
+    changedSMS: {
+      type: Boolean,
+      required: false,
+    },
+    canceledSMS: {
+      type: Boolean,
+      required: false,
+    },
+    deletedSMS: {
+      type: Boolean,
+      required: false,
+    },
   },
   {
     timestamps: true,

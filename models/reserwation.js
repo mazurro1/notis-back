@@ -26,6 +26,17 @@ const reserwationSchema = new Schema(
       required: true,
     },
 
+    isDeleted: {
+      type: Boolean,
+      required: false,
+    },
+
+    oldReserwationId: {
+      type: Schema.Types.ObjectId,
+      ref: "Reserwations",
+      required: false,
+    },
+
     hasCommuniting: {
       type: Boolean,
       required: false,
@@ -137,12 +148,25 @@ const reserwationSchema = new Schema(
       type: Boolean,
       required: false,
     },
+    sendSMSReserwationUserChanged: {
+      type: Boolean,
+      required: false,
+    },
     sendSMSNotifaction: {
       type: Boolean,
       required: false,
     },
     sendSMSCanceled: {
       type: Boolean,
+      required: false,
+    },
+    sendSMSChanged: {
+      type: Boolean,
+      required: false,
+    },
+    communitingId: {
+      type: Schema.Types.ObjectId,
+      ref: "Communitings",
       required: false,
     },
   },

@@ -7,6 +7,7 @@ const io = require("../socket");
 const AWS = require("aws-sdk");
 const Invoice = require("../models/invoice");
 const { createInvoice } = require("../generateInvoice");
+const Communiting = require("../models/Communiting");
 
 require("dotenv").config();
 const {
@@ -44,7 +45,10 @@ const s3Bucket = new AWS.S3({
 
 const sns = new AWS.SNS();
 
-const updateCompanyFunction = async (itemCompany) => {
+const updateCompanyFunction = async (
+  itemCompany,
+  title = "sms_notifaction_reserwation"
+) => {
   try {
     const result = await Company.updateOne(
       {
@@ -61,7 +65,7 @@ const updateCompanyFunction = async (itemCompany) => {
             month: new Date().getMonth() + 1,
             count: itemCompany.allReserwations.length,
             isAdd: false,
-            title: "sms_notifaction_reserwation",
+            title: title,
           },
         },
       },
@@ -112,6 +116,7 @@ for (let i = 0; i < 24; i++) {
           $gte: dateStartValid.toISOString(),
           $lte: dateStartValidEnd.toISOString(),
         },
+        isDeleted: { $in: [false, null] },
       })
         .select(
           "_id fromUser dateYear dateMonth dateDay toWorkerUserId serviceName dateStart dateEnd visitNotFinished visitCanceled visitChanged workerReserwation fullDate"
@@ -140,7 +145,7 @@ for (let i = 0; i < 24; i++) {
                     const userAlertToSave = {
                       reserwationId: resultReserwation._id,
                       active: true,
-                      type: "rezerwation_notifaction",
+                      type: "reserwation_notifaction",
                       creationTime: new Date(),
                       companyChanged: false,
                     };
@@ -182,7 +187,7 @@ for (let i = 0; i < 24; i++) {
                         alertData: {
                           reserwationId: itemReserwation,
                           active: true,
-                          type: "rezerwation_notifaction",
+                          type: "reserwation_notifaction",
                           creationTime: new Date(),
                           companyChanged: false,
                         },
@@ -334,6 +339,284 @@ for (let i = 0; i < 24; i++) {
               }
 
               Reserwation.bulkWrite(bulkArrayToUpdateReserwations)
+                .then(() => {})
+                .catch(() => {
+                  const error = new Error(
+                    "Błąd podczas aktualizacji rezerwacji."
+                  );
+                  error.statusCode = 502;
+                  throw error;
+                });
+            } else {
+              transporter.sendMail({
+                to: itemCompany.companyEmail,
+                from: MAIL_INFO,
+                subject:
+                  "Brak środków na wysłanie sms-ów na potwierdzenie wizyty.",
+                html: `<h1>Brak środków na wysłanie sms-ów na potwierdzenie wizyty</h1> Potrzebna ilość: ${itemCompany.allReserwations.length}`,
+              });
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  );
+
+  //notification one day before communiting
+  schedule.scheduleJob(
+    // `${i < 12 ? i * 5 : (i - 12) * 5} ${i < 12 ? 10 : 1 < 24 ? 11 : 12} * * *`,
+    `52 15 * * *`,
+    async () => {
+      const validDate = new Date(new Date().setDate(new Date().getDate() + 1));
+      const dateStartValid = new Date(
+        validDate.getFullYear(),
+        validDate.getMonth(),
+        validDate.getDate(),
+        i,
+        0,
+        0,
+        0
+      );
+      const dateStartValidEnd = new Date(
+        validDate.getFullYear(),
+        validDate.getMonth(),
+        validDate.getDate(),
+        i,
+        59,
+        59,
+        59
+      );
+      Communiting.find({
+        year: validDate.getFullYear(),
+        month: validDate.getMonth() + 1,
+        day: validDate.getDate(),
+        isDeleted: { $in: [false, null] },
+        fullDate: {
+          $gte: dateStartValid.toISOString(),
+          $lte: dateStartValidEnd.toISOString(),
+        },
+      })
+        .select(
+          "_id city description userId companyId month year day timeStart timeEnd workerUserId phone email surname name"
+        )
+        .populate("companyId", "_id name linkPath notificationCommuniting")
+        .populate("workerUserId", "_id name surname")
+        .populate(
+          "userId",
+          "_id name surname whiteListVerifiedPhones phoneVerified email"
+        )
+        .then((resultCommunitings) => {
+          const bulkArrayToUpdateUsers = [];
+          resultCommunitings.forEach((resultCommuniting) => {
+            if (!!resultCommuniting.userId) {
+              let itemReserwation = null;
+              if (!!resultCommuniting.userId._id) {
+                if (!!resultCommuniting.workerUserId) {
+                  if (
+                    !!resultCommuniting.workerUserId._id &&
+                    !!resultCommuniting.companyId._id
+                  ) {
+                    const userAlertToSave = {
+                      reserwationId: resultCommuniting._id,
+                      active: true,
+                      type: "communiting_notifaction",
+                      creationTime: new Date(),
+                      companyChanged: false,
+                    };
+
+                    itemReserwation = {
+                      _id: resultCommuniting._id,
+                      userId: {
+                        name: resultCommuniting.userId.name,
+                        surname: resultCommuniting.userId.surname,
+                        _id: resultCommuniting.userId._id,
+                      },
+                      companyId: {
+                        name: resultCommuniting.companyId.name,
+                        _id: resultCommuniting.companyId._id,
+                        linkPath: resultCommuniting.companyId.linkPath,
+                      },
+                      workerUserId: {
+                        name: resultCommuniting.workerUserId.name,
+                        _id: resultCommuniting.workerUserId._id,
+                        surname: resultCommuniting.workerUserId.surname,
+                      },
+                      year: resultCommuniting.dateYear,
+                      month: resultCommuniting.dateMonth,
+                      day: resultCommuniting.dateDay,
+                      timeStart: resultCommuniting.dateStart,
+                      fullDate: resultCommuniting.fullDate,
+                      city: resultCommuniting.city,
+                      street: resultCommuniting.street,
+                      statusValue: resultCommuniting.statusValue,
+                      cost: resultCommuniting.cost,
+                      description: resultCommuniting.description,
+                    };
+
+                    if (!!itemReserwation) {
+                      io.getIO().emit(`user${resultCommuniting.userId._id}`, {
+                        action: "update-alerts",
+                        alertData: {
+                          reserwationId: itemReserwation,
+                          active: true,
+                          type: "communiting_notifaction",
+                          creationTime: new Date(),
+                          companyChanged: false,
+                        },
+                      });
+
+                      bulkArrayToUpdateUsers.push({
+                        updateOne: {
+                          filter: {
+                            _id: resultCommuniting.userId._id,
+                          },
+                          update: {
+                            $inc: { alertActiveCount: 1 },
+                            $push: {
+                              alerts: {
+                                $each: [userAlertToSave],
+                                $position: 0,
+                              },
+                            },
+                          },
+                        },
+                      });
+                    }
+                    if (
+                      !!resultCommuniting.userId.email ||
+                      !!resultCommuniting.email
+                    ) {
+                      transporter.sendMail({
+                        to: !!resultCommuniting.userId.email
+                          ? resultCommuniting.userId.email
+                          : resultCommuniting.email,
+                        from: MAIL_INFO,
+                        subject: `Przypomnienie o dojeżdzie`,
+                        html: `<h1>Przypomnienie o dojeżdzie</h1>
+                          Przypomnienie o dojeżdzie która ma odbyć się: ${itemReserwation.day}.${itemReserwation.month}.${itemReserwation.year}, o godzinie: ${itemReserwation.timeStart}. Miasto: ${itemReserwation.city}`,
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          });
+          if (bulkArrayToUpdateUsers.length > 0) {
+            return User.bulkWrite(bulkArrayToUpdateUsers)
+              .then(() => {
+                return resultCommunitings;
+              })
+              .catch(() => {
+                const error = new Error(
+                  "Błąd podczas dodawania alertów użytkownikom."
+                );
+                error.statusCode = 502;
+                throw error;
+              });
+          } else {
+            const error = new Error("Brak rezerwacji.");
+            error.statusCode = 502;
+            throw error;
+          }
+        })
+        .then(async (resultCommunitings) => {
+          const filteredCompany = [];
+          const bulkArrayToUpdateReserwations = [];
+          resultCommunitings.forEach((itemReserwation) => {
+            if (!!itemReserwation.companyId) {
+              if (!!itemReserwation.companyId.notificationCommuniting) {
+                const findIndexCompany = filteredCompany.findIndex(
+                  (item) => item.companyId == itemReserwation.companyId._id
+                );
+
+                if (findIndexCompany >= 0) {
+                  filteredCompany[findIndexCompany].allReserwations.push(
+                    itemReserwation
+                  );
+                } else {
+                  const newItem = {
+                    companyId: itemReserwation.companyId._id,
+                    companyEmail: itemReserwation.companyId.email,
+                    allReserwations: [itemReserwation],
+                  };
+                  filteredCompany.push(newItem);
+                }
+              }
+            }
+          });
+
+          for (const itemCompany of filteredCompany) {
+            // filteredCompany.forEach(async (itemCompany) => {
+            const resultFunctionUpdate = await updateCompanyFunction(
+              itemCompany,
+              "sms_notifaction_communiting"
+            );
+            if (!!resultFunctionUpdate) {
+              for (const itemReserwation of itemCompany.allReserwations) {
+                // itemCompany.allReserwations.forEach((itemReserwation) => {
+                if (itemReserwation.userId) {
+                  let selectedPhoneNumber = null;
+                  if (!!itemReserwation.userId.phoneVerified) {
+                    selectedPhoneNumber = itemReserwation.userId.phone;
+                  } else {
+                    if (!!itemReserwation.userId.whiteListVerifiedPhones) {
+                      if (
+                        itemReserwation.userId.whiteListVerifiedPhones.length >
+                        0
+                      ) {
+                        selectedPhoneNumber =
+                          itemReserwation.userId.whiteListVerifiedPhones[
+                            itemReserwation.userId.whiteListVerifiedPhones
+                              .length - 1
+                          ];
+                      }
+                    }
+                  }
+                  if (!!selectedPhoneNumber) {
+                    bulkArrayToUpdateReserwations.push({
+                      updateOne: {
+                        filter: {
+                          _id: itemReserwation._id,
+                        },
+                        update: {
+                          $set: {
+                            notificationSMS: true,
+                          },
+                        },
+                      },
+                    });
+
+                    const userPhone = Buffer.from(
+                      selectedPhoneNumber,
+                      "base64"
+                    ).toString("utf-8");
+
+                    const validComapnyName =
+                      itemReserwation.companyId.name.length > 32
+                        ? itemReserwation.companyId.name.slice(0, 32)
+                        : itemReserwation.companyId.name;
+
+                    const messageNotifaction = `Przypomnienie o wizycie która ma odbyć się: ${itemReserwation.day}.${itemReserwation.month}.${itemReserwation.year}, o godzinie: ${itemReserwation.timeStart}. Miasto: ${itemReserwation.city}`;
+
+                    const params = {
+                      Message: `${messageNotifaction} - ${validComapnyName.toUpperCase()}`,
+                      MessageStructure: "string",
+                      PhoneNumber: `+48${userPhone}`,
+                      MessageAttributes: {
+                        "AWS.SNS.SMS.SenderID": {
+                          DataType: "String",
+                          StringValue: "Meetsy",
+                        },
+                      },
+                    };
+                    // sns.publish(params, function (err, data) {
+                    //   if (err) console.log(err, err.stack);
+                    // });
+                  }
+                }
+              }
+
+              Communiting.bulkWrite(bulkArrayToUpdateReserwations)
                 .then(() => {})
                 .catch(() => {
                   const error = new Error(

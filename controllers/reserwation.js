@@ -4,48 +4,8 @@ const Company = require("../models/company");
 const CompanyUsersInformations = require("../models/companyUsersInformations");
 const { validationResult } = require("express-validator");
 const io = require("../socket");
-const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
-const AWS = require("aws-sdk");
-const company = require("../models/company");
-const webpush = require("web-push");
-const generateNotifications = require("../middleware/generateNotifications");
-require("dotenv").config();
-const {
-  MAIL_HOST,
-  MAIL_PORT,
-  MAIL_INFO,
-  MAIL_PASSWORD,
-  AWS_ACCESS_KEY_ID_APP,
-  AWS_SECRET_ACCESS_KEY_APP,
-  AWS_REGION_APP,
-  AWS_BUCKET,
-  AWS_PATH_URL,
-  PUBLIC_KEY_VAPID,
-  PRIVATE_KEY_VAPID,
-} = process.env;
-
-webpush.setVapidDetails(
-  `mailto:${MAIL_INFO}`,
-  PUBLIC_KEY_VAPID,
-  PRIVATE_KEY_VAPID
-);
-
-const transporter = nodemailer.createTransport({
-  host: MAIL_HOST,
-  port: Number(MAIL_PORT),
-  secure: true,
-  auth: {
-    user: MAIL_INFO,
-    pass: MAIL_PASSWORD,
-  },
-});
-
-AWS.config.update({
-  accessKeyId: AWS_ACCESS_KEY_ID_APP,
-  secretAccessKey: AWS_SECRET_ACCESS_KEY_APP,
-  region: AWS_REGION_APP,
-});
+const notifications = require("../middleware/notifications");
 
 exports.addReserwation = (req, res, next) => {
   const userId = req.userId;
@@ -103,6 +63,7 @@ exports.addReserwation = (req, res, next) => {
     dateMonth: Number(arrayDateFull[1]),
     dateYear: Number(arrayDateFull[2]),
     visitCanceled: false,
+    isDeleted: { $in: [false, null] },
   })
     .then((allReserwations) => {
       return Company.aggregate([
@@ -180,6 +141,7 @@ exports.addReserwation = (req, res, next) => {
             companyStamps: 1,
             premium: 1,
             smsReserwationAvaible: 1,
+            smsReserwationChangedUserAvaible: 1,
             smsNotifactionAvaible: 1,
             sms: 1,
             pauseCompany: 1,
@@ -259,6 +221,7 @@ exports.addReserwation = (req, res, next) => {
             companyStamps: 1,
             premium: 1,
             smsReserwationAvaible: 1,
+            smsReserwationChangedUserAvaible: 1,
             smsNotifactionAvaible: 1,
             sms: 1,
             pauseCompany: 1,
@@ -862,6 +825,7 @@ exports.addReserwation = (req, res, next) => {
                                           sendSMSReserwation: false,
                                           sendSMSNotifaction: false,
                                           sendSMSCanceled: false,
+                                          sendSMSChanged: false,
                                           isDraft: false,
                                           dateStart: dateStart,
                                           dateEnd: timeEndService,
@@ -892,13 +856,16 @@ exports.addReserwation = (req, res, next) => {
                                             : false,
                                           basicPrice:
                                             selectedServices.serviceCost,
+                                          isDeleted: false,
                                         },
                                       }
                                     )
                                       .then(() => {
+                                        newReserwationDraftId.isDeleted = false;
                                         newReserwationDraftId.sendSMSReserwation = false;
                                         newReserwationDraftId.sendSMSNotifaction = false;
                                         newReserwationDraftId.sendSMSCanceled = false;
+                                        newReserwationDraftId.sendSMSChanged = false;
                                         newReserwationToValid.isDraft = false;
                                         newReserwationToValid.dateStart =
                                           dateStart;
@@ -1078,7 +1045,7 @@ exports.addReserwation = (req, res, next) => {
     })
     .then((resultReserwation) => {
       return User.find({
-        _id: { $in: [userId, workerUserId] },
+        _id: { $in: [userId] },
         accountVerified: true,
       })
         .select("_id stamps")
@@ -1091,78 +1058,92 @@ exports.addReserwation = (req, res, next) => {
               )
               .populate(
                 {
-                  path: "company fromUser",
+                  path: "company fromUser toWorkerUserId",
                   select:
-                    "name surname linkPath smsReserwationAvaible sms companyStamps",
+                    "_id name surname linkPath smsReserwationChangedUserAvaible smsReserwationAvaible sms companyStamps",
                 },
                 async (err, resultReserwationPopulate) => {
-                  const emailContent = `<h1>Termin rezerwacji:</h1>
-                      <h4>
-                        Nazwa usługi: ${resultReserwationPopulate.serviceName}
-                      </h4>
-                      <h4>
-                        Termin: ${resultReserwationPopulate.dateDay}-${
+                  const emailContent = `
+                        Dokonano rezerwacji, nazwa usługi: ${
+                          resultReserwationPopulate.serviceName
+                        },termin: ${resultReserwationPopulate.dateDay}-${
                     resultReserwationPopulate.dateMonth
-                  }-${resultReserwationPopulate.dateYear}
-                      </h4>
-                      <h4>
-                        Godzina: ${resultReserwationPopulate.dateStart}
-                      </h4>
-                      <h4>
-                        Czas trwania: ${
-                          resultReserwationPopulate.timeReserwation
-                        }min ${resultReserwationPopulate.extraTime ? "+" : ""}
-                      </h4>
-                      <h4>
-                        Koszt: ${
-                          resultReserwationPopulate.costReserwation
-                        } zł ${resultReserwationPopulate.extraCost ? "+" : ""}
-                      </h4>`;
+                  }-${resultReserwationPopulate.dateYear}, godzina: ${
+                    resultReserwationPopulate.dateStart
+                  }, czas trwania: ${
+                    resultReserwationPopulate.timeReserwation
+                  }min ${
+                    resultReserwationPopulate.extraTime ? "+" : ""
+                  }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
+                    resultReserwationPopulate.extraCost ? "+" : ""
+                  }.`;
 
                   const payload = {
-                    title: `Dokonano rezerwacji dnia: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}, na usługę: ${resultReserwationPopulate.serviceName}`,
+                    title: `
+                        Dokonano rezerwacji, nazwa usługi: ${
+                          resultReserwationPopulate.serviceName
+                        },termin: ${resultReserwationPopulate.dateDay}-${
+                      resultReserwationPopulate.dateMonth
+                    }-${resultReserwationPopulate.dateYear}, godzina: ${
+                      resultReserwationPopulate.dateStart
+                    }, czas trwania: ${
+                      resultReserwationPopulate.timeReserwation
+                    }min ${
+                      resultReserwationPopulate.extraTime ? "+" : ""
+                    }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
+                      resultReserwationPopulate.extraCost ? "+" : ""
+                    }.`,
                     body: "this is the body",
                     icon: "images/someImageInPath.png",
                   };
 
-                  const messageSMS = `Dokonano rezerwacji w firmie: ${
-                    resultReserwationPopulate.company.name
-                  } dnia: ${resultReserwationPopulate.dateDay}-${
+                  const emailSubject = `Dokonano rezerwację`;
+                  const message = `
+                        Dokonano rezerwacji, nazwa usługi: ${
+                          resultReserwationPopulate.serviceName
+                        },termin: ${resultReserwationPopulate.dateDay}-${
                     resultReserwationPopulate.dateMonth
-                  }-${resultReserwationPopulate.dateYear}, o godzine: ${
+                  }-${resultReserwationPopulate.dateYear}, godzina: ${
                     resultReserwationPopulate.dateStart
-                  }, na usługę: ${
-                    resultReserwationPopulate.serviceName
-                  }. Czas trwania usługi: ${
+                  }, czas trwania: ${
                     resultReserwationPopulate.timeReserwation
                   }min ${
                     resultReserwationPopulate.extraTime ? "+" : ""
-                  }. Koszt usługi: ${
-                    resultReserwationPopulate.costReserwation
-                  } zł ${resultReserwationPopulate.extraCost ? "+" : ""}`;
+                  }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
+                    resultReserwationPopulate.extraCost ? "+" : ""
+                  }.`;
 
-                  const emailSubject = `Dokonano rezerwacji w firmie ${resultReserwationPopulate.company.name}`;
-
-                  const { smsSendDone } = await generateNotifications(
-                    [userId, workerUserId],
-                    resultReserwationPopulate,
-                    "rezerwation_created",
-                    [emailSubject, emailContent],
-                    payload,
-                    {
-                      sendSMSCompany: false,
-                      // resultReserwationPopulate.company.smsReserwationAvaible,
-                      messageSMS: messageSMS,
-                      companyId: companyId,
-                      smsTitle: "sms_add_reserwation",
+                  const { resultSMS } = await notifications.sendAll({
+                    usersId: [
+                      resultReserwationPopulate.fromUser._id,
+                      resultReserwationPopulate.toWorkerUserId._id,
+                    ],
+                    clientId: resultReserwationPopulate.fromUser._id,
+                    emailContent: {
+                      customEmail: null,
+                      emailTitle: emailSubject,
+                      emailMessage: emailContent,
                     },
-                    userId
-                  );
+                    notificationContent: {
+                      typeAlert: "reserwationId",
+                      dateAlert: resultReserwationPopulate,
+                      typeNotification: "reserwation_created",
+                      payload: payload,
+                      companyChanged: false,
+                    },
+                    smsContent: {
+                      companyId: companyId,
+                      customPhone: null,
+                      companySendSMSValidField: "smsReserwationAvaible",
+                      titleCompanySendSMS: "sms_created_reserwation",
+                      message: message,
+                    },
+                  });
 
-                  if (!!smsSendDone) {
+                  if (!!resultSMS) {
                     Reserwation.updateOne(
                       {
-                        _id: resultReserwation._id,
+                        _id: resultReserwationPopulate._id,
                         sendSMSReserwation: false,
                       },
                       {
@@ -1170,9 +1151,7 @@ exports.addReserwation = (req, res, next) => {
                           sendSMSReserwation: true,
                         },
                       }
-                    )
-                      .then(() => {})
-                      .catch(() => {});
+                    ).then(() => {});
                   }
 
                   const bulkArrayToUpdate = [];
@@ -1378,6 +1357,7 @@ exports.addReserwationWorker = (req, res, next) => {
         dateMonth: Number(arrayDateFull[1]),
         dateYear: Number(arrayDateFull[2]),
         visitCanceled: false,
+        isDeleted: { $in: [false, null] },
       })
         .then(() => {
           const newReserwationWorker = new Reserwation({
@@ -1400,6 +1380,7 @@ exports.addReserwationWorker = (req, res, next) => {
             timeReserwation: 0,
             fullDate: actualDate,
             hasCommuniting: false,
+            isDeleted: false,
           });
           return newReserwationWorker.save();
         })
@@ -1422,7 +1403,7 @@ exports.addReserwationWorker = (req, res, next) => {
                     alertData: {
                       reserwationId: resultReserwationPopulate,
                       active: true,
-                      type: "new_rezerwation_worker",
+                      type: "new_reserwation_worker",
                       creationTime: new Date(),
                       companyChanged: false,
                     },
@@ -1431,7 +1412,7 @@ exports.addReserwationWorker = (req, res, next) => {
                 const newUserAlert = {
                   reserwationId: resultReserwationPopulate._id,
                   active: true,
-                  type: "new_rezerwation_worker",
+                  type: "new_reserwation_worker",
                   creationTime: new Date(),
                   companyChanged: false,
                 };
@@ -1510,6 +1491,7 @@ exports.getWorkerDisabledHours = (req, res, next) => {
     dateDay: selectedDay,
     dateYear: selectedYear,
     visitCanceled: false,
+    isDeleted: { $in: [false, null] },
   })
     .select(
       "toWorkerUserId company dateYear dateMonth dateDay dateStart dateEnd visitCanceled"
@@ -2071,6 +2053,7 @@ exports.getUserReserwations = (req, res, next) => {
     fullDate: {
       $gte: new Date().toISOString(),
     },
+    isDeleted: { $in: [false, null] },
   })
     .populate("toWorkerUserId", "name surname")
     .populate({
@@ -2208,6 +2191,7 @@ exports.getUserReserwationsAll = (req, res, next) => {
         fullDate: {
           $lte: new Date().toISOString(),
         },
+        isDeleted: { $in: [false, null] },
       }
     : {
         fromUser: userId,
@@ -2218,6 +2202,7 @@ exports.getUserReserwationsAll = (req, res, next) => {
         fullDate: {
           $lte: new Date().toISOString(),
         },
+        isDeleted: { $in: [false, null] },
       };
 
   Reserwation.find(queryToReserwation)
@@ -2324,9 +2309,11 @@ exports.getWorkerReserwationsAll = (req, res, next) => {
     company: companyId,
     visitCanceled: false,
     isDraft: { $in: [false, null] },
+    isDeleted: { $in: [false, null] },
   })
     .populate("fromUser", "name surname")
     .populate("company", "name linkPath services.serviceColor services._id")
+    .populate("communitingId", "_id city street description")
     .then((reserwationsDoc) => {
       return Company.findOne({ _id: companyId })
         .select(
@@ -2376,8 +2363,6 @@ exports.updateReserwation = (req, res, next) => {
   const userId = req.userId;
   const reserwationId = req.body.reserwationId;
   const canceled = req.body.canceled;
-  const changed = req.body.changed;
-  const noFinished = req.body.noFinished;
 
   const errors = validationResult(req);
 
@@ -2392,9 +2377,13 @@ exports.updateReserwation = (req, res, next) => {
     _id: reserwationId,
     visitCanceled: false,
     visitNotFinished: false,
+    isDeleted: { $in: [false, null] },
   })
-    .populate("toWorkerUserId", "name surname")
-    .populate("company", "name")
+    .select(
+      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId visitCanceled"
+    )
+    .populate("toWorkerUserId fromUser", "_id name surname")
+    .populate("company", "_id name linkPath")
     .then((reserwationsDoc) => {
       if (!!reserwationsDoc) {
         const dateEndSplit = reserwationsDoc.dateEnd.split(":");
@@ -2408,15 +2397,24 @@ exports.updateReserwation = (req, res, next) => {
         const isGoodDate = new Date() <= reserwationDate;
         if (isGoodDate) {
           if (canceled !== null) {
-            reserwationsDoc.visitCanceled = canceled;
+            return Reserwation.updateOne(
+              {
+                fromUser: userId,
+                _id: reserwationId,
+                visitCanceled: false,
+                visitNotFinished: false,
+                isDeleted: { $in: [false, null] },
+              },
+              {
+                $set: {
+                  visitCanceled: true,
+                },
+              }
+            ).then(() => {
+              reserwationsDoc.visitCanceled = true;
+              return reserwationsDoc;
+            });
           }
-          if (changed !== null) {
-            reserwationsDoc.visitChanged = changed;
-          }
-          if (noFinished !== null) {
-            reserwationsDoc.visitNotFinished = noFinished;
-          }
-          return reserwationsDoc.save();
         } else {
           const error = new Error(
             "Brak uprawnień - nie można edytować rezerwacji już skończonej."
@@ -2430,56 +2428,61 @@ exports.updateReserwation = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultReserwation) => {
-      const reserwationStatus = resultReserwation.visitCanceled
-        ? "rezerwation_canceled"
-        : resultReserwation.visitChanged
-        ? "rezerwation_changed"
-        : resultReserwation.visitNotFinished
-        ? "reserwation_not_finished"
-        : "reserwation_finished";
+    .then(async (resultReserwation) => {
+      const emailContent = `Odwołano rezerwację, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
+      const payload = {
+        title: `Odwołano rezerwację, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`,
+        body: "this is the body",
+        icon: "images/someImageInPath.png",
+      };
 
-      resultReserwation
-        .populate(
-          "reserwationId",
-          "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
-        )
-        .populate(
+      const emailSubject = `Dokonano zmiany rezerwacji`;
+      const message = `Odwołano rezerwację, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
+
+      const { resultSMS } = await notifications.sendAll({
+        usersId: [
+          resultReserwation.fromUser._id,
+          resultReserwation.toWorkerUserId._id,
+        ],
+        clientId: resultReserwation.fromUser._id,
+        emailContent: {
+          customEmail: null,
+          emailTitle: emailSubject,
+          emailMessage: emailContent,
+        },
+        notificationContent: {
+          typeAlert: "reserwationId",
+          dateAlert: resultReserwation,
+          typeNotification: "reserwation_canceled",
+          payload: payload,
+          companyChanged: false,
+        },
+        smsContent: {
+          companyId: resultReserwation.company._id,
+          customPhone: null,
+          companySendSMSValidField: "smsReserwationChangedUserAvaible",
+          titleCompanySendSMS: "sms_user_canceled_reserwation",
+          message: message,
+        },
+      });
+
+      if (!!resultSMS) {
+        Reserwation.updateOne(
           {
-            path: "company fromUser",
-            select: "name surname linkPath email",
+            _id: resultReserwation._id,
+            sendSMSReserwationUserChanged: false,
           },
-          async (err, resultReserwationPopulate) => {
-            const emailSubject = `Odwołano / zaktualizowano rezerwację w firmie ${resultReserwationPopulate.company.name}`;
-            const emailContent = `
-                <h4>
-                  Nazwa usługi: ${resultReserwationPopulate.serviceName}
-                </h4>
-                <h4>
-                  Termin: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}
-                </h4>
-                <h4>
-                  Godzina: ${resultReserwationPopulate.dateStart}
-                </h4>
-                `;
-
-            const { notifactionDone } = await generateNotifications(
-              [userId, resultReserwation.toWorkerUserId._id],
-              resultReserwationPopulate,
-              reserwationStatus,
-              [emailSubject, emailContent],
-              null,
-              null,
-              userId
-            );
-
-            if (notifactionDone) {
-              res.status(201).json({
-                reserwation: resultReserwation,
-              });
-            }
+          {
+            $set: {
+              sendSMSReserwationUserChanged: true,
+            },
           }
-        );
+        ).then(() => {});
+      }
+
+      res.status(201).json({
+        message: "Zaktualizowano rezerwację",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -2492,7 +2495,6 @@ exports.updateReserwation = (req, res, next) => {
 
 exports.updateWorkerReserwation = (req, res, next) => {
   const userId = req.userId;
-  const userEmail = req.userEmail;
   const workerUserId = req.body.workerUserId;
   const reserwationId = req.body.reserwationId;
   const canceled = req.body.canceled;
@@ -2514,9 +2516,10 @@ exports.updateWorkerReserwation = (req, res, next) => {
   Reserwation.findOne({
     toWorkerUserId: workerUserId,
     _id: reserwationId,
+    isDeleted: { $in: [false, null] },
   })
-    .populate("toWorkerUserId", "name surname")
-    .populate("company", "name owner workers.user")
+    .populate("toWorkerUserId fromUser", "_id name surname")
+    .populate("company", "_id name owner workers.user")
 
     .then((reserwationsDoc) => {
       if (!!reserwationsDoc) {
@@ -2625,143 +2628,116 @@ exports.updateWorkerReserwation = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultReserwation) => {
-      return Company.findOne({
-        _id: resultReserwation.company._id,
-      })
-        .select("_id smsCanceledAvaible smsChangedAvaible")
-        .then((companyDoc) => {
-          if (!!companyDoc) {
-            const reserwationStatus = !!resultReserwation.workerReserwation
-              ? "rezerwation_worker"
-              : resultReserwation.visitCanceled
-              ? "rezerwation_canceled"
-              : resultReserwation.visitChanged
-              ? "rezerwation_changed"
-              : resultReserwation.visitNotFinished
-              ? "reserwation_not_finished"
-              : "reserwation_finished";
+    .then(async (resultReserwation) => {
+      const reserwationStatus = resultReserwation.visitNotFinished
+        ? "reserwation_not_finished"
+        : !!resultReserwation.workerReserwation
+        ? "reserwation_worker"
+        : resultReserwation.visitCanceled
+        ? "reserwation_canceled"
+        : resultReserwation.visitChanged
+        ? "reserwation_changed"
+        : "reserwation_finished";
 
-            let isAccessToSentAlert = true;
-            if (!!resultReserwation.workerReserwation) {
-              isAccessToSentAlert = !(
-                workerUserId === resultReserwation.toWorkerUserId._id
-              );
-            }
-            if (isAccessToSentAlert) {
-              resultReserwation
-                .populate(
-                  "reserwationId",
-                  "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
-                )
-                .populate(
-                  {
-                    path: "company fromUser",
-                    select: "name surname linkPath",
-                  },
-                  async (err, resultReserwationPopulate) => {
-                    const validIsChange =
-                      !!!resultReserwation.visitNotFinished &&
-                      !!!resultReserwation.workerReserwation &&
-                      !!!resultReserwation.visitCanceled &&
-                      !!resultReserwation.visitChanged;
+      const reserwationValidCompanySMS = resultReserwation.visitNotFinished
+        ? null
+        : !!resultReserwation.workerReserwation
+        ? null
+        : resultReserwation.visitCanceled
+        ? "smsCanceledAvaible"
+        : resultReserwation.visitChanged
+        ? "smsChangedAvaible"
+        : null;
 
-                    const validIsCancel =
-                      !!!resultReserwation.visitNotFinished &&
-                      !!!resultReserwation.workerReserwation &&
-                      !!resultReserwation.visitCanceled &&
-                      !!!resultReserwation.visitChanged;
+      const reserwationValidCompanySMSMessage =
+        resultReserwation.visitNotFinished
+          ? null
+          : !!resultReserwation.workerReserwation
+          ? null
+          : resultReserwation.visitCanceled
+          ? "sms_canceled_reserwation"
+          : resultReserwation.visitChanged
+          ? "sms_changed_reserwation"
+          : null;
 
-                    const payload = validIsCancel
-                      ? {
-                          title: `Odwołano rezerwację dnia: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, o godzine: ${resultReserwation.dateStart}, na usługę: ${resultReserwation.serviceName}`,
-                          body: "this is the body",
-                          icon: "images/someImageInPath.png",
-                        }
-                      : validIsChange && {
-                          title: `Dokonano zmianę w rezerwacji dnia: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, o godzine: ${resultReserwation.dateStart}, na usługę: ${resultReserwation.serviceName}`,
-                          body: "this is the body",
-                          icon: "images/someImageInPath.png",
-                        };
+      const validTextStatusReserwation = resultReserwation.visitNotFinished
+        ? "Oznaczono rezerwację jako nie odbytą"
+        : !!resultReserwation.workerReserwation
+        ? "Dodano rezerwację czasu"
+        : resultReserwation.visitCanceled
+        ? "Odwołano rezerwację"
+        : resultReserwation.visitChanged
+        ? "Dokonano zmiany w rezerwacji"
+        : "Oznaczono rezerwację jako odbytą";
 
-                    const emailSubject = validIsChange
-                      ? `Zmieniono rezerwację`
-                      : validIsCancel && `Odwołano rezerwację`;
-                    const emailContent = validIsChange
-                      ? `<h1>Zmieniono rezerwację w firmie: ${resultReserwation.company.name}</h1>
-                              <h4>
-                                Nazwa usługi: ${resultReserwation.serviceName}
-                              </h4>
-                              <h4>
-                                Termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}
-                              </h4>
-                              <h4>
-                                Godzina: ${resultReserwation.dateStart}
-                              </h4>
-                              `
-                      : validIsCancel &&
-                        `<h1>Odwołano rezerwację w firmie: ${resultReserwation.company.name}</h1>
-                              <h4>
-                                Nazwa usługi: ${resultReserwation.serviceName}
-                              </h4>
-                              <h4>
-                                Termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}
-                              </h4>
-                              <h4>
-                                Godzina: ${resultReserwation.dateStart}
-                              </h4>
-                              `;
+      const validStatusReserwation = !!resultReserwation.workerReserwation
+        ? null
+        : resultReserwation.visitCanceled
+        ? { sendSMSCanceled: true }
+        : resultReserwation.visitChanged
+        ? { sendSMSChanged: true }
+        : resultReserwation.visitNotFinished
+        ? null
+        : null;
 
-                    const contentSMS =
-                      validIsChange && !!companyDoc.smsChangedAvaible
-                        ? {
-                            sendSMSCompany: companyDoc.smsChangedAvaible,
-                            messageSMS: `Dokonano zmianę rezerwacji w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
-                            companyId: resultReserwation.company._id,
-                            smsTitle: "sms_update_worker_reserwation",
-                          }
-                        : validIsCancel &&
-                          !!companyDoc.smsCanceledAvaible && {
-                            sendSMSCompany: companyDoc.smsCanceledAvaible,
-                            messageSMS: `Rezerwacja została odwołana w firmie ${resultReserwation.company.name}. Nazwa usługi: ${resultReserwation.serviceName}, termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}`,
-                            companyId: resultReserwation.company._id,
-                            smsTitle: "sms_canceled_worker_reserwation",
-                          };
+      const emailContent = `${validTextStatusReserwation}, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
+      const payload = {
+        title: `${validTextStatusReserwation}, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`,
+        body: "this is the body",
+        icon: "images/someImageInPath.png",
+      };
 
-                    const { smsSendDone } = await generateNotifications(
-                      [resultReserwation.fromUser._id, workerUserId],
-                      resultReserwationPopulate,
-                      reserwationStatus,
-                      [emailSubject, emailContent],
-                      payload,
-                      contentSMS,
-                      resultReserwation.fromUser._id
-                    );
+      const emailSubject = `${validTextStatusReserwation}`;
+      const message = `${validTextStatusReserwation}, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
 
-                    if (smsSendDone) {
-                      Reserwation.updateOne(
-                        {
-                          _id: resultReserwation._id,
-                          sendSMSCanceled: false,
-                        },
-                        {
-                          $set: {
-                            sendSMSCanceled: true,
-                          },
-                        }
-                      )
-                        .then(() => {})
-                        .catch(() => {});
-                    }
-                  }
-                );
-            }
+      const { resultSMS } = await notifications.sendAll({
+        usersId: [
+          resultReserwation.fromUser._id,
+          resultReserwation.toWorkerUserId._id,
+        ],
+        clientId: resultReserwation.fromUser._id,
+        emailContent: !!!resultReserwation.workerReserwation &&
+          !!validStatusReserwation && {
+            customEmail: null,
+            emailTitle: emailSubject,
+            emailMessage: emailContent,
+          },
+        notificationContent: {
+          typeAlert: "reserwationId",
+          dateAlert: resultReserwation,
+          typeNotification: reserwationStatus,
+          payload: payload,
+          companyChanged: true,
+        },
+        smsContent: !!!resultReserwation.workerReserwation &&
+          !!validStatusReserwation && {
+            companyId: resultReserwation.company._id,
+            customPhone: null,
+            companySendSMSValidField: reserwationValidCompanySMS,
+            titleCompanySendSMS: reserwationValidCompanySMSMessage,
+            message: message,
+          },
+      });
 
-            res.status(201).json({
-              reserwation: resultReserwation,
-            });
+      if (
+        !!resultSMS &&
+        !!!resultReserwation.workerReserwation &&
+        !!validStatusReserwation
+      ) {
+        Reserwation.updateOne(
+          {
+            _id: resultReserwation._id,
+            sendSMSReserwationUserChanged: false,
+          },
+          {
+            $set: validStatusReserwation,
           }
-        });
+        ).then(() => {});
+      }
+
+      res.status(201).json({
+        message: "Zaktualizowano rezerwację",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -2905,6 +2881,7 @@ exports.getSelectedUserReserwations = (req, res, next) => {
             fromUser: mongoose.Types.ObjectId(userSelectedId),
             workerReserwation: false,
             isDraft: { $in: [false, null] },
+            isDeleted: { $in: [false, null] },
           },
         },
         {
@@ -2963,7 +2940,6 @@ exports.getSelectedUserReserwations = (req, res, next) => {
 
 exports.changeReserwation = (req, res, next) => {
   const userId = req.userId;
-  const userEmail = req.userEmail;
   const workerId = req.body.workerId;
   const workerUserId = req.body.workerUserId;
   const companyId = req.body.companyId;
@@ -2971,7 +2947,6 @@ exports.changeReserwation = (req, res, next) => {
   const dateFull = req.body.dateFull;
   const reserwationMessage = req.body.reserwationMessage;
   const serviceId = req.body.serviceId;
-  const numberPhone = req.body.numberPhone;
   const isStampActive = req.body.isStampActive;
   const selectedReserwationId = req.body.selectedReserwationId;
 
@@ -3020,6 +2995,7 @@ exports.changeReserwation = (req, res, next) => {
     dateMonth: Number(arrayDateFull[1]),
     dateYear: Number(arrayDateFull[2]),
     visitCanceled: false,
+    isDeleted: { $in: [false, null] },
   })
     .then((allReserwations) => {
       return Company.aggregate([
@@ -3779,6 +3755,7 @@ exports.changeReserwation = (req, res, next) => {
                                           sendSMSReserwation: false,
                                           sendSMSNotifaction: false,
                                           sendSMSCanceled: false,
+                                          sendSMSChanged: false,
                                           isDraft: false,
                                           dateStart: dateStart,
                                           dateEnd: timeEndService,
@@ -3809,13 +3786,18 @@ exports.changeReserwation = (req, res, next) => {
                                             : false,
                                           basicPrice:
                                             selectedServices.serviceCost,
+                                          isDeleted: false,
+                                          oldReserwationId:
+                                            selectedReserwationId,
                                         },
                                       }
                                     )
                                       .then(() => {
+                                        newReserwationDraftId.isDeleted = false;
                                         newReserwationDraftId.sendSMSReserwation = false;
                                         newReserwationDraftId.sendSMSNotifaction = false;
                                         newReserwationDraftId.sendSMSCanceled = false;
+                                        newReserwationDraftId.sendSMSChanged = false;
                                         newReserwationToValid.isDraft = false;
                                         newReserwationToValid.dateStart =
                                           dateStart;
@@ -3850,9 +3832,16 @@ exports.changeReserwation = (req, res, next) => {
                                         newReserwationToValid.basicPrice =
                                           selectedServices.serviceCost;
 
-                                        Reserwation.deleteOne({
-                                          _id: selectedReserwationId,
-                                        }).then(() => {});
+                                        Reserwation.updateOne(
+                                          {
+                                            _id: selectedReserwationId,
+                                          },
+                                          {
+                                            $set: {
+                                              isDeleted: true,
+                                            },
+                                          }
+                                        ).then(() => {});
 
                                         return {
                                           companyDoc: companyDocData,
@@ -3981,87 +3970,91 @@ exports.changeReserwation = (req, res, next) => {
         )
         .populate(
           {
-            path: "company fromUser",
-            select: "name surname linkPath smsChangedAvaible sms companyStamps",
+            path: "company fromUser toWorkerUserId",
+            select:
+              "_id name surname linkPath smsChangedAvaible sms companyStamps",
           },
           async (err, resultReserwationPopulate) => {
-            const emailContent = `<h1>Termin rezerwacji:</h1>
-              <h4>
-                Nazwa usługi: ${resultReserwationPopulate.serviceName}
-              </h4>
-              <h4>
-                Termin: ${resultReserwationPopulate.dateDay}-${
+            const emailContent = `Dokonano zmiany rezerwacji, nazwa usługi: ${
+              resultReserwationPopulate.serviceName
+            },termin: ${resultReserwationPopulate.dateDay}-${
               resultReserwationPopulate.dateMonth
-            }-${resultReserwationPopulate.dateYear}
-              </h4>
-              <h4>
-                Godzina: ${resultReserwationPopulate.dateStart}
-              </h4>
-              <h4>
-                Czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
+            }-${resultReserwationPopulate.dateYear}, godzina: ${
+              resultReserwationPopulate.dateStart
+            }, czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
               resultReserwationPopulate.extraTime ? "+" : ""
-            }
-              </h4>
-              <h4>
-                Koszt: ${resultReserwationPopulate.costReserwation} zł ${
+            }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
               resultReserwationPopulate.extraCost ? "+" : ""
-            }
-              </h4>`;
+            }.`;
 
             const payload = {
-              title: `Dokonano zmiany rezerwacji na: ${resultReserwationPopulate.dateDay}-${resultReserwationPopulate.dateMonth}-${resultReserwationPopulate.dateYear}, o godzine: ${resultReserwationPopulate.dateStart}, na usługę: ${resultReserwationPopulate.serviceName}`,
+              title: `Dokonano zmiany rezerwacji, nazwa usługi: ${
+                resultReserwationPopulate.serviceName
+              },termin: ${resultReserwationPopulate.dateDay}-${
+                resultReserwationPopulate.dateMonth
+              }-${resultReserwationPopulate.dateYear}, godzina: ${
+                resultReserwationPopulate.dateStart
+              }, czas trwania: ${
+                resultReserwationPopulate.timeReserwation
+              }min ${resultReserwationPopulate.extraTime ? "+" : ""}, koszt: ${
+                resultReserwationPopulate.costReserwation
+              } zł ${resultReserwationPopulate.extraCost ? "+" : ""}.`,
               body: "this is the body",
               icon: "images/someImageInPath.png",
             };
 
-            const messageSMS = `Dokonano zmiany rezerwacji w firmie: ${
-              resultReserwationPopulate.company.name
-            } dnia: ${resultReserwationPopulate.dateDay}-${
-              resultReserwationPopulate.dateMonth
-            }-${resultReserwationPopulate.dateYear}, o godzine: ${
-              resultReserwationPopulate.dateStart
-            }, na usługę: ${
+            const emailSubject = `Dokonano zmiany rezerwacji`;
+            const message = `Dokonano zmiany rezerwacji, nazwa usługi: ${
               resultReserwationPopulate.serviceName
-            }. Czas trwania usługi: ${
-              resultReserwationPopulate.timeReserwation
-            }min ${
+            },termin: ${resultReserwationPopulate.dateDay}-${
+              resultReserwationPopulate.dateMonth
+            }-${resultReserwationPopulate.dateYear}, godzina: ${
+              resultReserwationPopulate.dateStart
+            }, czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
               resultReserwationPopulate.extraTime ? "+" : ""
-            }. Koszt usługi: ${resultReserwationPopulate.costReserwation} zł ${
+            }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
               resultReserwationPopulate.extraCost ? "+" : ""
-            }`;
+            }.`;
 
-            const emailSubject = `Dokonano zmiany rezerwacji w firmie ${resultReserwationPopulate.company.name}`;
-
-            const { smsSendDone } = await generateNotifications(
-              [userId, workerUserId],
-              resultReserwationPopulate,
-              "rezerwation_created",
-              [emailSubject, emailContent],
-              payload,
-              {
-                sendSMSCompany: false,
-                // resultReserwationPopulate.company.smsReserwationAvaible,
-                messageSMS: messageSMS,
-                companyId: companyId,
-                smsTitle: "sms_add_reserwation",
+            const { resultSMS } = await notifications.sendAll({
+              usersId: [
+                resultReserwationPopulate.fromUser._id,
+                resultReserwationPopulate.toWorkerUserId._id,
+              ],
+              clientId: resultReserwationPopulate.fromUser._id,
+              emailContent: {
+                customEmail: null,
+                emailTitle: emailSubject,
+                emailMessage: emailContent,
               },
-              userId
-            );
+              notificationContent: {
+                typeAlert: "reserwationId",
+                dateAlert: resultReserwationPopulate,
+                typeNotification: "reserwation_user_changed",
+                payload: payload,
+                companyChanged: false,
+              },
+              smsContent: {
+                companyId: companyId,
+                customPhone: null,
+                companySendSMSValidField: "smsReserwationChangedUserAvaible",
+                titleCompanySendSMS: "sms_user_changed_reserwation",
+                message: message,
+              },
+            });
 
-            if (!!smsSendDone) {
+            if (!!resultSMS) {
               Reserwation.updateOne(
                 {
-                  _id: resultReserwation._id,
-                  sendSMSReserwation: false,
+                  _id: resultReserwationPopulate._id,
+                  sendSMSReserwationUserChanged: false,
                 },
                 {
                   $set: {
-                    sendSMSReserwation: true,
+                    sendSMSReserwationUserChanged: true,
                   },
                 }
-              )
-                .then(() => {})
-                .catch(() => {});
+              ).then(() => {});
             }
           }
         );

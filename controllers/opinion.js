@@ -61,6 +61,7 @@ exports.addOpinion = (req, res, next) => {
               return Reserwation.findOne({
                 _id: opinionData.reserwationId,
                 fromUser: userId,
+                isDeleted: { $in: [false, null] },
               })
                 .select("_id opinionId")
                 .then((reserwationData) => {

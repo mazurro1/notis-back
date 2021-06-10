@@ -11,7 +11,6 @@ const Communiting = require("../models/Communiting");
 const mongoose = require("mongoose");
 const User = require("../models/user");
 const { validationResult } = require("express-validator");
-const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const getImgBuffer = require("../getImgBuffer");
 require("dotenv").config();
@@ -19,7 +18,7 @@ const io = require("../socket");
 const bcrypt = require("bcryptjs");
 const rp = require("request-promise");
 const Bir = require("bir1");
-const generateNotifications = require("../middleware/generateNotifications");
+const notifications = require("../middleware/notifications");
 
 const {
   AWS_ACCESS_KEY_ID_APP,
@@ -28,10 +27,6 @@ const {
   AWS_BUCKET,
   AWS_PATH_URL,
   SITE_FRONT,
-  MAIL_HOST,
-  MAIL_PORT,
-  MAIL_INFO,
-  MAIL_PASSWORD,
   GOOGLE_API_KEY,
   GUS_USER_KEY,
 } = process.env;
@@ -45,18 +40,6 @@ AWS.config.update({
 const s3Bucket = new AWS.S3({
   params: {
     Bucket: AWS_BUCKET,
-  },
-});
-
-const sns = new AWS.SNS();
-
-const transporter = nodemailer.createTransport({
-  host: MAIL_HOST,
-  port: Number(MAIL_PORT),
-  secure: true,
-  auth: {
-    user: MAIL_INFO,
-    pass: MAIL_PASSWORD,
   },
 });
 
@@ -506,6 +489,7 @@ exports.registrationCompany = (req, res, next) => {
                                 : new Date()
                               : new Date(new Date().setMonth(actualMonth + 3)),
                             smsReserwationAvaible: false,
+                            smsReserwationChangedUserAvaible: false,
                             smsNotifactionAvaible: false,
                             smsCanceledAvaible: false,
                             smsChangedAvaible: false,
@@ -585,11 +569,11 @@ exports.registrationCompany = (req, res, next) => {
               result.codeToVerified,
               "base64"
             ).toString("utf-8");
-            transporter.sendMail({
-              to: result.email,
-              from: MAIL_INFO,
-              subject: "Tworzenie konta firmowego zakończone powodzeniem",
-              html: `<h1>Utworzono nowe konto firmowe</h1> ${unhashedCodeToVerified}`,
+
+            notifications.sendEmail({
+              email: result.email,
+              emailTitle: "Tworzenie konta firmowego zakończone powodzeniem",
+              emailMessage: `<h1>Utworzono nowe konto firmowe</h1> ${unhashedCodeToVerified}`,
             });
 
             res.status(200).json({
@@ -632,12 +616,13 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
         companyData.codeToVerified,
         "base64"
       ).toString("utf-8");
-      transporter.sendMail({
-        to: companyData.email,
-        from: MAIL_INFO,
-        subject: "Tworzenie konta firmowego zakończone powodzeniem",
-        html: `<h1>Utworzono nowe konto firmowe</h1> ${unhashedCodeToVerified}`,
+
+      notifications.sendEmail({
+        email: companyData.email,
+        emailTitle: "Tworzenie konta firmowego zakończone powodzeniem",
+        emailMessage: `<h1>Utworzono nowe konto firmowe</h1> ${unhashedCodeToVerified}`,
       });
+
       res.status(201).json({
         message: "Email został wysłany",
       });
@@ -909,6 +894,10 @@ exports.getCompanyData = (req, res, next) => {
                 smsReserwationAvaible: !!dataCompany.smsReserwationAvaible
                   ? dataCompany.smsReserwationAvaible
                   : false,
+                smsReserwationChangedUserAvaible:
+                  !!dataCompany.smsReserwationChangedUserAvaible
+                    ? dataCompany.smsReserwationChangedUserAvaible
+                    : false,
                 smsNotifactionAvaible: !!dataCompany.smsNotifactionAvaible
                   ? dataCompany.smsNotifactionAvaible
                   : false,
@@ -918,6 +907,43 @@ exports.getCompanyData = (req, res, next) => {
                 smsChangedAvaible: !!dataCompany.smsChangedAvaible
                   ? dataCompany.smsChangedAvaible
                   : false,
+                smsServiceCreatedAvaible: !!dataCompany.smsServiceCreatedAvaible
+                  ? dataCompany.smsServiceCreatedAvaible
+                  : false,
+                smsServiceChangedAvaible: !!dataCompany.smsServiceChangedAvaible
+                  ? dataCompany.smsServiceChangedAvaible
+                  : false,
+                smsServiceFinishedAvaible:
+                  !!dataCompany.smsServiceFinishedAvaible
+                    ? dataCompany.smsServiceFinishedAvaible
+                    : false,
+                smsServiceCanceledAvaible:
+                  !!dataCompany.smsServiceCanceledAvaible
+                    ? dataCompany.smsServiceCanceledAvaible
+                    : false,
+                smsServiceDeletedAvaible: !!dataCompany.smsServiceDeletedAvaible
+                  ? dataCompany.smsServiceDeletedAvaible
+                  : false,
+                smsCommunitingNotificationAvaible:
+                  !!dataCompany.smsCommunitingNotificationAvaible
+                    ? dataCompany.smsCommunitingNotificationAvaible
+                    : false,
+                smsCommunitingCreatedAvaible:
+                  !!dataCompany.smsCommunitingCreatedAvaible
+                    ? dataCompany.smsCommunitingCreatedAvaible
+                    : false,
+                smsCommunitingChangedAvaible:
+                  !!dataCompany.smsCommunitingChangedAvaible
+                    ? dataCompany.smsCommunitingChangedAvaible
+                    : false,
+                smsCommunitingCanceledAvaible:
+                  !!dataCompany.smsCommunitingCanceledAvaible
+                    ? dataCompany.smsCommunitingCanceledAvaible
+                    : false,
+                smsCommunitingDeletedAvaible:
+                  !!dataCompany.smsCommunitingDeletedAvaible
+                    ? dataCompany.smsCommunitingDeletedAvaible
+                    : false,
                 ...dataGUS,
                 nip: !!dataCompany.nip ? dataCompany.nip : null,
               };
@@ -1016,11 +1042,10 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
                 "base64"
               );
 
-              transporter.sendMail({
-                to: emailWorker,
-                from: MAIL_INFO,
-                subject: `Potwierdzenie dodania do listy pracowników w firmie ${result.name}`,
-                html: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${result._id}&${hashedEmail}&${hashedRandomValue}">kliknij tutaj</a>`,
+              notifications.sendEmail({
+                email: emailWorker,
+                emailTitle: `Potwierdzenie dodania do listy pracowników w firmie ${result.name}`,
+                emailMessage: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${result._id}&${hashedEmail}&${hashedRandomValue}">kliknij tutaj</a>`,
               });
 
               res.status(201).json({
@@ -1081,11 +1106,10 @@ exports.sentAgainEmailToActiveCompanyWorker = (req, res, next) => {
             "base64"
           );
 
-          transporter.sendMail({
-            to: emailWorker,
-            from: MAIL_INFO,
-            subject: `Potwierdzenie dodania do listy pracowników w firmie ${companyData.name}`,
-            html: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${companyData._id}&${hashedEmail}&${thisWorker.codeToActive}">kliknij tutaj</a>`,
+          notifications.sendEmail({
+            email: emailWorker,
+            emailTitle: `Potwierdzenie dodania do listy pracowników w firmie ${companyData.name}`,
+            emailMessage: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${companyData._id}&${hashedEmail}&${thisWorker.codeToActive}">kliknij tutaj</a>`,
           });
 
           res.status(201).json({
@@ -1213,11 +1237,10 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
         });
     })
     .then((userDoc) => {
-      transporter.sendMail({
-        to: userDoc.email,
-        from: MAIL_INFO,
-        subject: `Potwierdzenie dodania do pracy`,
-        html: `<h1>Dodano do pracy!</h1>`,
+      notifications.sendEmail({
+        email: userDoc.email,
+        emailTitle: `Potwierdzenie dodania do pracy`,
+        emailMessage: `<h1>Dodano do pracy!</h1>`,
       });
       res.status(201).json({
         message: "Użytkownik został dodany do firmy",
@@ -1275,11 +1298,10 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                           userWorkerDoc.company = null;
                           userWorkerDoc.allCompanys = filterUserCompanys;
 
-                          transporter.sendMail({
-                            to: userWorkerDoc.email,
-                            from: MAIL_INFO,
-                            subject: `Usunięto z firmy ${companyDoc.name}`,
-                            html: `<h1>Konto zostało usunięte z firmy</h1>`,
+                          notifications.sendEmail({
+                            email: userWorkerDoc.email,
+                            emailTitle: `Usunięto z firmy ${companyDoc.name}`,
+                            emailMessage: `<h1>Konto zostało usunięte z firmy</h1>`,
                           });
 
                           return Company.updateOne(
@@ -1337,6 +1359,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         fullDate: {
           $gte: new Date().toISOString(),
         },
+        isDeleted: { $in: [false, null] },
       })
         .populate("company", "name linkPath _id")
         .populate("fromUser toWorkerUserId", "name surname _id")
@@ -1642,7 +1665,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             const userAlertToSave = {
               reserwationId: itemReserwation._id,
               active: true,
-              type: "rezerwation_canceled",
+              type: "reserwation_canceled",
               creationTime: new Date(),
               companyChanged: true,
             };
@@ -1652,7 +1675,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               alertData: {
                 reserwationId: itemReserwation,
                 active: true,
-                type: "rezerwation_canceled",
+                type: "reserwation_canceled",
                 creationTime: new Date(),
                 companyChanged: true,
               },
@@ -1686,7 +1709,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             const userAlertToSave = {
               reserwationId: itemReserwation._id,
               active: true,
-              type: "rezerwation_canceled",
+              type: "reserwation_canceled",
               creationTime: new Date(),
               companyChanged: true,
             };
@@ -1696,7 +1719,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               alertData: {
                 reserwationId: itemReserwation,
                 active: true,
-                type: "rezerwation_canceled",
+                type: "reserwation_canceled",
                 creationTime: new Date(),
                 companyChanged: true,
               },
@@ -5143,6 +5166,7 @@ exports.companyStatistics = (req, res, next) => {
   ])
     .then((resultCompanyDocQuery) => {
       const resultCompanyDoc = resultCompanyDocQuery[0];
+
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
         let selectedWorkerId = null;
@@ -5175,6 +5199,11 @@ exports.companyStatistics = (req, res, next) => {
       const findOnlyWorker = !!result.selectedWorkerId
         ? { toWorkerUserId: result.selectedWorkerId }
         : {};
+
+      const findOnlyWorkerSecond = !!result.selectedWorkerId
+        ? { workerUserId: result.selectedWorkerId }
+        : {};
+
       return Reserwation.find({
         company: companyId,
         ...findOnlyWorker,
@@ -5182,18 +5211,44 @@ exports.companyStatistics = (req, res, next) => {
         workerReserwation: false,
         dateMonth: { $in: months },
         isDraft: { $in: [false, null] },
+        isDeleted: { $in: [false, null] },
       })
         .select(
-          "company serviceId dateYear dateMonth dateDay costReserwation visitNotFinished visitCanceled visitChanged activePromotion activeHappyHour activeStamp fullDate toWorkerUserId dateEnd sendSMSCanceled sendSMSNotifaction sendSMSReserwation"
+          "company serviceId dateYear dateMonth dateDay costReserwation visitNotFinished visitCanceled visitChanged activePromotion activeHappyHour activeStamp fullDate toWorkerUserId dateEnd sendSMSChanged sendSMSCanceled sendSMSNotifaction sendSMSReserwation"
         )
         .populate("toWorkerUserId", "name surname")
         .sort({ fullDate: 1 })
         .then((resultReserwation) => {
-          return {
-            resultReserwation: resultReserwation,
-            services: result.resultCompanyDoc.services,
-            raportSMS: result.resultCompanyDoc.raportSMS,
-          };
+          return Service.find({
+            companyId: companyId,
+            month: { $in: months },
+            year: { $eq: year },
+            statusValue: { $in: [3, 4] },
+            ...findOnlyWorkerSecond,
+          })
+            .select("companyId cost day month year isDeleted workerUserId")
+            .populate("workerUserId", "name surname")
+            .then((raportServices) => {
+              return Communiting.find({
+                companyId: companyId,
+                month: { $in: months },
+                year: { $eq: year },
+                ...findOnlyWorkerSecond,
+              })
+                .select(
+                  "companyId cost day month year isDeleted workerUserId timeEnd statusValue"
+                )
+                .populate("workerUserId", "name surname")
+                .then((raportCommunitings) => {
+                  return {
+                    resultReserwation: resultReserwation,
+                    services: result.resultCompanyDoc.services,
+                    raportSMS: result.resultCompanyDoc.raportSMS,
+                    raportServices: raportServices,
+                    raportCommunitings: raportCommunitings,
+                  };
+                });
+            });
         });
     })
     .then((resultSave) => {
@@ -5201,6 +5256,8 @@ exports.companyStatistics = (req, res, next) => {
         stats: resultSave.resultReserwation,
         services: resultSave.services,
         raportSMS: resultSave.raportSMS,
+        raportServices: resultSave.raportServices,
+        raportCommunitings: resultSave.raportCommunitings,
       });
     })
     .catch((err) => {
@@ -5253,11 +5310,11 @@ exports.companySentCodeDeleteCompany = (req, res, next) => {
         companyData.codeDelete,
         "base64"
       ).toString("utf-8");
-      transporter.sendMail({
-        to: companyData.email,
-        from: MAIL_INFO,
-        subject: `Potwierdzenie usunięcia działalności ${companyData.name}`,
-        html: `<h1>Kod do usunięcia działalności: ${codeToDelete.toUpperCase()}</h1>`,
+
+      notifications.sendEmail({
+        email: companyData.email,
+        emailTitle: `Potwierdzenie usunięcia działalności ${companyData.name}`,
+        emailMessage: `<h1>Kod do usunięcia działalności: ${codeToDelete.toUpperCase()}</h1>`,
       });
       res.status(201).json({
         message: "Wysłano kod do usunięcia działalności",
@@ -5371,6 +5428,7 @@ exports.companyDeleteCompany = (req, res, next) => {
         fullDate: {
           $gte: new Date().toISOString(),
         },
+        isDeleted: { $in: [false, null] },
       })
         .populate("company", "name linkPath _id")
         .populate("fromUser toWorkerUserId", "name surname _id")
@@ -5672,7 +5730,7 @@ exports.companyDeleteCompany = (req, res, next) => {
             const userAlertToSave = {
               reserwationId: itemReserwation._id,
               active: true,
-              type: "rezerwation_canceled",
+              type: "reserwation_canceled",
               creationTime: new Date(),
               companyChanged: true,
             };
@@ -5682,7 +5740,7 @@ exports.companyDeleteCompany = (req, res, next) => {
               alertData: {
                 reserwationId: itemReserwation,
                 active: true,
-                type: "rezerwation_canceled",
+                type: "reserwation_canceled",
                 creationTime: new Date(),
                 companyChanged: true,
               },
@@ -5716,7 +5774,7 @@ exports.companyDeleteCompany = (req, res, next) => {
             const userAlertToSave = {
               reserwationId: itemReserwation._id,
               active: true,
-              type: "rezerwation_canceled",
+              type: "reserwation_canceled",
               creationTime: new Date(),
               companyChanged: true,
             };
@@ -5726,7 +5784,7 @@ exports.companyDeleteCompany = (req, res, next) => {
               alertData: {
                 reserwationId: itemReserwation,
                 active: true,
-                type: "rezerwation_canceled",
+                type: "reserwation_canceled",
                 creationTime: new Date(),
                 companyChanged: true,
               },
@@ -5780,11 +5838,10 @@ exports.companyDeleteCompany = (req, res, next) => {
         .select("email _id")
         .then((companyData) => {
           if (!!companyData) {
-            transporter.sendMail({
-              to: companyData.email,
-              from: MAIL_INFO,
-              subject: `Usunięto działalność!`,
-              html: `<h1>Działalność została usunięta</h1>`,
+            notifications.sendEmail({
+              email: companyData.email,
+              emailTitle: `Usunięto działalność!`,
+              emailMessage: `<h1>Działalność została usunięta</h1>`,
             });
             return true;
           } else {
@@ -5892,11 +5949,10 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
         .select("email _id")
         .then((companyData) => {
           if (!!companyData) {
-            transporter.sendMail({
-              to: companyData.email,
-              from: MAIL_INFO,
-              subject: `Usunięto działalność!`,
-              html: `<h1>Działalność została usunięta</h1>`,
+            notifications.sendEmail({
+              email: companyData.email,
+              emailTitle: `Usunięto działalność!`,
+              emailMessage: `<h1>Działalność została usunięta</h1>`,
             });
             return true;
           } else {
@@ -5969,9 +6025,22 @@ exports.companySMSUpdate = (req, res, next) => {
   const userId = req.userId;
   const companyId = req.body.companyId;
   const smsReserwationAvaible = req.body.smsReserwationAvaible;
+  const smsReserwationChangedUserAvaible =
+    req.body.smsReserwationChangedUserAvaible;
   const smsNotifactionAvaible = req.body.smsNotifactionAvaible;
   const smsCanceledAvaible = req.body.smsCanceledAvaible;
   const smsChangedAvaible = req.body.smsChangedAvaible;
+  const smsServiceCreatedAvaible = req.body.smsServiceCreatedAvaible;
+  const smsServiceChangedAvaible = req.body.smsServiceChangedAvaible;
+  const smsServiceFinishedAvaible = req.body.smsServiceFinishedAvaible;
+  const smsServiceCanceledAvaible = req.body.smsServiceCanceledAvaible;
+  const smsServiceDeletedAvaible = req.body.smsServiceDeletedAvaible;
+  const smsCommunitingNotificationAvaible =
+    req.body.smsCommunitingNotificationAvaible;
+  const smsCommunitingCreatedAvaible = req.body.smsCommunitingCreatedAvaible;
+  const smsCommunitingChangedAvaible = req.body.smsCommunitingChangedAvaible;
+  const smsCommunitingCanceledAvaible = req.body.smsCommunitingCanceledAvaible;
+  const smsCommunitingDeletedAvaible = req.body.smsCommunitingDeletedAvaible;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -5983,7 +6052,7 @@ exports.companySMSUpdate = (req, res, next) => {
     _id: companyId,
   })
     .select(
-      "_id owner smsReserwationAvaible smsNotifactionAvaible smsCanceledAvaible smsChangedAvaible"
+      "_id owner smsReserwationChangedUserAvaible smsReserwationAvaible smsNotifactionAvaible smsCanceledAvaible smsChangedAvaible smsServiceCreatedAvaible smsServiceFinishedAvaible smsServiceChangedAvaible smsServiceDeletedAvaible smsServiceCanceledAvaible smsCommunitingNotificationAvaible smsCommunitingCreatedAvaible smsCommunitingChangedAvaible smsCommunitingDeletedAvaible smsCommunitingCanceledAvaible"
     )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
@@ -6003,9 +6072,22 @@ exports.companySMSUpdate = (req, res, next) => {
     })
     .then((companyDoc) => {
       companyDoc.smsReserwationAvaible = smsReserwationAvaible;
+      companyDoc.smsReserwationChangedUserAvaible =
+        smsReserwationChangedUserAvaible;
       companyDoc.smsNotifactionAvaible = smsNotifactionAvaible;
       companyDoc.smsCanceledAvaible = smsCanceledAvaible;
       companyDoc.smsChangedAvaible = smsChangedAvaible;
+      companyDoc.smsServiceCreatedAvaible = smsServiceCreatedAvaible;
+      companyDoc.smsServiceChangedAvaible = smsServiceChangedAvaible;
+      companyDoc.smsServiceFinishedAvaible = smsServiceFinishedAvaible;
+      companyDoc.smsServiceCanceledAvaible = smsServiceCanceledAvaible;
+      companyDoc.smsServiceDeletedAvaible = smsServiceDeletedAvaible;
+      companyDoc.smsCommunitingNotificationAvaible =
+        smsCommunitingNotificationAvaible;
+      companyDoc.smsCommunitingCreatedAvaible = smsCommunitingCreatedAvaible;
+      companyDoc.smsCommunitingChangedAvaible = smsCommunitingChangedAvaible;
+      companyDoc.smsCommunitingCanceledAvaible = smsCommunitingCanceledAvaible;
+      companyDoc.smsCommunitingDeletedAvaible = smsCommunitingDeletedAvaible;
       return companyDoc.save();
     })
 
@@ -6724,8 +6806,7 @@ exports.companyAddService = (req, res, next) => {
                     );
                   }
                 }
-                // if (!userIsInWorkersInCompany) {
-                if (true) {
+                if (!userIsInWorkersInCompany) {
                   const newService = new Service({
                     userId: !!resultToUser ? resultToUser._id : null,
                     companyId: companyData._id,
@@ -6740,6 +6821,7 @@ exports.companyAddService = (req, res, next) => {
                     month: new Date().getMonth() + 1,
                     year: new Date().getFullYear(),
                     day: new Date().getDate(),
+                    createdSMS: false,
                   });
                   return newService.save();
                 } else {
@@ -6797,6 +6879,7 @@ exports.companyAddService = (req, res, next) => {
                 month: new Date().getMonth() + 1,
                 year: new Date().getFullYear(),
                 day: new Date().getDate(),
+                createdSMS: false,
               });
               return newService.save();
             }
@@ -6824,18 +6907,6 @@ exports.companyAddService = (req, res, next) => {
       });
     })
     .then((resultSaveService) => {
-      // return resultSaveService.populate(
-      //   {
-      //     path: "userId workerUserId",
-      //     select: "name surname _id",
-      //   },
-      //   function (err, populateService) {
-      //     populateService.phone = null;
-      //     res.status(200).json({
-      //       newService: populateService,
-      //     });
-      //   }
-      // );
       return resultSaveService
         .populate({
           path: "companyId",
@@ -6847,39 +6918,105 @@ exports.companyAddService = (req, res, next) => {
             select: "name surname _id",
           },
           async function (err, populateService) {
-            const emailContent = `<h1>Dodano serwis:</h1>
-                      <h4>serwis pod linkiem: xd</h4>`;
+            const emailContent = `Utworzono serwis dnia: ${
+              resultSaveService.day < 10
+                ? `0${resultSaveService.day}`
+                : resultSaveService.day
+            }-${
+              resultSaveService.month < 10
+                ? `0${resultSaveService.month}`
+                : resultSaveService.month
+            }-${resultSaveService.year}, przedmiotu: ${
+              resultSaveService.objectName
+            }, przewidywany koszt: ${
+              !!resultSaveService.cost ? resultSaveService.cost : "nieznany"
+            }, numer serwisu: ${resultSaveService._id}`;
 
             const payload = {
-              title: `Dodano serwis dnia: ${populateService.day}-${populateService.month}-${populateService.year}, o godzine: ${populateService.timeStart}`,
+              title: `Utworzono serwis dnia: ${
+                resultSaveService.day < 10
+                  ? `0${resultSaveService.day}`
+                  : resultSaveService.day
+              }-${
+                resultSaveService.month < 10
+                  ? `0${resultSaveService.month}`
+                  : resultSaveService.month
+              }-${resultSaveService.year}, przedmiotu: ${
+                resultSaveService.objectName
+              }, przewidywany koszt: ${
+                !!resultSaveService.cost ? resultSaveService.cost : "nieznany"
+              }, numer serwisu: ${resultSaveService._id}`,
               body: "this is the body",
               icon: "images/someImageInPath.png",
             };
 
             const emailSubject = `Dodano serwis`;
-
-            const { notifactionDone } = await generateNotifications(
-              [
-                !!populateService.userId ? populateService.userId._id : null,
-                !!populateService.workerUserId
-                  ? populateService.workerUserId._id
-                  : null,
-              ],
-              populateService,
-              "service_created",
-              [emailSubject, emailContent],
-              payload,
-              null,
-              !!populateService.userId ? populateService.userId._id : null,
-              !!email ? email : null,
-              "serviceId"
-            );
-            populateService.phone = null;
-            if (notifactionDone) {
-              res.status(200).json({
-                newService: populateService,
-              });
+            const message = `Utworzono serwis dnia: ${
+              resultSaveService.day < 10
+                ? `0${resultSaveService.day}`
+                : resultSaveService.day
+            }-${
+              resultSaveService.month < 10
+                ? `0${resultSaveService.month}`
+                : resultSaveService.month
+            }-${resultSaveService.year}, przedmiotu: ${
+              resultSaveService.objectName
+            }, przewidywany koszt: ${
+              !!resultSaveService.cost ? resultSaveService.cost : "nieznany"
+            }, numer serwisu: ${resultSaveService._id}`;
+            let customPhone = !!resultSaveService.phone
+              ? resultSaveService.phone
+              : null;
+            if (!!customPhone) {
+              customPhone = Buffer.from(customPhone, "base64").toString(
+                "utf-8"
+              );
             }
+
+            const { resultSMS } = await notifications.sendAll({
+              usersId: [
+                populateService.userId._id,
+                populateService.workerUserId._id,
+              ],
+              clientId: populateService.userId._id,
+              emailContent: {
+                customEmail: null,
+                emailTitle: emailSubject,
+                emailMessage: emailContent,
+              },
+              notificationContent: {
+                typeAlert: "serviceId",
+                dateAlert: populateService,
+                typeNotification: "service_created",
+                payload: payload,
+                companyChanged: true,
+              },
+              smsContent: {
+                companyId: companyId,
+                customPhone: customPhone,
+                companySendSMSValidField: "smsServiceCreatedAvaible",
+                titleCompanySendSMS: "sms_added_service",
+                message: message,
+              },
+            });
+
+            if (!!resultSMS) {
+              Service.updateOne(
+                {
+                  _id: resultSaveService._id,
+                },
+                {
+                  $set: {
+                    createdSMS: true,
+                  },
+                }
+              ).then(() => {});
+            }
+
+            populateService.phone = null;
+            res.status(200).json({
+              newService: populateService,
+            });
           }
         );
     })
@@ -6986,10 +7123,10 @@ exports.companyDeleteServices = (req, res, next) => {
             _id: serviceId,
           })
             .select(
-              "workerUserId companyId userId createdAt objectName description city timeStart timeEnd day month year"
+              "workerUserId companyId userId createdAt objectName description city timeStart timeEnd day month year phone"
             )
-            .populate("companyId", "name linkPath")
-            .populate("workerUserId userId", "name surname")
+            .populate("companyId", "_id name linkPath")
+            .populate("workerUserId userId", "_id name surname")
             .then((serviceDoc) => {
               if (!!serviceDoc) {
                 if (!!serviceDoc.statusValue !== 3) {
@@ -7026,38 +7163,84 @@ exports.companyDeleteServices = (req, res, next) => {
       }
     })
     .then(async (savedServiceDoc) => {
-      const emailContent = `<h1>Usunieto serwis:</h1>
-                      <h4>dojazd pod linkiem: xd</h4>`;
+      const emailContent = `Usunięto serwis z dnia: ${
+        savedServiceDoc.day < 10
+          ? `0${savedServiceDoc.day}`
+          : savedServiceDoc.day
+      }-${
+        savedServiceDoc.month < 10
+          ? `0${savedServiceDoc.month}`
+          : savedServiceDoc.month
+      }-${savedServiceDoc.year}, przedmiotu: ${savedServiceDoc.objectName}`;
 
       const payload = {
-        title: `Usunieto serwis dnia: ${savedServiceDoc.day}-${savedServiceDoc.month}-${savedServiceDoc.year}, o godzine: ${savedServiceDoc.timeStart}`,
+        title: `Usunięto serwis z dnia: ${
+          savedServiceDoc.day < 10
+            ? `0${savedServiceDoc.day}`
+            : savedServiceDoc.day
+        }-${
+          savedServiceDoc.month < 10
+            ? `0${savedServiceDoc.month}`
+            : savedServiceDoc.month
+        }-${savedServiceDoc.year}, przedmiotu: ${savedServiceDoc.objectName}`,
         body: "this is the body",
         icon: "images/someImageInPath.png",
       };
 
-      const emailSubject = `Usunieto serwis`;
-
-      const { notifactionDone } = await generateNotifications(
-        [
-          !!savedServiceDoc.userId ? savedServiceDoc.userId._id : null,
-          !!savedServiceDoc.workerUserId
-            ? savedServiceDoc.workerUserId._id
-            : null,
-        ],
-        savedServiceDoc,
-        "service_deleted",
-        [emailSubject, emailContent],
-        payload,
-        null,
-        !!savedServiceDoc.userId ? savedServiceDoc.userId._id : null,
-        !!savedServiceDoc.email ? savedServiceDoc.email : null,
-        "serviceId"
-      );
-      if (notifactionDone) {
-        res.status(200).json({
-          message: "Usunieto serwis",
-        });
+      const emailSubject = `Usunięto serwis serwis`;
+      const message = `Usunięto serwis z dnia: ${
+        savedServiceDoc.day < 10
+          ? `0${savedServiceDoc.day}`
+          : savedServiceDoc.day
+      }-${
+        savedServiceDoc.month < 10
+          ? `0${savedServiceDoc.month}`
+          : savedServiceDoc.month
+      }-${savedServiceDoc.year}, przedmiotu: ${savedServiceDoc.objectName}`;
+      let customPhone = !!savedServiceDoc.phone ? savedServiceDoc.phone : null;
+      if (!!customPhone) {
+        customPhone = Buffer.from(customPhone, "base64").toString("utf-8");
       }
+
+      const { resultSMS } = await notifications.sendAll({
+        usersId: [savedServiceDoc.userId._id, savedServiceDoc.workerUserId._id],
+        clientId: savedServiceDoc.userId._id,
+        emailContent: {
+          customEmail: null,
+          emailTitle: emailSubject,
+          emailMessage: emailContent,
+        },
+        notificationContent: {
+          typeAlert: "serviceId",
+          dateAlert: savedServiceDoc,
+          typeNotification: "service_deleted",
+          payload: payload,
+          companyChanged: true,
+        },
+        smsContent: {
+          companyId: companyId,
+          customPhone: customPhone,
+          companySendSMSValidField: "smsServiceDeletedAvaible",
+          titleCompanySendSMS: "sms_deleted_service",
+          message: message,
+        },
+      });
+
+      if (!!resultSMS) {
+        Service.updateOne(
+          {
+            _id: savedServiceDoc._id,
+          },
+          {
+            $set: {
+              deletedSMS: true,
+            },
+          }
+        ).then(() => {});
+      }
+      res.status(200).json({
+        message: "Usunieto serwis",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -7135,49 +7318,128 @@ exports.companyUpdateServices = (req, res, next) => {
             ...validPermission,
           })
             .select(
-              "_id city description userId companyId month year day objectName email"
+              "_id city description userId companyId month year day objectName email workerUserId phone"
             )
             .populate("companyId userId", "name surname linkPath")
             .then(async (resultSavetService) => {
               if (!!resultSavetService) {
-                const emailContent = `<h1>Zaktualizowano serwis:</h1>
-                      <h4>serwis pod linkiem: xd</h4>`;
+                const nameStatusService =
+                  statusValue == 3
+                    ? "Ukończono"
+                    : statusValue == 4
+                    ? "Anulowano"
+                    : "Edytowano";
+
+                const emailContent = `${nameStatusService} serwis z dnia: ${
+                  resultSavetService.day < 10
+                    ? `0${resultSavetService.day}`
+                    : resultSavetService.day
+                }-${
+                  resultSavetService.month < 10
+                    ? `0${resultSavetService.month}`
+                    : resultSavetService.month
+                }-${resultSavetService.year}, przedmiotu: ${
+                  resultSavetService.objectName
+                }`;
 
                 const payload = {
-                  title: `Zaktualizowano serwis dnia: ${Number(
-                    resultSavetService.day
-                  )}-${resultSavetService.month}-${resultSavetService.year}`,
+                  title: `${nameStatusService} serwis z dnia: ${
+                    resultSavetService.day < 10
+                      ? `0${resultSavetService.day}`
+                      : resultSavetService.day
+                  }-${
+                    resultSavetService.month < 10
+                      ? `0${resultSavetService.month}`
+                      : resultSavetService.month
+                  }-${resultSavetService.year}, przedmiotu: ${
+                    resultSavetService.objectName
+                  }`,
                   body: "this is the body",
                   icon: "images/someImageInPath.png",
                 };
 
-                const emailSubject = `Zaktualizowano serwis`;
-
-                const { notifactionDone } = await generateNotifications(
-                  [
-                    !!resultSavetService.userId
-                      ? resultSavetService.userId._id
-                      : null,
-                    !!resultSavetService.workerUserId
-                      ? resultSavetService.workerUserId._id
-                      : null,
-                  ],
-                  resultSavetService,
-                  "service_changed",
-                  [emailSubject, emailContent],
-                  payload,
-                  null,
-                  !!resultSavetService.userId
-                    ? resultSavetService.userId._id
-                    : null,
-                  !!resultSavetService.email ? resultSavetService.email : null,
-                  "serviceId"
-                );
-                if (notifactionDone) {
-                  res.status(200).json({
-                    message: "Zaktualizowano serwis",
-                  });
+                const emailSubject = `${nameStatusService} serwis`;
+                const message = `${nameStatusService} serwis z dnia: ${
+                  resultSavetService.day < 10
+                    ? `0${resultSavetService.day}`
+                    : resultSavetService.day
+                }-${
+                  resultSavetService.month < 10
+                    ? `0${resultSavetService.month}`
+                    : resultSavetService.month
+                }-${resultSavetService.year}, przedmiotu: ${
+                  resultSavetService.objectName
+                }`;
+                let customPhone = !!resultSavetService.phone
+                  ? resultSavetService.phone
+                  : null;
+                if (!!customPhone) {
+                  customPhone = Buffer.from(customPhone, "base64").toString(
+                    "utf-8"
+                  );
                 }
+
+                const { resultSMS } = await notifications.sendAll({
+                  usersId: [
+                    resultSavetService.userId._id,
+                    resultSavetService.workerUserId._id,
+                  ],
+                  clientId: resultSavetService.userId._id,
+                  emailContent: {
+                    customEmail: null,
+                    emailTitle: emailSubject,
+                    emailMessage: emailContent,
+                  },
+                  notificationContent: {
+                    typeAlert: "serviceId",
+                    dateAlert: resultSavetService,
+                    typeNotification:
+                      statusValue == 3
+                        ? "service_finished"
+                        : statusValue == 4
+                        ? "service_canceled"
+                        : "service_changed",
+                    payload: payload,
+                    companyChanged: true,
+                  },
+                  smsContent: {
+                    companyId: companyId,
+                    customPhone: customPhone,
+                    companySendSMSValidField:
+                      statusValue == 3
+                        ? "smsServiceFinishedAvaible"
+                        : statusValue == 4
+                        ? "smsServiceCanceledAvaible"
+                        : "smsServiceChangedAvaible",
+                    titleCompanySendSMS:
+                      statusValue == 3
+                        ? "sms_finished_service"
+                        : statusValue == 4
+                        ? "sms_canceled_service"
+                        : "sms_changed_service",
+                    message: message,
+                  },
+                });
+
+                if (!!resultSMS) {
+                  const validUpdateSMSObject =
+                    statusValue == 3
+                      ? { finishedSMS: true }
+                      : statusValue == 4
+                      ? { canceledSMS: true }
+                      : { changedSMS: true };
+                  Service.updateOne(
+                    {
+                      _id: resultSavetService._id,
+                    },
+                    {
+                      $set: validUpdateSMSObject,
+                    }
+                  ).then(() => {});
+                }
+                res.status(200).json({
+                  message: "Zaktualizwowano serwis",
+                });
               }
             });
         });
@@ -7546,17 +7808,16 @@ exports.companyAddCommuniting = (req, res, next) => {
 
             if (isActiveUser) {
               if (!!resultToUser) {
-                let userIsInWorkersInCompany = false;
-                // let userIsInWorkersInCompany = companyData.owner == userId;
-                // if (!!resultToUser) {
-                //   if (!userIsInWorkersInCompany) {
-                //     userIsInWorkersInCompany = companyData.workers.some(
-                //       (worker) => {
-                //         return worker.user == resultToUser._id;
-                //       }
-                //     );
-                //   }
-                // }
+                let userIsInWorkersInCompany = companyData.owner == userId;
+                if (!!resultToUser) {
+                  if (!userIsInWorkersInCompany) {
+                    userIsInWorkersInCompany = companyData.workers.some(
+                      (worker) => {
+                        return worker.user == resultToUser._id;
+                      }
+                    );
+                  }
+                }
                 if (!userIsInWorkersInCompany) {
                   if (addWorkerTime) {
                     newReserwationWorker = new Reserwation({
@@ -7579,8 +7840,8 @@ exports.companyAddCommuniting = (req, res, next) => {
                       timeReserwation: 0,
                       fullDate: actualDate,
                       hasCommuniting: true,
+                      isDeleted: false,
                     });
-                    newReserwationWorker.save();
                   }
 
                   const newCommuniting = new Communiting({
@@ -7605,6 +7866,10 @@ exports.companyAddCommuniting = (req, res, next) => {
                       ? newReserwationWorker._id
                       : null,
                   });
+                  if (!!newReserwationWorker) {
+                    newReserwationWorker.communitingId = newCommuniting._id;
+                    newReserwationWorker.save();
+                  }
                   return newCommuniting.save();
                 } else {
                   const error = new Error("Użytkownik pracuje w działalności");
@@ -7664,8 +7929,8 @@ exports.companyAddCommuniting = (req, res, next) => {
                   timeReserwation: 0,
                   fullDate: actualDate,
                   hasCommuniting: true,
+                  isDeleted: false,
                 });
-                newReserwationWorker.save();
               }
 
               const newCommuniting = new Communiting({
@@ -7693,6 +7958,10 @@ exports.companyAddCommuniting = (req, res, next) => {
                   ? newReserwationWorker._id
                   : null,
               });
+              if (!!newReserwationWorker) {
+                newReserwationWorker.communitingId = newCommuniting._id;
+                newReserwationWorker.save();
+              }
               return newCommuniting.save();
             }
           });
@@ -7730,43 +7999,106 @@ exports.companyAddCommuniting = (req, res, next) => {
             select: "name surname _id",
           },
           async function (err, populateCommuniting) {
-            const emailContent = `<h1>Dodano dojazd:</h1>
-                      <h4>dojazd pod linkiem: xd</h4>`;
+            const emailContent = `Utworzono dojazd dnia: ${
+              populateCommuniting.day < 10
+                ? `0${populateCommuniting.day}`
+                : populateCommuniting.day
+            }-${
+              populateCommuniting.month < 10
+                ? `0${populateCommuniting.month}`
+                : populateCommuniting.month
+            }-${populateCommuniting.year}, miasto: ${
+              populateCommuniting.city
+            }, ulica: ${populateCommuniting.street} przewidywany koszt: ${
+              !!populateCommuniting.cost ? populateCommuniting.cost : "nieznany"
+            }, numer dojazdu: ${populateCommuniting._id}`;
 
             const payload = {
-              title: `Dodano dojazd dnia: ${populateCommuniting.day}-${populateCommuniting.month}-${populateCommuniting.year}, o godzine: ${populateCommuniting.timeStart}`,
+              title: `Utworzono dojazd dnia: ${
+                populateCommuniting.day < 10
+                  ? `0${populateCommuniting.day}`
+                  : populateCommuniting.day
+              }-${
+                populateCommuniting.month < 10
+                  ? `0${populateCommuniting.month}`
+                  : populateCommuniting.month
+              }-${populateCommuniting.year}, miasto: ${
+                populateCommuniting.city
+              }, ulica: ${populateCommuniting.street} przewidywany koszt: ${
+                !!populateCommuniting.cost
+                  ? populateCommuniting.cost
+                  : "nieznany"
+              }, numer dojazdu: ${populateCommuniting._id}`,
               body: "this is the body",
               icon: "images/someImageInPath.png",
             };
 
             const emailSubject = `Dodano dojazd`;
-
-            const { notifactionDone } = await generateNotifications(
-              [
-                !!resultSaveCommuniting.userId
-                  ? resultSaveCommuniting.userId._id
-                  : null,
-                !!resultSaveCommuniting.workerUserId
-                  ? resultSaveCommuniting.workerUserId._id
-                  : null,
-              ],
-              populateCommuniting,
-              "commuting_created",
-              [emailSubject, emailContent],
-              payload,
-              null,
-              !!resultSaveCommuniting.userId
-                ? resultSaveCommuniting.userId._id
-                : null,
-              !!email ? email : null,
-              "communitingId"
-            );
-            populateCommuniting.phone = null;
-            if (notifactionDone) {
-              res.status(200).json({
-                newCommuniting: populateCommuniting,
-              });
+            const message = `Utworzono dojazd dnia: ${
+              populateCommuniting.day < 10
+                ? `0${populateCommuniting.day}`
+                : populateCommuniting.day
+            }-${
+              populateCommuniting.month < 10
+                ? `0${populateCommuniting.month}`
+                : populateCommuniting.month
+            }-${populateCommuniting.year}, miasto: ${
+              populateCommuniting.city
+            }, ulica: ${populateCommuniting.street} przewidywany koszt: ${
+              !!populateCommuniting.cost ? populateCommuniting.cost : "nieznany"
+            }, numer dojazdu: ${populateCommuniting._id}`;
+            let customPhone = !!populateCommuniting.phone
+              ? populateCommuniting.phone
+              : null;
+            if (!!customPhone) {
+              customPhone = Buffer.from(customPhone, "base64").toString(
+                "utf-8"
+              );
             }
+
+            const { resultSMS } = await notifications.sendAll({
+              usersId: [
+                populateCommuniting.userId._id,
+                populateCommuniting.workerUserId._id,
+              ],
+              clientId: populateCommuniting.userId._id,
+              emailContent: {
+                customEmail: null,
+                emailTitle: emailSubject,
+                emailMessage: emailContent,
+              },
+              notificationContent: {
+                typeAlert: "communitingId",
+                dateAlert: populateCommuniting,
+                typeNotification: "commuting_created",
+                payload: payload,
+                companyChanged: true,
+              },
+              smsContent: {
+                companyId: companyId,
+                customPhone: customPhone,
+                companySendSMSValidField: "smsCommunitingCreatedAvaible",
+                titleCompanySendSMS: "sms_added_communiting",
+                message: message,
+              },
+            });
+
+            if (!!resultSMS) {
+              Communiting.updateOne(
+                {
+                  _id: populateCommuniting._id,
+                },
+                {
+                  $set: {
+                    createdSMS: true,
+                  },
+                }
+              ).then(() => {});
+            }
+            populateCommuniting.phone = null;
+            res.status(200).json({
+              newCommuniting: populateCommuniting,
+            });
           }
         );
     })
@@ -7820,22 +8152,11 @@ exports.companyDeleteCommuniting = (req, res, next) => {
             _id: communitingId,
           })
             .select(
-              "workerUserId companyId userId createdAt description city timeStart timeEnd day month year"
+              "workerUserId companyId userId createdAt description street city timeStart timeEnd day month year"
             )
             .populate("companyId", "name linkPath")
             .populate("workerUserId userId", "name surname")
             .then(async (populateCommuniting) => {
-              const emailContent = `<h1>Dodano dojazd:</h1>
-                      <h4>dojazd pod linkiem: xd</h4>`;
-
-              const payload = {
-                title: `Usunięto dojazd dnia: ${populateCommuniting.day}-${populateCommuniting.month}-${populateCommuniting.year}, o godzine: ${populateCommuniting.timeStart}`,
-                body: "this is the body",
-                icon: "images/someImageInPath.png",
-              };
-
-              const emailSubject = `Usunięto dojazd`;
-
               return Communiting.updateOne(
                 {
                   _id: communitingId,
@@ -7846,33 +8167,97 @@ exports.companyDeleteCommuniting = (req, res, next) => {
                   },
                 }
               ).then(async () => {
-                const { notifactionDone } = await generateNotifications(
-                  [
-                    !!populateCommuniting.userId
-                      ? populateCommuniting.userId._id
-                      : null,
-                    !!populateCommuniting.workerUserId
-                      ? populateCommuniting.workerUserId._id
-                      : null,
-                  ],
-                  populateCommuniting,
-                  "commuting_deleted",
-                  [emailSubject, emailContent],
-                  payload,
-                  null,
-                  !!populateCommuniting.userId
-                    ? populateCommuniting.userId._id
-                    : null,
-                  !!populateCommuniting.email
-                    ? populateCommuniting.email
-                    : null,
-                  "communitingId"
-                );
-                if (notifactionDone) {
-                  res.status(200).json({
-                    message: "Usunieto serwis",
-                  });
+                const emailContent = `Usunięto dojazd dnia: ${
+                  populateCommuniting.day < 10
+                    ? `0${populateCommuniting.day}`
+                    : populateCommuniting.day
+                }-${
+                  populateCommuniting.month < 10
+                    ? `0${populateCommuniting.month}`
+                    : populateCommuniting.month
+                }-${populateCommuniting.year}, miasto: ${
+                  populateCommuniting.city
+                }, ulica: ${populateCommuniting.street}`;
+
+                const payload = {
+                  title: `Usunięto dojazd dnia: ${
+                    populateCommuniting.day < 10
+                      ? `0${populateCommuniting.day}`
+                      : populateCommuniting.day
+                  }-${
+                    populateCommuniting.month < 10
+                      ? `0${populateCommuniting.month}`
+                      : populateCommuniting.month
+                  }-${populateCommuniting.year}, miasto: ${
+                    populateCommuniting.city
+                  }, ulica: ${populateCommuniting.street}`,
+                  body: "this is the body",
+                  icon: "images/someImageInPath.png",
+                };
+
+                const emailSubject = `Usunięto dojazd`;
+                const message = `Utworzono dojazd dnia: ${
+                  populateCommuniting.day < 10
+                    ? `0${populateCommuniting.day}`
+                    : populateCommuniting.day
+                }-${
+                  populateCommuniting.month < 10
+                    ? `0${populateCommuniting.month}`
+                    : populateCommuniting.month
+                }-${populateCommuniting.year}, miasto: ${
+                  populateCommuniting.city
+                }, ulica: ${populateCommuniting.street}`;
+                let customPhone = !!populateCommuniting.phone
+                  ? populateCommuniting.phone
+                  : null;
+                if (!!customPhone) {
+                  customPhone = Buffer.from(customPhone, "base64").toString(
+                    "utf-8"
+                  );
                 }
+
+                const { resultSMS } = await notifications.sendAll({
+                  usersId: [
+                    populateCommuniting.userId._id,
+                    populateCommuniting.workerUserId._id,
+                  ],
+                  clientId: populateCommuniting.userId._id,
+                  emailContent: {
+                    customEmail: null,
+                    emailTitle: emailSubject,
+                    emailMessage: emailContent,
+                  },
+                  notificationContent: {
+                    typeAlert: "communitingId",
+                    dateAlert: populateCommuniting,
+                    typeNotification: "commuting_deleted",
+                    payload: payload,
+                    companyChanged: true,
+                  },
+                  smsContent: {
+                    companyId: companyId,
+                    customPhone: customPhone,
+                    companySendSMSValidField: "smsCommunitingDeletedAvaible",
+                    titleCompanySendSMS: "sms_deleted_communiting",
+                    message: message,
+                  },
+                });
+
+                if (!!resultSMS) {
+                  Communiting.updateOne(
+                    {
+                      _id: populateCommuniting._id,
+                    },
+                    {
+                      $set: {
+                        deletedSMS: true,
+                      },
+                    }
+                  ).then(() => {});
+                }
+                res.status(200).json({
+                  message: "Usunieto serwis",
+                });
               });
             });
         } else {
@@ -8002,53 +8387,135 @@ exports.companyUpdateCommuniting = (req, res, next) => {
             ...validPermission,
           })
             .select(
-              "_id city description userId companyId month year day timeStart timeEnd email"
+              "_id city description userId companyId month year day timeStart timeEnd email workerUserId street cost"
             )
             .populate("companyId userId", "name surname linkPath")
             .then(async (resultSavetCommuniting) => {
               if (!!resultSavetCommuniting) {
-                const emailContent = `<h1>Zaktualizowano dojazd:</h1>
-                      <h4>dojazd pod linkiem: xd</h4>`;
+                const validTextCommuniting =
+                  resultSavetCommuniting.statusValue == 4
+                    ? "Odwołano"
+                    : "Zaktualizowano";
+
+                const emailContent = `${validTextCommuniting} dojazd dnia: ${
+                  resultSavetCommuniting.day < 10
+                    ? `0${resultSavetCommuniting.day}`
+                    : resultSavetCommuniting.day
+                }-${
+                  resultSavetCommuniting.month < 10
+                    ? `0${resultSavetCommuniting.month}`
+                    : resultSavetCommuniting.month
+                }-${resultSavetCommuniting.year}, miasto: ${
+                  resultSavetCommuniting.city
+                }, ulica: ${
+                  resultSavetCommuniting.street
+                } przewidywany koszt: ${
+                  !!resultSavetCommuniting.cost
+                    ? resultSavetCommuniting.cost
+                    : "nieznany"
+                }, numer dojazdu: ${resultSavetCommuniting._id}`;
 
                 const payload = {
-                  title: `Zaktualizowano dojazd dnia: ${Number(
-                    splitFullDate[0]
-                  )}-${Number(splitFullDate[1])}-${Number(
-                    splitFullDate[2]
-                  )}, o godzine: ${statusValue}`,
+                  title: `${validTextCommuniting} dojazd dnia: ${
+                    resultSavetCommuniting.day < 10
+                      ? `0${resultSavetCommuniting.day}`
+                      : resultSavetCommuniting.day
+                  }-${
+                    resultSavetCommuniting.month < 10
+                      ? `0${resultSavetCommuniting.month}`
+                      : resultSavetCommuniting.month
+                  }-${resultSavetCommuniting.year}, miasto: ${
+                    resultSavetCommuniting.city
+                  }, ulica: ${
+                    resultSavetCommuniting.street
+                  } przewidywany koszt: ${
+                    !!resultSavetCommuniting.cost
+                      ? resultSavetCommuniting.cost
+                      : "nieznany"
+                  }, numer dojazdu: ${resultSavetCommuniting._id}`,
                   body: "this is the body",
                   icon: "images/someImageInPath.png",
                 };
 
-                const emailSubject = `Zaktualizowano dojazd`;
-
-                const { notifactionDone } = await generateNotifications(
-                  [
-                    !!resultSavetCommuniting.userId
-                      ? resultSavetCommuniting.userId._id
-                      : null,
-                    !!resultSavetCommuniting.workerUserId
-                      ? resultSavetCommuniting.workerUserId._id
-                      : null,
-                  ],
-                  resultSavetCommuniting,
-                  "commuting_changed",
-                  [emailSubject, emailContent],
-                  payload,
-                  null,
-                  !!resultSavetCommuniting.userId
-                    ? resultSavetCommuniting.userId._id
-                    : null,
-                  !!resultSavetCommuniting.email
-                    ? resultSavetCommuniting.email
-                    : null,
-                  "communitingId"
-                );
-                if (notifactionDone) {
-                  res.status(200).json({
-                    message: "Zaktualizowano dojazd",
-                  });
+                const emailSubject = `${validTextCommuniting} dojazd`;
+                const message = `${validTextCommuniting} dojazd dnia: ${
+                  resultSavetCommuniting.day < 10
+                    ? `0${resultSavetCommuniting.day}`
+                    : resultSavetCommuniting.day
+                }-${
+                  resultSavetCommuniting.month < 10
+                    ? `0${resultSavetCommuniting.month}`
+                    : resultSavetCommuniting.month
+                }-${resultSavetCommuniting.year}, miasto: ${
+                  resultSavetCommuniting.city
+                }, ulica: ${
+                  resultSavetCommuniting.street
+                } przewidywany koszt: ${
+                  !!resultSavetCommuniting.cost
+                    ? resultSavetCommuniting.cost
+                    : "nieznany"
+                }, numer dojazdu: ${resultSavetCommuniting._id}`;
+                let customPhone = !!resultSavetCommuniting.phone
+                  ? resultSavetCommuniting.phone
+                  : null;
+                if (!!customPhone) {
+                  customPhone = Buffer.from(customPhone, "base64").toString(
+                    "utf-8"
+                  );
                 }
+
+                const { resultSMS } = await notifications.sendAll({
+                  usersId: [
+                    resultSavetCommuniting.userId._id,
+                    resultSavetCommuniting.workerUserId._id,
+                  ],
+                  clientId: resultSavetCommuniting.userId._id,
+                  emailContent: {
+                    customEmail: null,
+                    emailTitle: emailSubject,
+                    emailMessage: emailContent,
+                  },
+                  notificationContent: {
+                    typeAlert: "communitingId",
+                    dateAlert: resultSavetCommuniting,
+                    typeNotification:
+                      resultSavetCommuniting.statusValue == 4
+                        ? "commuting_canceled"
+                        : "commuting_changed",
+                    payload: payload,
+                    companyChanged: true,
+                  },
+                  smsContent: {
+                    companyId: companyId,
+                    customPhone: customPhone,
+                    companySendSMSValidField:
+                      resultSavetCommuniting.statusValue == 4
+                        ? "smsCommunitingCanceledAvaible"
+                        : "smsCommunitingChangedAvaible",
+                    titleCompanySendSMS:
+                      resultSavetCommuniting.statusValue == 4
+                        ? "sms_canceld_communiting"
+                        : "sms_changed_communiting",
+                    message: message,
+                  },
+                });
+                const validUpdateValue =
+                  resultSavetCommuniting.statusValue == 4
+                    ? { canceledSMS: true }
+                    : { changedSMS: true };
+                if (!!resultSMS) {
+                  Communiting.updateOne(
+                    {
+                      _id: resultSavetCommuniting._id,
+                    },
+                    {
+                      $set: validUpdateValue,
+                    }
+                  ).then(() => {});
+                }
+                res.status(200).json({
+                  message: "Zaktualizowano dojazd",
+                });
               }
             });
         });

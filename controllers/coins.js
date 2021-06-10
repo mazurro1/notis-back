@@ -1,12 +1,7 @@
-const Company = require("../models/company");
 const Coins = require("../models/coins");
 const { validationResult } = require("express-validator");
-const { STRIPE_SECRET_KEY } = process.env;
-const stripeLoader = require("stripe");
-const stripe = new stripeLoader(STRIPE_SECRET_KEY);
 
 exports.addCoins = (req, res, next) => {
-  // const userId = req.userId
   const userCreated = req.body.userCreated;
   const productId = req.body.productId;
   const priceId = req.body.priceId;

@@ -1,7 +1,6 @@
 const Company = require("../models/company");
 const CompanyAvailability = require("../models/companyAvailability");
 const { validationResult } = require("express-validator");
-require("dotenv").config();
 
 exports.getCompanyAvailability = (req, res, next) => {
   const userId = req.userId;

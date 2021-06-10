@@ -12,8 +12,7 @@ const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const io = require("../socket");
 const getImgBuffer = require("../getImgBuffer");
-const webpush = require("web-push");
-const generateNotifications = require("../middleware/generateNotifications");
+const notifications = require("../middleware/notifications");
 
 require("dotenv").config();
 const {
@@ -31,14 +30,7 @@ const {
   MAIL_HOST,
   MAIL_PASSWORD,
   PUBLIC_KEY_VAPID,
-  PRIVATE_KEY_VAPID,
 } = process.env;
-
-webpush.setVapidDetails(
-  `mailto:${MAIL_INFO}`,
-  PUBLIC_KEY_VAPID,
-  PRIVATE_KEY_VAPID
-);
 
 const transporter = nodemailer.createTransport({
   host: MAIL_HOST,
@@ -61,7 +53,6 @@ const s3Bucket = new AWS.S3({
     Bucket: AWS_BUCKET,
   },
 });
-const sns = new AWS.SNS();
 
 function makeid(length) {
   var result = "";
@@ -247,7 +238,7 @@ exports.login = (req, res, next) => {
     )
     .populate(
       "stamps.reserwations",
-      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate"
+      "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate oldReserwationId"
     )
     .populate({
       path: "alerts.reserwationId",
@@ -775,7 +766,7 @@ exports.autoLogin = (req, res, next) => {
     .populate({
       path: "alerts.reserwationId",
       select:
-        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company",
+        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId",
       populate: {
         path: "company fromUser",
         select: "name surname linkPath",
@@ -799,7 +790,7 @@ exports.autoLogin = (req, res, next) => {
         select: "name surname linkPath",
       },
     })
-    .then((user) => {
+    .then(async (user) => {
       if (!!user) {
         const userName = Buffer.from(user.name, "base64").toString("utf-8");
         const userSurname = Buffer.from(user.surname, "base64").toString(
@@ -852,28 +843,6 @@ exports.autoLogin = (req, res, next) => {
             return itemCompany._id.toString() == user.company.toString();
           });
         }
-
-        // const params = {
-        //   PhoneNumber: "+48515873009",
-        //   Message: `Kod potwierdzający numer telefonu: $`,
-        //   MessageStructure: "string",
-        //   MessageAttributes: {
-        //     "AWS.SNS.SMS.SenderID": {
-        //       DataType: "String",
-        //       StringValue: "Meetsy",
-        //     },
-        //     // "AWS.SNS.SMS.SMSType": {
-        //     //   DataType: "String",
-        //     //   StringValue: "Transactional",
-        //     //   // StringValue: "Promotional",
-        //     // },
-        //   },
-        // };
-
-        // sns.publish(params, function (err, data) {
-        //   if (err) console.log(err, err.stack);
-        //   else console.log(data);
-        // });
 
         res.status(200).json({
           userId: user._id.toString(),
@@ -1924,6 +1893,7 @@ exports.deleteUserAccount = (req, res, next) => {
         fullDate: {
           $gte: new Date().toISOString(),
         },
+        isDeleted: { $in: [false, null] },
       })
         .populate("company", "name linkPath _id")
         .populate("fromUser toWorkerUserId", "name surname _id")
@@ -2139,11 +2109,10 @@ exports.deleteUserAccount = (req, res, next) => {
       allUsersReserwations.forEach((userDoc) => {
         const allUserAlertsToSave = [];
         userDoc.items.forEach((itemReserwation) => {
-          console.log(itemReserwation);
           const userAlertToSave = {
             reserwationId: itemReserwation._id,
             active: true,
-            type: "rezerwation_canceled",
+            type: "reserwation_canceled",
             creationTime: new Date(),
             companyChanged: false,
           };
@@ -2153,7 +2122,7 @@ exports.deleteUserAccount = (req, res, next) => {
             alertData: {
               reserwationId: itemReserwation,
               active: true,
-              type: "rezerwation_canceled",
+              type: "reserwation_canceled",
               creationTime: new Date(),
               companyChanged: false,
             },
@@ -2299,16 +2268,6 @@ exports.saveNotificationEndpoint = (req, res, next) => {
     .then((resultUserDoc) => {
       if (!!resultUserDoc) {
         resultUserDoc.vapidEndpoint = endpoint;
-
-        const params = {
-          title: "Test podczas logowania",
-          body: "Test podczas logowania body",
-        };
-
-        webpush
-          .sendNotification(endpoint, JSON.stringify(params))
-          .then(() => {})
-          .catch(() => {});
 
         return resultUserDoc.save();
       } else {
@@ -2509,49 +2468,64 @@ exports.userCancelCommuniting = (req, res, next) => {
             userId: userId,
           })
             .select(
-              "_id city description userId companyId month year day timeStart timeEnd email"
+              "_id city description userId companyId month year day timeStart timeEnd email cost street"
             )
-            .populate("companyId userId", "name surname linkPath")
+            .populate("companyId userId workerUserId", "name surname linkPath")
             .then(async (resultSavetCommuniting) => {
               if (!!resultSavetCommuniting) {
-                const emailContent = `<h1>Odwołano dojazd:</h1>
-                      <h4>dojazd pod linkiem: xd</h4>`;
+                const emailContent = `Odwołano dojazd dnia: ${
+                  resultSavetCommuniting.day < 10
+                    ? `0${resultSavetCommuniting.day}`
+                    : resultSavetCommuniting.day
+                }-${
+                  resultSavetCommuniting.month < 10
+                    ? `0${resultSavetCommuniting.month}`
+                    : resultSavetCommuniting.month
+                }-${resultSavetCommuniting.year}, miasto: ${
+                  resultSavetCommuniting.city
+                }, ulica: ${resultSavetCommuniting.street}`;
 
                 const payload = {
-                  title: `Odwołano dojazd dnia: ${resultSavetCommuniting.day}-${resultSavetCommuniting.month}-${resultSavetCommuniting.year}, o godzine: ${resultSavetCommuniting.timeStart}`,
+                  title: `Odwołano dojazd dnia: ${
+                    resultSavetCommuniting.day < 10
+                      ? `0${resultSavetCommuniting.day}`
+                      : resultSavetCommuniting.day
+                  }-${
+                    resultSavetCommuniting.month < 10
+                      ? `0${resultSavetCommuniting.month}`
+                      : resultSavetCommuniting.month
+                  }-${resultSavetCommuniting.year}, miasto: ${
+                    resultSavetCommuniting.city
+                  }, ulica: ${resultSavetCommuniting.street}`,
                   body: "this is the body",
                   icon: "images/someImageInPath.png",
                 };
 
                 const emailSubject = `Odwołano dojazd`;
 
-                const { notifactionDone } = await generateNotifications(
-                  [
-                    !!resultSavetCommuniting.userId
-                      ? resultSavetCommuniting.userId._id
-                      : null,
-                    !!resultSavetCommuniting.workerUserId
-                      ? resultSavetCommuniting.workerUserId._id
-                      : null,
+                await notifications.sendAll({
+                  usersId: [
+                    resultSavetCommuniting.userId._id,
+                    resultSavetCommuniting.workerUserId._id,
                   ],
-                  resultSavetCommuniting,
-                  "commuting_canceled",
-                  [emailSubject, emailContent],
-                  payload,
-                  null,
-                  !!resultSavetCommuniting.userId
-                    ? resultSavetCommuniting.userId._id
-                    : null,
-                  !!resultSavetCommuniting.email
-                    ? resultSavetCommuniting.email
-                    : null,
-                  "communitingId"
-                );
-                if (notifactionDone) {
-                  res.status(200).json({
-                    message: "Odwołano dojazd",
-                  });
-                }
+                  clientId: resultSavetCommuniting.userId._id,
+                  emailContent: {
+                    customEmail: null,
+                    emailTitle: emailSubject,
+                    emailMessage: emailContent,
+                  },
+                  notificationContent: {
+                    typeAlert: "communitingId",
+                    dateAlert: resultSavetCommuniting,
+                    typeNotification: "commuting_canceled",
+                    payload: payload,
+                    companyChanged: false,
+                  },
+                  smsContent: null,
+                });
+                res.status(200).json({
+                  message: "Odwołano dojazd",
+                });
               }
             });
         });

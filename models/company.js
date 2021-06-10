@@ -123,6 +123,12 @@ const companySchema = new Schema(
       min: 0,
     },
     smsReserwationAvaible: {
+      // powiadomienie podczas tworzenia rezerwacji
+      type: Boolean,
+      required: false,
+    },
+    smsReserwationChangedUserAvaible: {
+      // powiadomienie podczas zmiany rezerwacji przez użytkownika
       type: Boolean,
       required: false,
     },
@@ -135,6 +141,56 @@ const companySchema = new Schema(
       required: false,
     },
     smsChangedAvaible: {
+      type: Boolean,
+      required: false,
+    },
+    smsServiceCreatedAvaible: {
+      // powiadomienia podczas tworzenia serwisu
+      type: Boolean,
+      required: false,
+    },
+    smsServiceChangedAvaible: {
+      // powiadomienia podczas edytowania serwisu
+      type: Boolean,
+      required: false,
+    },
+    smsServiceFinishedAvaible: {
+      // powiadomienia podczas ukończenia serwisu
+      type: Boolean,
+      required: false,
+    },
+    smsServiceCanceledAvaible: {
+      // powiadomienia podczas anulowania serwisu
+      type: Boolean,
+      required: false,
+    },
+    smsServiceDeletedAvaible: {
+      // powiadomienia podczas anulowania serwisu
+      type: Boolean,
+      required: false,
+    },
+    smsCommunitingNotificationAvaible: {
+      // powiadomienia 1 dzień przed dojazdem
+      type: Boolean,
+      required: false,
+    },
+    smsCommunitingCreatedAvaible: {
+      // powiadomienia podczas tworzenia dojazdu
+      type: Boolean,
+      required: false,
+    },
+    smsCommunitingChangedAvaible: {
+      // powiadomienia podczas edytowania dojazdu
+      type: Boolean,
+      required: false,
+    },
+    smsCommunitingCanceledAvaible: {
+      // powiadomienia podczas anulowania dojazdu
+      type: Boolean,
+      required: false,
+    },
+    smsCommunitingDeletedAvaible: {
+      // powiadomienia podczas anulowania dojazdu
       type: Boolean,
       required: false,
     },
@@ -698,6 +754,10 @@ const companySchema = new Schema(
       required: false,
     },
     notifactionNoPremium: {
+      type: Boolean,
+      required: false,
+    },
+    notificationCommuniting: {
       type: Boolean,
       required: false,
     },
