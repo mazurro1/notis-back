@@ -148,6 +148,28 @@ const sendEmail = ({ email, emailTitle, emailMessage, attachments = null }) => {
   }
 };
 
+const sendVerifySMS = async ({ phoneNumber = null, message = null }) => {
+  if (!!phoneNumber && !!message) {
+    const params = {
+      Message: message,
+      PhoneNumber: `+48${phoneNumber}`,
+    };
+    snsResultCustom = await sns
+      .publish(params, (err, data) => {
+        if (data) {
+          return data;
+        } else {
+          return false;
+        }
+      })
+      .promise();
+
+    return snsResultCustom;
+  } else {
+    return false;
+  }
+};
+
 const sendSMS = ({
   userId,
   companyId,
@@ -435,6 +457,7 @@ const sendAll = async ({
   }
 };
 
+exports.sendVerifySMS = sendVerifySMS;
 exports.sendSMS = sendSMS;
 exports.sendEmail = sendEmail;
 exports.sendAlert = sendAlert;

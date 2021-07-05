@@ -147,7 +147,7 @@ for (let i = 0; i < 24; i++) {
                       active: true,
                       type: "reserwation_notifaction",
                       creationTime: new Date(),
-                      companyChanged: false,
+                      companyChanged: true,
                     };
 
                     itemReserwation = {
@@ -189,7 +189,7 @@ for (let i = 0; i < 24; i++) {
                           active: true,
                           type: "reserwation_notifaction",
                           creationTime: new Date(),
-                          companyChanged: false,
+                          companyChanged: true,
                         },
                       });
 
@@ -421,7 +421,7 @@ for (let i = 0; i < 24; i++) {
                       active: true,
                       type: "communiting_notifaction",
                       creationTime: new Date(),
-                      companyChanged: false,
+                      companyChanged: true,
                     };
 
                     itemReserwation = {
@@ -461,7 +461,7 @@ for (let i = 0; i < 24; i++) {
                           active: true,
                           type: "communiting_notifaction",
                           creationTime: new Date(),
-                          companyChanged: false,
+                          companyChanged: true,
                         },
                       });
 
@@ -671,7 +671,7 @@ schedule.scheduleJob(`10 8 * * *`, () => {
             active: true,
             type: "alert_notifaction_sms",
             creationTime: new Date(),
-            companyChanged: false,
+            companyChanged: true,
           };
 
           io.getIO().emit(`user${itemCompany.owner}`, {
@@ -760,7 +760,7 @@ schedule.scheduleJob(`20 8 * * *`, () => {
             active: true,
             type: "alert_notifaction_premium",
             creationTime: new Date(),
-            companyChanged: false,
+            companyChanged: true,
           };
 
           io.getIO().emit(`user${itemCompany.owner}`, {

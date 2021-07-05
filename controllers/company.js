@@ -1438,7 +1438,8 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         .then((workerServices) => {
           const bulkArrayToUpdateUsers = [];
           const bulkArrayToUpdateServices = [];
-          workerServices.forEach((workerService) => {
+
+          for (const workerService of workerServices) {
             bulkArrayToUpdateServices.push({
               updateOne: {
                 filter: {
@@ -1512,7 +1513,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                 },
               },
             });
-          });
+          }
           return Service.bulkWrite(bulkArrayToUpdateServices)
             .then(() => {
               return {
@@ -1556,7 +1557,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               ...bulkArrayToUpdateUsers,
             ];
             const bulkArrayToUpdate = [];
-            communitingItems.forEach((communitingItem) => {
+            for (const communitingItem of communitingItems) {
               bulkArrayToUpdate.push({
                 updateOne: {
                   filter: {
@@ -1630,7 +1631,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                   },
                 },
               });
-            });
+            }
 
             return Communiting.bulkWrite(bulkArrayToUpdate)
               .then(() => {
@@ -1661,7 +1662,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         allUsersReserwation.forEach((userDoc) => {
           const allUserAlertsToSave = [];
 
-          userDoc.items.forEach((itemReserwation) => {
+          for (const itemReserwation of userDoc.items) {
             const userAlertToSave = {
               reserwationId: itemReserwation._id,
               active: true,
@@ -1682,7 +1683,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             });
 
             allUserAlertsToSave.push(userAlertToSave);
-          });
+          }
           if (!!userDoc.userId) {
             bulkArrayToUpdate.push({
               updateOne: {
@@ -1702,7 +1703,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             });
           }
         });
-        allWorkerReserwations.forEach((userDoc) => {
+        for (const userDoc of allWorkerReserwations) {
           const allWorkerAlertsToSave = [];
 
           userDoc.items.forEach((itemReserwation) => {
@@ -1744,7 +1745,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               },
             },
           });
-        });
+        }
 
         return User.bulkWrite(bulkArrayToUpdate)
           .then(() => {
@@ -5508,7 +5509,7 @@ exports.companyDeleteCompany = (req, res, next) => {
         .then((workerServices) => {
           const bulkArrayToUpdateUsers = [];
           const bulkArrayToUpdateServices = [];
-          workerServices.forEach((workerService) => {
+          for (const workerService of workerServices) {
             bulkArrayToUpdateServices.push({
               updateOne: {
                 filter: {
@@ -5582,7 +5583,7 @@ exports.companyDeleteCompany = (req, res, next) => {
                 },
               },
             });
-          });
+          }
           return Service.bulkWrite(bulkArrayToUpdateServices)
             .then(() => {
               return {
@@ -5623,7 +5624,7 @@ exports.companyDeleteCompany = (req, res, next) => {
               ...bulkArrayToUpdateUsers,
             ];
             const bulkArrayToUpdate = [];
-            communitingItems.forEach((communitingItem) => {
+            for (const communitingItem of communitingItems) {
               bulkArrayToUpdate.push({
                 updateOne: {
                   filter: {
@@ -5697,7 +5698,7 @@ exports.companyDeleteCompany = (req, res, next) => {
                   },
                 },
               });
-            });
+            }
 
             return Communiting.bulkWrite(bulkArrayToUpdate)
               .then(() => {
@@ -5726,7 +5727,7 @@ exports.companyDeleteCompany = (req, res, next) => {
         const bulkArrayToUpdate = [...bulkArrayToUpdateUsers];
         allUsersReserwations.forEach((userDoc) => {
           const allUserAlertsToSave = [];
-          userDoc.items.forEach((itemReserwation) => {
+          for (const itemReserwation of userDoc.items) {
             const userAlertToSave = {
               reserwationId: itemReserwation._id,
               active: true,
@@ -5747,7 +5748,7 @@ exports.companyDeleteCompany = (req, res, next) => {
             });
 
             allUserAlertsToSave.push(userAlertToSave);
-          });
+          }
 
           bulkArrayToUpdate.push({
             updateOne: {
@@ -5767,10 +5768,10 @@ exports.companyDeleteCompany = (req, res, next) => {
           });
         });
 
-        allWorkerReserwations.forEach((userDoc) => {
+        for (const userDoc of allWorkerReserwations) {
           const allWorkerAlertsToSave = [];
 
-          userDoc.items.forEach((itemReserwation) => {
+          for (const itemReserwation of userDoc.items) {
             const userAlertToSave = {
               reserwationId: itemReserwation._id,
               active: true,
@@ -5791,7 +5792,7 @@ exports.companyDeleteCompany = (req, res, next) => {
             });
 
             allWorkerAlertsToSave.push(userAlertToSave);
-          });
+          }
 
           bulkArrayToUpdate.push({
             updateOne: {
@@ -5809,7 +5810,7 @@ exports.companyDeleteCompany = (req, res, next) => {
               },
             },
           });
-        });
+        }
 
         return User.bulkWrite(bulkArrayToUpdate)
           .then(() => {
@@ -5825,16 +5826,13 @@ exports.companyDeleteCompany = (req, res, next) => {
       }
     )
     .then(() => {
-      // return CompanyUsersInformations.deleteMany({ companyId: companyId });
-      return true;
+      return CompanyUsersInformations.deleteMany({ companyId: companyId });
     })
     .then(() => {
-      // return CompanyAvailability.deleteOne({ companyId: companyId });
-      return true;
+      return CompanyAvailability.deleteOne({ companyId: companyId });
     })
     .then(() => {
-      // return Company.findOneAndDelete({ _id: companyId })
-      return Company.findOne({ _id: companyId })
+      return Company.findOneAndDelete({ _id: companyId })
         .select("email _id")
         .then((companyData) => {
           if (!!companyData) {

@@ -25,22 +25,8 @@ const {
   AWS_BUCKET,
   AWS_PATH_URL,
   SITE_FRONT,
-  MAIL_INFO,
-  MAIL_PORT,
-  MAIL_HOST,
-  MAIL_PASSWORD,
   PUBLIC_KEY_VAPID,
 } = process.env;
-
-const transporter = nodemailer.createTransport({
-  host: MAIL_HOST,
-  port: Number(MAIL_PORT),
-  secure: true,
-  auth: {
-    user: MAIL_INFO,
-    pass: MAIL_PASSWORD,
-  },
-});
 
 AWS.config.update({
   accessKeyId: AWS_ACCESS_KEY_ID_APP,
@@ -184,11 +170,11 @@ exports.registration = (req, res, next) => {
         result.codeToVerified,
         "base64"
       ).toString("utf-8");
-      transporter.sendMail({
-        to: result.email,
-        from: MAIL_INFO,
-        subject: "Tworzenie konta zakończone powodzeniem",
-        html: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified}`,
+
+      notifications.sendEmail({
+        email: result.email,
+        emailTitle: "Tworzenie konta zakończone powodzeniem",
+        emailMessage: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified}`,
       });
 
       res.status(200).json({
@@ -401,11 +387,10 @@ exports.sentAgainVerifiedEmail = (req, res, next) => {
           user.codeToVerified,
           "base64"
         ).toString("utf-8");
-        transporter.sendMail({
-          to: user.email,
-          from: MAIL_INFO,
-          subject: "Tworzenie konta zakończone powodzeniem",
-          html: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified.toUpperCase()}`,
+        notifications.sendEmail({
+          email: user.email,
+          emailTitle: "Tworzenie konta zakończone powodzeniem",
+          emailMessage: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified.toUpperCase()}`,
         });
         res.status(201).json({
           message: "Email został wysłany",
@@ -585,11 +570,10 @@ exports.veryfiedEmail = (req, res, next) => {
       }
     })
     .then((result) => {
-      transporter.sendMail({
-        to: result.email,
-        from: MAIL_INFO,
-        subject: "Tworzenie konta zakończone powodzeniem",
-        html: `<h1>Adres e-mail został zweryfikowany</h1>`,
+      notifications.sendEmail({
+        email: result.email,
+        emailTitle: "Tworzenie konta zakończone powodzeniem",
+        emailMessage: `<h1>Adres e-mail został zweryfikowany</h1>`,
       });
       res.status(201).json({
         accountVerified: result.accountVerified,
@@ -1025,27 +1009,15 @@ exports.edit = (req, res, next) => {
                 "base64"
               ).toString("utf-8");
 
-              // const params = {
-              //   Message: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
-              //   MessageStructure: "string",
-              //   PhoneNumber: "+48515873009",
-              //   MessageAttributes: {
-              //     "AWS.SNS.SMS.SenderID": {
-              //       DataType: "String",
-              //       StringValue: "Meetsy",
-              //     },
-              //   },
-              // };
-              // sns.publish(params, function (err, data) {
-              //   if (err) console.log(err, err.stack);
-              //   else console.log(data);
-              // });
+              notifications.sendVerifySMS({
+                phoneNumber: newPhone,
+                message: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
+              });
 
-              transporter.sendMail({
-                to: userSavedData.email,
-                from: MAIL_INFO,
-                subject: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
-                html: `<h1>Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}</h1>`,
+              notifications.sendEmail({
+                email: userSavedData.email,
+                emailTitle: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
+                emailMessage: `<h1>Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}</h1>`,
               });
             }
             return userSavedData;
@@ -1054,12 +1026,13 @@ exports.edit = (req, res, next) => {
             const userPhone = !!result.phone
               ? Buffer.from(result.phone, "base64").toString("utf-8")
               : null;
-            transporter.sendMail({
-              to: result.email,
-              from: MAIL_INFO,
-              subject: "Edycja konta zakończone powodzeniem",
-              html: `<h1>Edycja konta zakończona pomyślnie</h1>`,
+
+            notifications.sendEmail({
+              email: result.email,
+              emailTitle: "Edycja konta zakończone powodzeniem",
+              emailMessage: `<h1>Edycja konta zakończona pomyślnie</h1>`,
             });
+
             res.status(201).json({
               email: result.email,
               token: result.loginToken,
@@ -1146,11 +1119,11 @@ exports.sentEmailResetPassword = (req, res, next) => {
           ? `0${result.dateToResetPassword.getMinutes()}`
           : result.dateToResetPassword.getMinutes()
       }`;
-      transporter.sendMail({
-        to: result.email,
-        from: MAIL_INFO,
-        subject: "Kod z kodem resetującym hasło na Meetsy",
-        html: `<h1>Kod resetujący hasło</h1> ${codeToResetPassword}.
+
+      notifications.sendEmail({
+        email: result.email,
+        emailTitle: "Kod z kodem resetującym hasło na Meetsy",
+        emailMessage: `<h1>Kod resetujący hasło</h1> ${codeToResetPassword}.
         <h2>Data wygaśnięcia kodu: ${showDate}</h2>`,
       });
 
@@ -1228,12 +1201,12 @@ exports.resetPassword = (req, res, next) => {
       }
     })
     .then((result) => {
-      transporter.sendMail({
-        to: result.email,
-        from: MAIL_INFO,
-        subject: "Tworzenie konta zakończone powodzeniem",
-        html: `<h1>Hasło zostało zmienione</h1>`,
+      notifications.sendEmail({
+        email: result.email,
+        emailTitle: "Tworzenie konta zakończone powodzeniem",
+        emailMessage: `<h1>Hasło zostało zmienione</h1>`,
       });
+
       res.status(200).json({
         message: "Hasło zostało zmienione",
       });
@@ -1458,13 +1431,13 @@ exports.loginFacebookNew = (req, res, next) => {
                 user.loginToken = token;
                 user.save((err, userSaved) => {
                   if (!!!err) {
-                    transporter.sendMail({
-                      to: userSaved.email,
-                      from: MAIL_INFO,
-                      subject: "Tworzenie konta zakończone powodzeniem",
-                      html: `<h1>Utworzono nowe konto za pomocą facebook-a</h1>
+                    notifications.sendEmail({
+                      email: userSaved.email,
+                      emailTitle: "Tworzenie konta zakończone powodzeniem",
+                      emailMessage: `<h1>Utworzono nowe konto za pomocą facebook-a</h1>
                       <p>Twoje nowe wygenerowane hasło to: <b>${randomPassword}</b>. Możesz go zmienić w ustawieniach konta na stronie nootis.pl</p>`,
                     });
+
                     res.redirect(
                       303,
                       `${SITE_FRONT}/login-facebook?${userSaved.loginToken}&${userSaved._id}&true`
@@ -1647,11 +1620,10 @@ exports.loginGoogle = (req, res, next) => {
                 user.loginToken = token;
                 user.save((err, userSaved) => {
                   if (!!!err) {
-                    transporter.sendMail({
-                      to: userSaved.email,
-                      from: MAIL_INFO,
-                      subject: "Tworzenie konta zakończone powodzeniem",
-                      html: `<h1>Utworzono nowe konto za pomocą googla</h1>
+                    notifications.sendEmail({
+                      email: userSaved.email,
+                      emailTitle: "Tworzenie konta zakończone powodzeniem",
+                      emailMessage: `<h1>Utworzono nowe konto za pomocą googla</h1>
                       <p>Twoje nowe wygenerowane hasło to: <b>${randomPassword}</b>. Możesz go zmienić w ustawieniach konta na stronie nootis.pl</p>`,
                     });
                     res.redirect(
@@ -1728,11 +1700,11 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
         userSavedData.codeDelete,
         "base64"
       ).toString("utf-8");
-      transporter.sendMail({
-        to: userSavedData.email,
-        from: MAIL_INFO,
-        subject: `Potwierdzenie usunięcia konta ${userName} ${userSurname}`,
-        html: `<h1>Kod do usunięcia konta: ${codeToDelete.toUpperCase()}</h1>`,
+
+      notifications.sendEmail({
+        email: userSavedData.email,
+        emailTitle: `Potwierdzenie usunięcia konta ${userName} ${userSurname}`,
+        emailMessage: `<h1>Kod do usunięcia konta: ${codeToDelete.toUpperCase()}</h1>`,
       });
       res.status(201).json({
         message: "Wysłano kod do usunięcia konta",
@@ -1755,7 +1727,7 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
     _id: userId,
   })
     .select(
-      "_id blockUserSendVerifiedPhoneSms codeVerifiedPhoneDate codeVerifiedPhone name surname email"
+      "_id blockUserSendVerifiedPhoneSms codeVerifiedPhoneDate codeVerifiedPhone name surname email phone"
     )
     .then((resultUserDoc) => {
       if (!!resultUserDoc) {
@@ -1802,28 +1774,19 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
         "base64"
       ).toString("utf-8");
 
-      const params = {
-        Message: `Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}`,
-        MessageStructure: "string",
-        PhoneNumber: "+48515873009",
-        MessageAttributes: {
-          "AWS.SNS.SMS.SenderID": {
-            DataType: "String",
-            StringValue: "Meetsy",
-          },
-        },
-      };
-      /*
-      sns.publish(params, function (err, data) {
-        if (err) console.log(err, err.stack);
-        else console.log(data);
-      });*/
+      const phoneNumber = Buffer.from(userSavedData.phone, "base64").toString(
+        "utf-8"
+      );
 
-      transporter.sendMail({
-        to: userSavedData.email,
-        from: MAIL_INFO,
-        subject: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
-        html: `<h1>Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}</h1>`,
+      notifications.sendVerifySMS({
+        phoneNumber: phoneNumber,
+        message: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
+      });
+
+      notifications.sendEmail({
+        email: userSavedData.email,
+        emailTitle: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
+        emailMessage: `<h1>Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}</h1>`,
       });
       res.status(201).json({
         blockUserSendVerifiedPhoneSms:
@@ -1978,7 +1941,7 @@ exports.deleteUserAccount = (req, res, next) => {
               active: true,
               type: "service_deleted",
               creationTime: new Date(),
-              companyChanged: true,
+              companyChanged: false,
             };
 
             io.getIO().emit(`user${workerService.workerUserId}`, {
@@ -1988,7 +1951,7 @@ exports.deleteUserAccount = (req, res, next) => {
                 active: true,
                 type: "service_deleted",
                 creationTime: new Date(),
-                companyChanged: true,
+                companyChanged: false,
               },
             });
             bulkArrayToUpdateUsers.push({
@@ -2057,7 +2020,7 @@ exports.deleteUserAccount = (req, res, next) => {
               active: true,
               type: "commuting_deleted",
               creationTime: new Date(),
-              companyChanged: true,
+              companyChanged: false,
             };
 
             io.getIO().emit(`user${communitingItem.workerUserId}`, {
@@ -2067,7 +2030,7 @@ exports.deleteUserAccount = (req, res, next) => {
                 active: true,
                 type: "commuting_deleted",
                 creationTime: new Date(),
-                companyChanged: true,
+                companyChanged: false,
               },
             });
             bulkArrayToUpdateUsersCommuniting.push({
@@ -2169,11 +2132,10 @@ exports.deleteUserAccount = (req, res, next) => {
         .select("_id email")
         .then((userDoc) => {
           if (!!userDoc) {
-            transporter.sendMail({
-              to: userDoc.email,
-              from: MAIL_INFO,
-              subject: "Usunięto konto!",
-              html: "<h1>Konto została usunięte</h1>",
+            notifications.sendEmail({
+              email: userDoc.email,
+              emailTitle: "Usunięto konto!",
+              emailMessage: "<h1>Konto została usunięte</h1>",
             });
             return true;
           } else {
@@ -2212,17 +2174,23 @@ exports.verifiedUserPhone = (req, res, next) => {
       "_id codeVerifiedPhoneDate codeVerifiedPhone name surname email phoneVerified phone whiteListVerifiedPhones"
     )
     .then((userData) => {
-      const codeToVerified = Buffer.from(
-        userData.codeVerifiedPhone,
-        "base64"
-      ).toString("utf-8");
-      if (
-        code.toUpperCase() === codeToVerified.toUpperCase() &&
-        userData.codeVerifiedPhoneDate > new Date()
-      ) {
-        return userData;
+      if (!!userData.codeVerifiedPhone) {
+        const codeToVerified = Buffer.from(
+          userData.codeVerifiedPhone,
+          "base64"
+        ).toString("utf-8");
+        if (
+          code.toUpperCase() === codeToVerified.toUpperCase() &&
+          userData.codeVerifiedPhoneDate > new Date()
+        ) {
+          return userData;
+        } else {
+          const error = new Error("Błędny kod.");
+          error.statusCode = 422;
+          throw error;
+        }
       } else {
-        const error = new Error("Błędny kod.");
+        const error = new Error("Numer już aktywowany.");
         error.statusCode = 422;
         throw error;
       }
@@ -2235,11 +2203,10 @@ exports.verifiedUserPhone = (req, res, next) => {
       return userData.save();
     })
     .then((userDoc) => {
-      transporter.sendMail({
-        to: userDoc.email,
-        from: MAIL_INFO,
-        subject: "Zweryfikowano numer telefonu!",
-        html: "<h1>Numer telefonu został zweryfikowany</h1>",
+      notifications.sendEmail({
+        email: userDoc.email,
+        emailTitle: "Zweryfikowano numer telefonu!",
+        emailMessage: "<h1>Numer telefonu został zweryfikowany</h1>",
       });
       return true;
     })

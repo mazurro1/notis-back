@@ -1405,7 +1405,7 @@ exports.addReserwationWorker = (req, res, next) => {
                       active: true,
                       type: "new_reserwation_worker",
                       creationTime: new Date(),
-                      companyChanged: false,
+                      companyChanged: true,
                     },
                   }
                 );
@@ -1414,7 +1414,7 @@ exports.addReserwationWorker = (req, res, next) => {
                   active: true,
                   type: "new_reserwation_worker",
                   creationTime: new Date(),
-                  companyChanged: false,
+                  companyChanged: true,
                 };
 
                 User.updateOne(
@@ -2317,7 +2317,7 @@ exports.getWorkerReserwationsAll = (req, res, next) => {
     .then((reserwationsDoc) => {
       return Company.findOne({ _id: companyId })
         .select(
-          "owner workers.user openingDays workers._id workers.servicesCategory workers.active ownerData._id ownerData.user ownerData.servicesCategory"
+          "owner services workers.user openingDays workers._id workers.servicesCategory workers.active ownerData._id ownerData.user ownerData.servicesCategory"
         )
         .populate("workers.user", "_id name surname")
         .populate("owner", "_id name surname")

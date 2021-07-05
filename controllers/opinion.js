@@ -802,7 +802,7 @@ exports.addReplayOpinion = (req, res, next) => {
                   active: true,
                   type: "opinion_from_company",
                   creationTime: new Date(),
-                  companyChanged: false,
+                  companyChanged: true,
                 };
 
                 io.getIO().emit(`user${resultOpinion.user._id}`, {
@@ -812,7 +812,7 @@ exports.addReplayOpinion = (req, res, next) => {
                     active: true,
                     type: "opinion_from_company",
                     creationTime: new Date(),
-                    companyChanged: false,
+                    companyChanged: true,
                   },
                 });
                 bulkArrayToUpdate.push({
@@ -855,7 +855,7 @@ exports.addReplayOpinion = (req, res, next) => {
                 active: true,
                 type: "opinion_from_company",
                 creationTime: new Date(),
-                companyChanged: false,
+                companyChanged: true,
               };
 
               io.getIO().emit(`user${validWorkerId}`, {
@@ -865,7 +865,7 @@ exports.addReplayOpinion = (req, res, next) => {
                   active: true,
                   type: "opinion_from_company",
                   creationTime: new Date(),
-                  companyChanged: false,
+                  companyChanged: true,
                 },
               });
 
