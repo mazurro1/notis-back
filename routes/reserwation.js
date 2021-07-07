@@ -48,6 +48,24 @@ router.post(
 );
 
 router.post(
+  "/add-worker-client-reserwation",
+  isAuth,
+  [body("companyId")],
+  [body("dateStart")],
+  [body("dateEnd")],
+  [body("dateFull")],
+  [body("reserwationMessage")],
+  [body("selectedWorkerUserId")],
+  [body("selectedServiceId")],
+  [body("isActiveUser")],
+  [body("phone")],
+  [body("name")],
+  [body("surname")],
+  [body("email")],
+  reserwation.addWorkerClientReserwation
+);
+
+router.post(
   "/get-worker-disabled-hours",
   isAuth,
   [body("workerUserId")],

@@ -1350,101 +1350,90 @@ exports.addReserwationWorker = (req, res, next) => {
       }
     })
     .then(() => {
-      return Reserwation.find({
-        company: companyId,
+      // return Reserwation.find({
+      //   company: companyId,
+      //   toWorkerUserId: workerUserId,
+      //   dateDay: Number(arrayDateFull[0]),
+      //   dateMonth: Number(arrayDateFull[1]),
+      //   dateYear: Number(arrayDateFull[2]),
+      //   visitCanceled: false,
+      //   isDeleted: { $in: [false, null] },
+      // })
+      //   .then(() => {
+      const newReserwationWorker = new Reserwation({
+        fromUser: userId,
         toWorkerUserId: workerUserId,
-        dateDay: Number(arrayDateFull[0]),
-        dateMonth: Number(arrayDateFull[1]),
+        company: companyId,
         dateYear: Number(arrayDateFull[2]),
+        dateMonth: Number(arrayDateFull[1]),
+        dateDay: Number(arrayDateFull[0]),
+        dateStart: dateStart,
+        dateEnd: dateEnd,
+        costReserwation: null,
+        timeReserwation: null,
+        visitNotFinished: false,
         visitCanceled: false,
-        isDeleted: { $in: [false, null] },
-      })
-        .then(() => {
-          const newReserwationWorker = new Reserwation({
-            fromUser: userId,
-            toWorkerUserId: workerUserId,
-            company: companyId,
-            dateYear: Number(arrayDateFull[2]),
-            dateMonth: Number(arrayDateFull[1]),
-            dateDay: Number(arrayDateFull[0]),
-            dateStart: dateStart,
-            dateEnd: dateEnd,
-            costReserwation: null,
-            timeReserwation: null,
-            visitNotFinished: false,
-            visitCanceled: false,
-            visitChanged: false,
-            workerReserwation: true,
-            reserwationMessage: reserwationMessage,
-            costReserwation: 0,
-            timeReserwation: 0,
-            fullDate: actualDate,
-            hasCommuniting: false,
-            isDeleted: false,
-          });
-          return newReserwationWorker.save();
-        })
-        .then((result) => {
-          result
-            .populate(
-              "company",
-              "linkPath name services._id services.serviceColor _id"
-            )
-            .populate(
-              {
-                path: "fromUser",
-                select: "name surname _id",
+        visitChanged: false,
+        workerReserwation: true,
+        reserwationMessage: reserwationMessage,
+        costReserwation: 0,
+        timeReserwation: 0,
+        fullDate: actualDate,
+        hasCommuniting: false,
+        isDeleted: false,
+      });
+      return newReserwationWorker.save();
+    })
+    .then((result) => {
+      result
+        .populate(
+          "company",
+          "linkPath name services._id services.serviceColor _id"
+        )
+        .populate(
+          {
+            path: "fromUser",
+            select: "name surname _id",
+          },
+          function (err, resultReserwationPopulate) {
+            io.getIO().emit(`user${resultReserwationPopulate.toWorkerUserId}`, {
+              action: "update-alerts",
+              alertData: {
+                reserwationId: resultReserwationPopulate,
+                active: true,
+                type: "new_reserwation_worker",
+                creationTime: new Date(),
+                companyChanged: true,
               },
-              function (err, resultReserwationPopulate) {
-                io.getIO().emit(
-                  `user${resultReserwationPopulate.toWorkerUserId}`,
-                  {
-                    action: "update-alerts",
-                    alertData: {
-                      reserwationId: resultReserwationPopulate,
-                      active: true,
-                      type: "new_reserwation_worker",
-                      creationTime: new Date(),
-                      companyChanged: true,
-                    },
-                  }
-                );
-                const newUserAlert = {
-                  reserwationId: resultReserwationPopulate._id,
-                  active: true,
-                  type: "new_reserwation_worker",
-                  creationTime: new Date(),
-                  companyChanged: true,
-                };
+            });
+            const newUserAlert = {
+              reserwationId: resultReserwationPopulate._id,
+              active: true,
+              type: "new_reserwation_worker",
+              creationTime: new Date(),
+              companyChanged: true,
+            };
 
-                User.updateOne(
-                  {
-                    _id: resultReserwationPopulate.toWorkerUserId,
+            User.updateOne(
+              {
+                _id: resultReserwationPopulate.toWorkerUserId,
+              },
+              {
+                $inc: { alertActiveCount: 1 },
+                $push: {
+                  alerts: {
+                    $each: [newUserAlert],
+                    $position: 0,
                   },
-                  {
-                    $inc: { alertActiveCount: 1 },
-                    $push: {
-                      alerts: {
-                        $each: [newUserAlert],
-                        $position: 0,
-                      },
-                    },
-                  }
-                ).then(() => {
-                  res.status(201).json({
-                    reserwation: resultReserwationPopulate,
-                  });
-                });
+                },
               }
-            );
-        })
-        .catch((err) => {
-          if (!err.statusCode) {
-            err.statusCode = 501;
-            err.message = "Błąd podczas składania rezerwacji czasu.";
+            ).then(() => {
+              res.status(201).json({
+                reserwation: resultReserwationPopulate,
+              });
+            });
           }
-          next(err);
-        });
+        );
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -1453,6 +1442,14 @@ exports.addReserwationWorker = (req, res, next) => {
       }
       next(err);
     });
+  // })
+  // .catch((err) => {
+  //   if (!err.statusCode) {
+  //     err.statusCode = 501;
+  //     err.message = "Błąd podczas składania rezerwacji czasu.";
+  //   }
+  //   next(err);
+  // });
 };
 
 exports.getWorkerDisabledHours = (req, res, next) => {
@@ -4088,4 +4085,292 @@ exports.changeReserwation = (req, res, next) => {
       }
       next(err);
     });
+};
+
+exports.addWorkerClientReserwation = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const dateStart = req.body.dateStart;
+  const dateEnd = req.body.dateEnd;
+  const dateFull = req.body.dateFull;
+  const reserwationMessage = req.body.reserwationMessage;
+  const selectedWorkerUserId = req.body.selectedWorkerUserId;
+  const selectedServiceId = req.body.selectedServiceId;
+  const isActiveUser = req.body.isActiveUser;
+  const phone = req.body.phone;
+  const name = req.body.name;
+  const surname = req.body.surname;
+  const email = req.body.email;
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  const arrayDateFull = dateFull.split("-");
+  const splitDateStart = dateStart.split(":");
+  const splitDateEnd = dateEnd.split(":");
+
+  const actualDate = new Date(
+    Number(arrayDateFull[2]),
+    Number(arrayDateFull[1]) - 1,
+    Number(arrayDateFull[0]),
+    Number(splitDateStart[0]),
+    Number(splitDateStart[1])
+  );
+
+  Company.findOne({
+    _id: companyId,
+    premium: {
+      $gte: new Date().toISOString(),
+    },
+  })
+    .select("_id workers.permissions workers.user owner services")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
+        let hasPermission = resultCompanyDoc.owner == userId;
+        const isAdmin = resultCompanyDoc.owner == userId;
+        let selectedService = null;
+        if (!!resultCompanyDoc.services) {
+          selectedService = resultCompanyDoc.services.find(
+            (itemService) => itemService._id == selectedServiceId
+          );
+        }
+        if (!hasPermission) {
+          const selectedWorker = resultCompanyDoc.workers.find(
+            (worker) => worker.user == userId
+          );
+          if (!!selectedWorker) {
+            hasPermission = true;
+          }
+        }
+        if (!!hasPermission && !!selectedService) {
+          return { isAdmin: isAdmin, selectedService: selectedService };
+        } else {
+          const error = new Error("Brak uprawnień.");
+          error.statusCode = 403;
+          throw error;
+        }
+      } else {
+        const error = new Error(
+          "Brak wybranej firmy lub konto firmowe jest nieaktywne."
+        );
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then(({ isAdmin, selectedService }) => {
+      const hashedPhoneNumber = Buffer.from(phone, "utf-8").toString("base64");
+      const hashedName = Buffer.from(name, "utf-8").toString("base64");
+      const hashedSurname = Buffer.from(surname, "utf-8").toString("base64");
+      const validDateStart = new Date(
+        Number(arrayDateFull[2]),
+        Number(arrayDateFull[1]) - 1,
+        Number(arrayDateFull[0]),
+        Number(splitDateStart[0]),
+        Number(splitDateStart[1])
+      );
+      const validDateEnd = new Date(
+        Number(arrayDateFull[2]),
+        Number(arrayDateFull[1]) - 1,
+        Number(arrayDateFull[0]),
+        Number(splitDateEnd[0]),
+        Number(splitDateEnd[1])
+      );
+
+      const timeReserwation = Math.round(
+        Math.abs(validDateEnd - validDateStart) / 60000
+      );
+      if (isActiveUser) {
+        return User.findOne({
+          phone: hashedPhoneNumber,
+        })
+          .select("_id phone allCompanys")
+          .then((userDoc) => {
+            const isUserInCompany = userDoc.allCompanys.find(
+              (companyItem) => companyItem == companyId
+            );
+            if (!!!isUserInCompany) {
+              const newReserwationWorker = new Reserwation({
+                fromUser: userDoc._id,
+                toWorkerUserId: isAdmin ? selectedWorkerUserId : userId,
+                company: companyId,
+                dateYear: Number(arrayDateFull[2]),
+                dateMonth: Number(arrayDateFull[1]),
+                dateDay: Number(arrayDateFull[0]),
+                dateStart: dateStart,
+                dateEnd: dateEnd,
+                costReserwation: selectedService.serviceCost,
+                timeReserwation: timeReserwation,
+                visitNotFinished: false,
+                visitCanceled: false,
+                visitChanged: false,
+                workerReserwation: false,
+                reserwationMessage: reserwationMessage,
+                fullDate: actualDate,
+                hasCommuniting: false,
+                isDeleted: false,
+                serviceId: selectedService._id,
+                serviceName: selectedService.serviceName,
+              });
+              return newReserwationWorker.save();
+            } else {
+              const error = new Error(
+                "Pracownik firmy nie może dokonać rezerwacji"
+              );
+              error.statusCode = 441;
+              throw error;
+            }
+          });
+      } else {
+        return User.findOne({
+          phone: hashedPhoneNumber,
+        })
+          .select("_id phone allCompanys")
+          .then((userDoc) => {
+            let isUserInCompany = false;
+            if (!!userDoc) {
+              isUserInCompany = userDoc.allCompanys.find(
+                (companyItem) => companyItem == companyId
+              );
+            }
+            if (!!!isUserInCompany) {
+              const newReserwationWorker = new Reserwation({
+                fromUser: !!userDoc ? userDoc._id : null,
+                phone: hashedPhoneNumber,
+                name: hashedName,
+                surname: hashedSurname,
+                email: !!email ? email : null,
+                toWorkerUserId: isAdmin ? selectedWorkerUserId : userId,
+                company: companyId,
+                dateYear: Number(arrayDateFull[2]),
+                dateMonth: Number(arrayDateFull[1]),
+                dateDay: Number(arrayDateFull[0]),
+                dateStart: dateStart,
+                dateEnd: dateEnd,
+                costReserwation: selectedService.serviceCost,
+                timeReserwation: timeReserwation,
+                visitNotFinished: false,
+                visitCanceled: false,
+                visitChanged: false,
+                workerReserwation: false,
+                reserwationMessage: reserwationMessage,
+                fullDate: actualDate,
+                hasCommuniting: false,
+                isDeleted: false,
+                serviceId: selectedService._id,
+                serviceName: selectedService.serviceName,
+              });
+              return newReserwationWorker.save();
+            } else {
+              const error = new Error(
+                "Pracownik firmy nie może dokonać rezerwacji"
+              );
+              error.statusCode = 441;
+              throw error;
+            }
+          });
+      }
+    })
+    .then((result) => {
+      result
+        .populate(
+          "company",
+          "linkPath name services._id services.serviceColor _id"
+        )
+        .populate(
+          {
+            path: "fromUser",
+            select: "name surname _id",
+          },
+          function (err, resultReserwationPopulate) {
+            io.getIO().emit(`user${resultReserwationPopulate.toWorkerUserId}`, {
+              action: "update-alerts",
+              alertData: {
+                reserwationId: resultReserwationPopulate,
+                active: true,
+                type: "reserwation_created",
+                creationTime: new Date(),
+                companyChanged: true,
+              },
+            });
+            const bulkArrayToUpdate = [];
+
+            const newUserAlert = {
+              reserwationId: resultReserwationPopulate._id,
+              active: true,
+              type: "reserwation_created",
+              creationTime: new Date(),
+              companyChanged: true,
+            };
+
+            if (!!resultReserwationPopulate.fromUser) {
+              io.getIO().emit(`user${resultReserwationPopulate.fromUser._id}`, {
+                action: "update-alerts",
+                alertData: {
+                  reserwationId: resultReserwationPopulate,
+                  active: true,
+                  type: "reserwation_created",
+                  creationTime: new Date(),
+                  companyChanged: true,
+                },
+              });
+
+              bulkArrayToUpdate.push({
+                updateOne: {
+                  filter: { _id: resultReserwationPopulate.fromUser._id },
+                  update: {
+                    $inc: { alertActiveCount: 1 },
+                    $push: {
+                      alerts: {
+                        $each: [newUserAlert],
+                        $position: 0,
+                      },
+                    },
+                  },
+                },
+              });
+            }
+
+            bulkArrayToUpdate.push({
+              updateOne: {
+                filter: { _id: resultReserwationPopulate.toWorkerUserId },
+                update: {
+                  $inc: { alertActiveCount: 1 },
+                  $push: {
+                    alerts: {
+                      $each: [newUserAlert],
+                      $position: 0,
+                    },
+                  },
+                },
+              },
+            });
+
+            return User.bulkWrite(bulkArrayToUpdate).then(() => {
+              res.status(201).json({
+                reserwation: resultReserwationPopulate,
+              });
+            });
+          }
+        );
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas składania rezerwacji czasu.";
+      }
+      next(err);
+    });
+  // })
+  // .catch((err) => {
+  //   if (!err.statusCode) {
+  //     err.statusCode = 501;
+  //     err.message = "Błąd podczas składania rezerwacji czasu.";
+  //   }
+  //   next(err);
+  // });
 };
