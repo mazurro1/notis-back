@@ -2314,7 +2314,7 @@ exports.getWorkerReserwationsAll = (req, res, next) => {
     .then((reserwationsDoc) => {
       return Company.findOne({ _id: companyId })
         .select(
-          "owner services workers.user openingDays workers._id workers.servicesCategory workers.active ownerData._id ownerData.user ownerData.servicesCategory"
+          "owner services workers.user openingDays workers._id workers.servicesCategory happyHoursConst promotions workers.active ownerData._id ownerData.user ownerData.servicesCategory"
         )
         .populate("workers.user", "_id name surname")
         .populate("owner", "_id name surname")
@@ -3738,7 +3738,7 @@ exports.changeReserwation = (req, res, next) => {
                                         : 0;
                                     const resultPriceAfterPromotion =
                                       Math.floor(
-                                        (selectedServices.serviceCost *
+                                        (Number(selectedServices.serviceCost) *
                                           (100 - resultPromotion)) /
                                           100
                                       );
@@ -4101,6 +4101,8 @@ exports.addWorkerClientReserwation = (req, res, next) => {
   const name = req.body.name;
   const surname = req.body.surname;
   const email = req.body.email;
+  const activePromotion = req.body.activePromotion;
+  const activeHappyHour = req.body.activeHappyHour;
 
   const errors = validationResult(req);
 
@@ -4122,33 +4124,219 @@ exports.addWorkerClientReserwation = (req, res, next) => {
     Number(splitDateStart[1])
   );
 
-  Company.findOne({
-    _id: companyId,
-    premium: {
-      $gte: new Date().toISOString(),
+  const resultDayMinus = new Date(
+    Number(arrayDateFull[2]),
+    Number(arrayDateFull[1]) - 1,
+    Number(arrayDateFull[0]) - 1,
+    Number(splitDateStart[0]),
+    Number(splitDateStart[1])
+  );
+
+  const resultDayPlus = new Date(
+    Number(arrayDateFull[2]),
+    Number(arrayDateFull[1]) - 1,
+    Number(arrayDateFull[0]) + 1,
+    Number(splitDateStart[0]),
+    Number(splitDateStart[1])
+  );
+
+  let findUserId = null;
+
+  Company.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(companyId),
+        pauseCompany: false,
+        premium: {
+          $gte: new Date(),
+        },
+      },
     },
-  })
-    .select("_id workers.permissions workers.user owner services")
-    .then((resultCompanyDoc) => {
+    { $unwind: "$ownerData" },
+    {
+      $project: {
+        openingDays: 1,
+        ownerData: 1,
+        workers: {
+          $filter: {
+            input: "$workers",
+            as: "workerFirstFilter",
+            cond: {
+              $and: [
+                {
+                  $eq: [
+                    "$$workerFirstFilter.user",
+                    mongoose.Types.ObjectId(selectedWorkerUserId),
+                  ],
+                },
+                {
+                  $eq: [
+                    "$$workerFirstFilter.user",
+                    mongoose.Types.ObjectId(userId),
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        services: {
+          $filter: {
+            input: "$services",
+            as: "serviceitem",
+            cond: {
+              $and: [
+                {
+                  $eq: [
+                    "$$serviceitem._id",
+                    mongoose.Types.ObjectId(selectedServiceId),
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        owner: 1,
+        daysOff: {
+          $filter: {
+            input: "$daysOff",
+            as: "dayOffItem",
+            cond: {
+              $and: [
+                {
+                  $eq: ["$$dayOffItem.day", Number(arrayDateFull[0])],
+                },
+                {
+                  $eq: ["$$dayOffItem.month", Number(arrayDateFull[1])],
+                },
+                {
+                  $eq: ["$$dayOffItem.year", Number(arrayDateFull[2])],
+                },
+              ],
+            },
+          },
+        },
+        reservationMonthTime: 1,
+        reservationEveryTime: 1,
+        promotions: 1,
+        usersInformation: 1,
+        happyHoursConst: 1,
+        premium: 1,
+        smsReserwationAvaible: 1,
+        smsReserwationChangedUserAvaible: 1,
+        smsNotifactionAvaible: 1,
+        sms: 1,
+        pauseCompany: 1,
+        _id: 1,
+      },
+    },
+    { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: "$services", preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        openingDays: 1,
+        ownerData: {
+          _id: 1,
+          specialization: 1,
+          user: 1,
+          constantWorkingHours: 1,
+          active: 1,
+          permissions: 1,
+          servicesCategory: 1,
+          noConstantWorkingHours: {
+            $filter: {
+              input: "$ownerData.noConstantWorkingHours",
+              as: "itemOwner",
+              cond: {
+                $and: [
+                  { $gte: ["$$itemOwner.start", resultDayMinus] },
+                  { $lte: ["$$itemOwner.start", resultDayPlus] },
+                ],
+              },
+            },
+          },
+        },
+        workers: {
+          _id: 1,
+          specialization: 1,
+          user: 1,
+          constantWorkingHours: 1,
+          active: 1,
+          permissions: 1,
+          servicesCategory: 1,
+          noConstantWorkingHours: {
+            $filter: {
+              input: "$workers.noConstantWorkingHours",
+              as: "item",
+              cond: {
+                $and: [
+                  { $gte: ["$$item.start", resultDayMinus] },
+                  { $lte: ["$$item.start", resultDayPlus] },
+                ],
+              },
+            },
+          },
+        },
+        owner: 1,
+        daysOff: 1,
+        reservationMonthTime: 1,
+        reservationEveryTime: 1,
+        services: 1,
+        promotions: 1,
+        // usersInformation: {
+        //   $filter: {
+        //     input: "$usersInformation",
+        //     as: "userInfo",
+        //     cond: {
+        //       $and: [
+        //         {
+        //           $eq: ["$$userInfo.userId", mongoose.Types.ObjectId(userId)],
+        //         },
+        //       ],
+        //     },
+        //   },
+        // },
+        happyHoursConst: 1,
+        premium: 1,
+        smsReserwationAvaible: 1,
+        smsReserwationChangedUserAvaible: 1,
+        smsNotifactionAvaible: 1,
+        sms: 1,
+        pauseCompany: 1,
+        _id: 1,
+      },
+    },
+  ])
+    .then((resultCompany) => {
+      const resultCompanyDoc = resultCompany[0];
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
         const isAdmin = resultCompanyDoc.owner == userId;
         let selectedService = null;
         if (!!resultCompanyDoc.services) {
-          selectedService = resultCompanyDoc.services.find(
-            (itemService) => itemService._id == selectedServiceId
-          );
+          selectedService = resultCompanyDoc.services;
         }
         if (!hasPermission) {
-          const selectedWorker = resultCompanyDoc.workers.find(
-            (worker) => worker.user == userId
-          );
-          if (!!selectedWorker) {
-            hasPermission = true;
+          if (!!resultCompanyDoc.workers) {
+            if (!!resultCompanyDoc.workers._id == userId) {
+              hasPermission = true;
+            }
           }
         }
         if (!!hasPermission && !!selectedService) {
-          return { isAdmin: isAdmin, selectedService: selectedService };
+          return {
+            isAdmin: isAdmin,
+            selectedService: selectedService,
+            selectedPromotion: !!resultCompanyDoc.promotions
+              ? resultCompanyDoc.promotions.length > 0
+                ? resultCompanyDoc.promotions[0]
+                : null
+              : null,
+            selectedHappyHour: !!resultCompanyDoc.happyHoursConst
+              ? resultCompanyDoc.happyHoursConst.length > 0
+                ? resultCompanyDoc.happyHoursConst[0]
+                : null
+              : null,
+          };
         } else {
           const error = new Error("Brak uprawnień.");
           error.statusCode = 403;
@@ -4162,121 +4350,234 @@ exports.addWorkerClientReserwation = (req, res, next) => {
         throw error;
       }
     })
-    .then(({ isAdmin, selectedService }) => {
-      const hashedPhoneNumber = Buffer.from(phone, "utf-8").toString("base64");
-      const hashedName = Buffer.from(name, "utf-8").toString("base64");
-      const hashedSurname = Buffer.from(surname, "utf-8").toString("base64");
-      const validDateStart = new Date(
-        Number(arrayDateFull[2]),
-        Number(arrayDateFull[1]) - 1,
-        Number(arrayDateFull[0]),
-        Number(splitDateStart[0]),
-        Number(splitDateStart[1])
-      );
-      const validDateEnd = new Date(
-        Number(arrayDateFull[2]),
-        Number(arrayDateFull[1]) - 1,
-        Number(arrayDateFull[0]),
-        Number(splitDateEnd[0]),
-        Number(splitDateEnd[1])
-      );
+    .then(
+      ({ isAdmin, selectedService, selectedPromotion, selectedHappyHour }) => {
+        const hashedPhoneNumber = Buffer.from(phone, "utf-8").toString(
+          "base64"
+        );
+        const hashedName = Buffer.from(name, "utf-8").toString("base64");
+        const hashedSurname = Buffer.from(surname, "utf-8").toString("base64");
+        const validDateStart = new Date(
+          Number(arrayDateFull[2]),
+          Number(arrayDateFull[1]) - 1,
+          Number(arrayDateFull[0]),
+          Number(splitDateStart[0]),
+          Number(splitDateStart[1])
+        );
+        const validDateEnd = new Date(
+          Number(arrayDateFull[2]),
+          Number(arrayDateFull[1]) - 1,
+          Number(arrayDateFull[0]),
+          Number(splitDateEnd[0]),
+          Number(splitDateEnd[1])
+        );
 
-      const timeReserwation = Math.round(
-        Math.abs(validDateEnd - validDateStart) / 60000
-      );
-      if (isActiveUser) {
-        return User.findOne({
-          phone: hashedPhoneNumber,
-        })
-          .select("_id phone allCompanys")
-          .then((userDoc) => {
-            const isUserInCompany = userDoc.allCompanys.find(
-              (companyItem) => companyItem == companyId
+        const timeReserwation = Math.round(
+          Math.abs(validDateEnd - validDateStart) / 60000
+        );
+
+        let promotionNumber = null;
+        let happyHourNumber = null;
+
+        const convertToValidDateDateFull = `${Number(arrayDateFull[2])}-${
+          Number(arrayDateFull[1]) < 10
+            ? `0${Number(arrayDateFull[1])}`
+            : Number(arrayDateFull[1])
+        }-${
+          Number(arrayDateFull[0]) < 10
+            ? `0${Number(arrayDateFull[0])}`
+            : Number(arrayDateFull[0])
+        }`;
+        const newDateConvertToValidDateDateFull = new Date(
+          convertToValidDateDateFull
+        );
+
+        const dayNewDateConvertToValidDateDateFull =
+          newDateConvertToValidDateDateFull.getDay();
+
+        if (!!selectedPromotion) {
+          const dateStartPromotion = new Date(selectedPromotion.start);
+          const dateEndPromotion = new Date(selectedPromotion.end);
+          const isDayInPromotion =
+            dateStartPromotion <= newDateConvertToValidDateDateFull &&
+            dateEndPromotion >= newDateConvertToValidDateDateFull;
+          if (isDayInPromotion) {
+            promotionNumber = selectedPromotion.promotionPercent;
+          }
+        }
+
+        if (!!selectedHappyHour) {
+          const isSelectedDayHappyHour = selectedHappyHour.dayWeekIndex.some(
+            (happyHourItemService) =>
+              happyHourItemService == dayNewDateConvertToValidDateDateFull
+          );
+          if (isSelectedDayHappyHour) {
+            const splitDateStart = selectedHappyHour.start.split(":");
+            const splitDateEnd = selectedHappyHour.end.split(":");
+            const dateStartToValid = new Date(
+              new Date(
+                newDateConvertToValidDateDateFull.setHours(
+                  Number(splitDateStart[0])
+                )
+              ).setMinutes(Number(splitDateStart[1]))
             );
-            if (!!!isUserInCompany) {
-              const newReserwationWorker = new Reserwation({
-                fromUser: userDoc._id,
-                toWorkerUserId: isAdmin ? selectedWorkerUserId : userId,
-                company: companyId,
-                dateYear: Number(arrayDateFull[2]),
-                dateMonth: Number(arrayDateFull[1]),
-                dateDay: Number(arrayDateFull[0]),
-                dateStart: dateStart,
-                dateEnd: dateEnd,
-                costReserwation: selectedService.serviceCost,
-                timeReserwation: timeReserwation,
-                visitNotFinished: false,
-                visitCanceled: false,
-                visitChanged: false,
-                workerReserwation: false,
-                reserwationMessage: reserwationMessage,
-                fullDate: actualDate,
-                hasCommuniting: false,
-                isDeleted: false,
-                serviceId: selectedService._id,
-                serviceName: selectedService.serviceName,
-              });
-              return newReserwationWorker.save();
-            } else {
-              const error = new Error(
-                "Pracownik firmy nie może dokonać rezerwacji"
-              );
-              error.statusCode = 441;
-              throw error;
+            const dateEndToValid = new Date(
+              new Date(
+                newDateConvertToValidDateDateFull.setHours(
+                  Number(splitDateEnd[0])
+                )
+              ).setMinutes(Number(splitDateEnd[1]))
+            );
+            const validHappyHourDate =
+              dateStartToValid <= actualDate && actualDate <= dateEndToValid;
+            if (validHappyHourDate) {
+              happyHourNumber = selectedHappyHour.promotionPercent;
             }
-          });
-      } else {
-        return User.findOne({
-          phone: hashedPhoneNumber,
-        })
-          .select("_id phone allCompanys")
-          .then((userDoc) => {
-            let isUserInCompany = false;
-            if (!!userDoc) {
-              isUserInCompany = userDoc.allCompanys.find(
-                (companyItem) => companyItem == companyId
-              );
-            }
-            if (!!!isUserInCompany) {
-              const newReserwationWorker = new Reserwation({
-                fromUser: !!userDoc ? userDoc._id : null,
-                phone: hashedPhoneNumber,
-                name: hashedName,
-                surname: hashedSurname,
-                email: !!email ? email : null,
-                toWorkerUserId: isAdmin ? selectedWorkerUserId : userId,
-                company: companyId,
-                dateYear: Number(arrayDateFull[2]),
-                dateMonth: Number(arrayDateFull[1]),
-                dateDay: Number(arrayDateFull[0]),
-                dateStart: dateStart,
-                dateEnd: dateEnd,
-                costReserwation: selectedService.serviceCost,
-                timeReserwation: timeReserwation,
-                visitNotFinished: false,
-                visitCanceled: false,
-                visitChanged: false,
-                workerReserwation: false,
-                reserwationMessage: reserwationMessage,
-                fullDate: actualDate,
-                hasCommuniting: false,
-                isDeleted: false,
-                serviceId: selectedService._id,
-                serviceName: selectedService.serviceName,
-              });
-              return newReserwationWorker.save();
-            } else {
-              const error = new Error(
-                "Pracownik firmy nie może dokonać rezerwacji"
-              );
-              error.statusCode = 441;
-              throw error;
-            }
-          });
+          }
+        }
+        const resultPromotion =
+          promotionNumber !== null && activePromotion
+            ? promotionNumber
+            : happyHourNumber !== null && activeHappyHour
+            ? happyHourNumber
+            : 0;
+
+        const resultPriceAfterPromotion = Math.floor(
+          (Number(selectedService.serviceCost) *
+            (100 - Number(resultPromotion))) /
+            100
+        );
+
+        if (isActiveUser) {
+          return User.findOne({
+            phone: hashedPhoneNumber,
+          })
+            .select("_id phone allCompanys")
+            .then((userDoc) => {
+              if (!!userDoc) {
+                findUserId = !!userDoc ? userDoc._id : null;
+                const isUserInCompany = userDoc.allCompanys.find(
+                  (companyItem) => companyItem == companyId
+                );
+                if (!!!isUserInCompany) {
+                  const newReserwationWorker = new Reserwation({
+                    fromUser: userDoc._id,
+                    toWorkerUserId: isAdmin ? selectedWorkerUserId : userId,
+                    company: companyId,
+                    dateYear: Number(arrayDateFull[2]),
+                    dateMonth: Number(arrayDateFull[1]),
+                    dateDay: Number(arrayDateFull[0]),
+                    dateStart: dateStart,
+                    dateEnd: dateEnd,
+                    costReserwation: resultPriceAfterPromotion,
+                    basicPrice: selectedService.serviceCost,
+                    timeReserwation: timeReserwation,
+                    visitNotFinished: false,
+                    visitCanceled: false,
+                    visitChanged: false,
+                    workerReserwation: false,
+                    reserwationMessage: reserwationMessage,
+                    fullDate: actualDate,
+                    hasCommuniting: false,
+                    isDeleted: false,
+                    serviceId: selectedService._id,
+                    serviceName: selectedService.serviceName,
+                    sendSMSReserwation: false,
+                    sendSMSNotifaction: false,
+                    sendSMSCanceled: false,
+                    sendSMSChanged: false,
+                    isDraft: false,
+                    activeStamp: false,
+                    extraCost: selectedService.extraCost,
+                    extraTime: selectedService.extraTime,
+                    activePromotion:
+                      !!promotionNumber && activePromotion ? true : false,
+                    activeHappyHour:
+                      !!happyHourNumber && activeHappyHour ? true : false,
+                  });
+
+                  return newReserwationWorker.save();
+                } else {
+                  const error = new Error(
+                    "Pracownik firmy nie może dokonać rezerwacji"
+                  );
+                  error.statusCode = 441;
+                  throw error;
+                }
+              } else {
+                const error = new Error("Brak użytkownika");
+                error.statusCode = 442;
+                throw error;
+              }
+            });
+        } else {
+          return User.findOne({
+            phone: hashedPhoneNumber,
+          })
+            .select("_id phone allCompanys")
+            .then((userDoc) => {
+              let isUserInCompany = false;
+              if (!!userDoc) {
+                isUserInCompany = userDoc.allCompanys.find(
+                  (companyItem) => companyItem == companyId
+                );
+                findUserId = userDoc._id;
+              }
+              if (!!!isUserInCompany) {
+                const newReserwationWorker = new Reserwation({
+                  fromUser: !!userDoc ? userDoc._id : null,
+                  phone: hashedPhoneNumber,
+                  name: hashedName,
+                  surname: hashedSurname,
+                  email: !!email ? email : null,
+                  toWorkerUserId: isAdmin ? selectedWorkerUserId : userId,
+                  company: companyId,
+                  dateYear: Number(arrayDateFull[2]),
+                  dateMonth: Number(arrayDateFull[1]),
+                  dateDay: Number(arrayDateFull[0]),
+                  dateStart: dateStart,
+                  dateEnd: dateEnd,
+                  costReserwation: resultPriceAfterPromotion,
+                  basicPrice: selectedService.serviceCost,
+                  timeReserwation: timeReserwation,
+                  visitNotFinished: false,
+                  visitCanceled: false,
+                  visitChanged: false,
+                  workerReserwation: false,
+                  reserwationMessage: reserwationMessage,
+                  fullDate: actualDate,
+                  hasCommuniting: false,
+                  isDeleted: false,
+                  serviceId: selectedService._id,
+                  serviceName: selectedService.serviceName,
+                  sendSMSReserwation: false,
+                  sendSMSNotifaction: false,
+                  sendSMSCanceled: false,
+                  sendSMSChanged: false,
+                  isDraft: false,
+                  activeStamp: false,
+                  extraCost: selectedService.extraCost,
+                  extraTime: selectedService.extraTime,
+                  activePromotion:
+                    !!promotionNumber && activePromotion ? true : false,
+                  activeHappyHour:
+                    !!happyHourNumber && activeHappyHour ? true : false,
+                });
+
+                return newReserwationWorker.save();
+              } else {
+                const error = new Error(
+                  "Pracownik firmy nie może dokonać rezerwacji"
+                );
+                error.statusCode = 441;
+                throw error;
+              }
+            });
+        }
       }
-    })
+    )
     .then((result) => {
-      result
+      return result
         .populate(
           "company",
           "linkPath name services._id services.serviceColor _id"
@@ -4286,7 +4587,7 @@ exports.addWorkerClientReserwation = (req, res, next) => {
             path: "fromUser",
             select: "name surname _id",
           },
-          function (err, resultReserwationPopulate) {
+          (err, resultReserwationPopulate) => {
             io.getIO().emit(`user${resultReserwationPopulate.toWorkerUserId}`, {
               action: "update-alerts",
               alertData: {
@@ -4349,14 +4650,56 @@ exports.addWorkerClientReserwation = (req, res, next) => {
                 },
               },
             });
-
             return User.bulkWrite(bulkArrayToUpdate).then(() => {
-              res.status(201).json({
-                reserwation: resultReserwationPopulate,
-              });
+              return resultReserwationPopulate;
             });
           }
         );
+    })
+    .then((reserwation) => {
+      if (!!findUserId) {
+        return CompanyUsersInformations.findOne({
+          userId: findUserId,
+          companyId: companyId,
+        }).then((resultCompanyUsersInformations) => {
+          if (!!!resultCompanyUsersInformations) {
+            const newUserCompanyInfo = new CompanyUsersInformations({
+              userId: findUserId,
+              companyId: companyId,
+              messages: [],
+            });
+            newUserCompanyInfo.save();
+            return reserwation;
+          } else {
+            return reserwation;
+          }
+        });
+      } else {
+        return reserwation;
+      }
+    })
+    .then((reserwation) => {
+      if (!!reserwation) {
+        if (!!reserwation.fromUser) {
+          if (!!reserwation.fromUser._id) {
+            res.status(201).json({
+              reserwation: reserwation,
+            });
+          } else {
+            res.status(201).json({
+              reserwation: null,
+            });
+          }
+        } else {
+          res.status(201).json({
+            reserwation: null,
+          });
+        }
+      } else {
+        res.status(201).json({
+          reserwation: null,
+        });
+      }
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -4365,12 +4708,4 @@ exports.addWorkerClientReserwation = (req, res, next) => {
       }
       next(err);
     });
-  // })
-  // .catch((err) => {
-  //   if (!err.statusCode) {
-  //     err.statusCode = 501;
-  //     err.message = "Błąd podczas składania rezerwacji czasu.";
-  //   }
-  //   next(err);
-  // });
 };

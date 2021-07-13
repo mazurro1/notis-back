@@ -62,6 +62,8 @@ router.post(
   [body("name")],
   [body("surname")],
   [body("email")],
+  [body("activePromotion")],
+  [body("activeHappyHour")],
   reserwation.addWorkerClientReserwation
 );
 
