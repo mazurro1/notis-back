@@ -4323,6 +4323,71 @@ exports.addWorkerClientReserwation = (req, res, next) => {
           }
         }
         if (!!hasPermission && !!selectedService) {
+          let selectedHappyHour = null;
+          let selectedPromotion = null;
+          const convertToValidDateDateFullPromotions = `${Number(
+            arrayDateFull[2]
+          )}-${
+            Number(arrayDateFull[1]) < 10
+              ? `0${Number(arrayDateFull[1])}`
+              : Number(arrayDateFull[1])
+          }-${
+            Number(arrayDateFull[0]) < 10
+              ? `0${Number(arrayDateFull[0])}`
+              : Number(arrayDateFull[0])
+          }`;
+          const newDateConvertToValidDateDateFullPromotions = new Date(
+            convertToValidDateDateFullPromotions
+          );
+          if (!!resultCompanyDoc.happyHoursConst) {
+            if (resultCompanyDoc.happyHoursConst.length > 0) {
+              selectedHappyHour = resultCompanyDoc.happyHoursConst.find(
+                (itemHappyHour) => {
+                  const splitDateStart = itemHappyHour.start.split(":");
+                  const dateStartToValid = new Date(
+                    new Date(
+                      newDateConvertToValidDateDateFullPromotions.setHours(
+                        Number(splitDateStart[0])
+                      )
+                    ).setMinutes(Number(splitDateStart[1]))
+                  );
+
+                  const isDayInHappyHourItem = itemHappyHour.dayWeekIndex.some(
+                    (dayIndex) => dayIndex === dateStartToValid.getDay()
+                  );
+                  return isDayInHappyHourItem;
+                }
+              );
+            }
+          }
+          if (!!resultCompanyDoc.promotions) {
+            if (resultCompanyDoc.promotions.length > 0) {
+              selectedPromotion = resultCompanyDoc.promotions.find(
+                (itemPromotion) => {
+                  const isInService = itemPromotion.servicesInPromotion.some(
+                    (itemIdInPromotion) =>
+                      itemIdInPromotion === selectedService.value
+                  );
+                  if (isInService) {
+                    const dateStartPromotion = new Date(itemPromotion.start);
+                    const dateEndPromotion = new Date(itemPromotion.end);
+                    const isDayInPromotion =
+                      dateStartPromotion <=
+                        newDateConvertToValidDateDateFullPromotions &&
+                      dateEndPromotion >=
+                        newDateConvertToValidDateDateFullPromotions;
+                    if (isDayInPromotion) {
+                      return true;
+                    } else {
+                      return false;
+                    }
+                  } else {
+                    return false;
+                  }
+                }
+              );
+            }
+          }
           return {
             isAdmin: isAdmin,
             selectedService: selectedService,
@@ -4331,11 +4396,7 @@ exports.addWorkerClientReserwation = (req, res, next) => {
                 ? resultCompanyDoc.promotions[0]
                 : null
               : null,
-            selectedHappyHour: !!resultCompanyDoc.happyHoursConst
-              ? resultCompanyDoc.happyHoursConst.length > 0
-                ? resultCompanyDoc.happyHoursConst[0]
-                : null
-              : null,
+            selectedHappyHour: selectedHappyHour,
           };
         } else {
           const error = new Error("Brak uprawnień.");
@@ -4428,9 +4489,15 @@ exports.addWorkerClientReserwation = (req, res, next) => {
                 )
               ).setMinutes(Number(splitDateEnd[1]))
             );
+            const isDayInHappyHourItem = selectedHappyHour.dayWeekIndex.some(
+              (dayIndex) => {
+                return dayIndex == dateStartToValid.getDay();
+              }
+            );
             const validHappyHourDate =
               dateStartToValid <= actualDate && actualDate <= dateEndToValid;
-            if (validHappyHourDate) {
+
+            if (validHappyHourDate && isDayInHappyHourItem) {
               happyHourNumber = selectedHappyHour.promotionPercent;
             }
           }
