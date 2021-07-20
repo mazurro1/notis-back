@@ -229,7 +229,7 @@ exports.login = (req, res, next) => {
     .populate({
       path: "alerts.reserwationId",
       select:
-        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company",
+        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company name surname",
       populate: {
         path: "company fromUser",
         select: "name surname linkPath",
@@ -670,7 +670,7 @@ exports.getMoreAlerts = (req, res, next) => {
     .populate({
       path: "alerts.reserwationId",
       select:
-        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company",
+        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company name surname",
       populate: {
         path: "company fromUser",
         select: "name surname linkPath",
@@ -750,7 +750,7 @@ exports.autoLogin = (req, res, next) => {
     .populate({
       path: "alerts.reserwationId",
       select:
-        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId",
+        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId name surname",
       populate: {
         path: "company fromUser",
         select: "name surname linkPath",
@@ -774,7 +774,7 @@ exports.autoLogin = (req, res, next) => {
         select: "name surname linkPath",
       },
     })
-    .then(async (user) => {
+    .then((user) => {
       if (!!user) {
         const userName = Buffer.from(user.name, "base64").toString("utf-8");
         const userSurname = Buffer.from(user.surname, "base64").toString(

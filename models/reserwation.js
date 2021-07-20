@@ -6,13 +6,33 @@ const reserwationSchema = new Schema(
     fromUser: {
       type: Schema.Types.ObjectId,
       ref: "Users",
-      required: true,
+      required: false,
     },
 
     toWorkerUserId: {
       type: Schema.Types.ObjectId,
       ref: "Users",
       required: true,
+    },
+
+    name: {
+      type: String,
+      required: false,
+    },
+
+    surname: {
+      type: String,
+      required: false,
+    },
+
+    phone: {
+      type: String,
+      required: false,
+    },
+
+    email: {
+      type: String,
+      required: false,
     },
 
     serviceName: {

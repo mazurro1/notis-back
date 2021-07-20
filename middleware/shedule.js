@@ -43,8 +43,6 @@ const s3Bucket = new AWS.S3({
   },
 });
 
-const sns = new AWS.SNS();
-
 const updateCompanyFunction = async (
   itemCompany,
   title = "sms_notifaction_reserwation"
@@ -119,7 +117,7 @@ for (let i = 0; i < 24; i++) {
         isDeleted: { $in: [false, null] },
       })
         .select(
-          "_id fromUser dateYear dateMonth dateDay toWorkerUserId serviceName dateStart dateEnd visitNotFinished visitCanceled visitChanged workerReserwation fullDate"
+          "_id fromUser dateYear dateMonth dateDay toWorkerUserId serviceName dateStart dateEnd visitNotFinished visitCanceled visitChanged workerReserwation fullDate phone name surname email"
         )
         .populate(
           "company",
@@ -150,6 +148,14 @@ for (let i = 0; i < 24; i++) {
                       companyChanged: true,
                     };
 
+                    let customPhone = null;
+                    if (!!resultReserwation.phone) {
+                      customPhone = Buffer.from(
+                        resultReserwation.phone,
+                        "base64"
+                      ).toString("utf-8");
+                    }
+
                     itemReserwation = {
                       _id: resultReserwation._id,
                       fromUser: {
@@ -168,6 +174,16 @@ for (let i = 0; i < 24; i++) {
                         _id: resultReserwation.toWorkerUserId._id,
                         surname: resultReserwation.toWorkerUserId.surname,
                       },
+                      phone: customPhone,
+                      name: !!resultReserwation.name
+                        ? resultReserwation.name
+                        : null,
+                      surname: !!resultReserwation.surname
+                        ? resultReserwation.surname
+                        : null,
+                      email: !!resultReserwation.email
+                        ? resultReserwation.email
+                        : null,
                       dateYear: resultReserwation.dateYear,
                       dateMonth: resultReserwation.dateMonth,
                       dateDay: resultReserwation.dateDay,
@@ -221,6 +237,16 @@ for (let i = 0; i < 24; i++) {
                     }
                   }
                 }
+              }
+            } else {
+              if (!!resultReserwation.email) {
+                transporter.sendMail({
+                  to: resultReserwation.email,
+                  from: MAIL_INFO,
+                  subject: `Przypomnienie o wizycie`,
+                  html: `<h1>Przypomnienie o wizycie</h1>
+                          Przypomnienie o wizycie która ma odbyć się: ${itemReserwation.dateDay}.${itemReserwation.dateMonth}.${itemReserwation.dateYear}, o godzinie: ${itemReserwation.dateStart}. Usługa: ${itemReserwation.serviceName}`,
+                });
               }
             }
           });
@@ -331,9 +357,51 @@ for (let i = 0; i < 24; i++) {
                         },
                       },
                     };
-                    // sns.publish(params, function (err, data) {
-                    //   if (err) console.log(err, err.stack);
-                    // });
+                    sns.publish(params, function (err, data) {
+                      if (err) console.log(err, err.stack);
+                    });
+                  }
+                } else {
+                  if (!!itemReserwation.phone) {
+                    bulkArrayToUpdateReserwations.push({
+                      updateOne: {
+                        filter: {
+                          _id: itemReserwation._id,
+                        },
+                        update: {
+                          $set: {
+                            sendSMSNotifaction: true,
+                          },
+                        },
+                      },
+                    });
+
+                    const userPhone = Buffer.from(
+                      itemReserwation.phone,
+                      "base64"
+                    ).toString("utf-8");
+
+                    const validComapnyName =
+                      itemReserwation.company.name.length > 32
+                        ? itemReserwation.company.name.slice(0, 32)
+                        : itemReserwation.company.name;
+
+                    const messageNotifaction = `Przypomnienie o wizycie która ma odbyć się: ${itemReserwation.dateDay}.${itemReserwation.dateMonth}.${itemReserwation.dateYear}, o godzinie: ${itemReserwation.dateStart}. Usługa: ${itemReserwation.serviceName}`;
+
+                    const params = {
+                      Message: `${messageNotifaction} - ${validComapnyName.toUpperCase()}`,
+                      MessageStructure: "string",
+                      PhoneNumber: `+48${userPhone}`,
+                      MessageAttributes: {
+                        "AWS.SNS.SMS.SenderID": {
+                          DataType: "String",
+                          StringValue: "Meetsy",
+                        },
+                      },
+                    };
+                    sns.publish(params, function (err, data) {
+                      if (err) console.log(err, err.stack);
+                    });
                   }
                 }
               }

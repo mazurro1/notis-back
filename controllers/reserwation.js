@@ -2308,6 +2308,7 @@ exports.getWorkerReserwationsAll = (req, res, next) => {
     isDraft: { $in: [false, null] },
     isDeleted: { $in: [false, null] },
   })
+    .select("-phone -email")
     .populate("fromUser", "name surname")
     .populate("company", "name linkPath services.serviceColor services._id")
     .populate("communitingId", "_id city street description")
@@ -4647,79 +4648,228 @@ exports.addWorkerClientReserwation = (req, res, next) => {
       return result
         .populate(
           "company",
-          "linkPath name services._id services.serviceColor _id"
+          "linkPath name services._id services.serviceColor _id companyStamps"
         )
+        .populate("fromUser", "name surname _id stamps")
         .populate(
           {
-            path: "fromUser",
+            path: "toWorkerUserId",
             select: "name surname _id",
           },
-          (err, resultReserwationPopulate) => {
-            io.getIO().emit(`user${resultReserwationPopulate.toWorkerUserId}`, {
-              action: "update-alerts",
-              alertData: {
-                reserwationId: resultReserwationPopulate,
-                active: true,
-                type: "reserwation_created",
-                creationTime: new Date(),
-                companyChanged: true,
-              },
-            });
-            const bulkArrayToUpdate = [];
+          async (err, resultReserwationPopulate) => {
+            const emailContent = `
+                        Dokonano rezerwacji, nazwa usługi: ${
+                          resultReserwationPopulate.serviceName
+                        },termin: ${resultReserwationPopulate.dateDay}-${
+              resultReserwationPopulate.dateMonth
+            }-${resultReserwationPopulate.dateYear}, godzina: ${
+              resultReserwationPopulate.dateStart
+            }, czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
+              resultReserwationPopulate.extraTime ? "+" : ""
+            }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
+              resultReserwationPopulate.extraCost ? "+" : ""
+            }.`;
 
-            const newUserAlert = {
-              reserwationId: resultReserwationPopulate._id,
-              active: true,
-              type: "reserwation_created",
-              creationTime: new Date(),
-              companyChanged: true,
+            const payload = {
+              title: `
+                        Dokonano rezerwacji, nazwa usługi: ${
+                          resultReserwationPopulate.serviceName
+                        },termin: ${resultReserwationPopulate.dateDay}-${
+                resultReserwationPopulate.dateMonth
+              }-${resultReserwationPopulate.dateYear}, godzina: ${
+                resultReserwationPopulate.dateStart
+              }, czas trwania: ${
+                resultReserwationPopulate.timeReserwation
+              }min ${resultReserwationPopulate.extraTime ? "+" : ""}, koszt: ${
+                resultReserwationPopulate.costReserwation
+              } zł ${resultReserwationPopulate.extraCost ? "+" : ""}.`,
+              body: "this is the body",
+              icon: "images/someImageInPath.png",
             };
 
+            const emailSubject = `Dokonano rezerwację`;
+            const message = `
+                        Dokonano rezerwacji, nazwa usługi: ${
+                          resultReserwationPopulate.serviceName
+                        },termin: ${resultReserwationPopulate.dateDay}-${
+              resultReserwationPopulate.dateMonth
+            }-${resultReserwationPopulate.dateYear}, godzina: ${
+              resultReserwationPopulate.dateStart
+            }, czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
+              resultReserwationPopulate.extraTime ? "+" : ""
+            }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
+              resultReserwationPopulate.extraCost ? "+" : ""
+            }.`;
+            let resultSMSUserAndNoUser = null;
             if (!!resultReserwationPopulate.fromUser) {
-              io.getIO().emit(`user${resultReserwationPopulate.fromUser._id}`, {
-                action: "update-alerts",
-                alertData: {
-                  reserwationId: resultReserwationPopulate,
-                  active: true,
-                  type: "reserwation_created",
-                  creationTime: new Date(),
+              const { resultSMS } = await notifications.sendAll({
+                usersId: [
+                  resultReserwationPopulate.fromUser._id,
+                  resultReserwationPopulate.toWorkerUserId._id,
+                ],
+                clientId: resultReserwationPopulate.fromUser._id,
+                emailContent: {
+                  customEmail: null,
+                  emailTitle: emailSubject,
+                  emailMessage: emailContent,
+                },
+                notificationContent: {
+                  typeAlert: "reserwationId",
+                  dateAlert: resultReserwationPopulate,
+                  typeNotification: "reserwation_created",
+                  payload: payload,
                   companyChanged: true,
                 },
-              });
-
-              bulkArrayToUpdate.push({
-                updateOne: {
-                  filter: { _id: resultReserwationPopulate.fromUser._id },
-                  update: {
-                    $inc: { alertActiveCount: 1 },
-                    $push: {
-                      alerts: {
-                        $each: [newUserAlert],
-                        $position: 0,
-                      },
-                    },
-                  },
+                smsContent: {
+                  companyId: companyId,
+                  customPhone: null,
+                  companySendSMSValidField: "smsReserwationAvaible",
+                  titleCompanySendSMS: "sms_created_reserwation",
+                  message: message,
                 },
               });
+              resultSMSUserAndNoUser = resultSMS;
+            } else {
+              let userPhone = null;
+              if (!!resultReserwationPopulate.phone) {
+                userPhone = Buffer.from(
+                  resultReserwationPopulate.phone,
+                  "base64"
+                ).toString("utf-8");
+              }
+              const { resultSMS } = await notifications.sendAll({
+                usersId: [resultReserwationPopulate.toWorkerUserId._id],
+                clientId: null,
+                emailContent: {
+                  customEmail: !!resultReserwationPopulate.email
+                    ? resultReserwationPopulate.email
+                    : null,
+                  emailTitle: emailSubject,
+                  emailMessage: emailContent,
+                },
+                notificationContent: {
+                  typeAlert: "reserwationId",
+                  dateAlert: resultReserwationPopulate,
+                  typeNotification: "reserwation_created",
+                  payload: payload,
+                  companyChanged: true,
+                },
+                smsContent: {
+                  companyId: companyId,
+                  customPhone: userPhone,
+                  companySendSMSValidField: "smsReserwationAvaible",
+                  titleCompanySendSMS: "sms_created_reserwation",
+                  message: message,
+                },
+              });
+              resultSMSUserAndNoUser = resultSMS;
             }
 
-            bulkArrayToUpdate.push({
-              updateOne: {
-                filter: { _id: resultReserwationPopulate.toWorkerUserId },
-                update: {
-                  $inc: { alertActiveCount: 1 },
-                  $push: {
-                    alerts: {
-                      $each: [newUserAlert],
-                      $position: 0,
-                    },
-                  },
+            if (!!resultSMSUserAndNoUser) {
+              Reserwation.updateOne(
+                {
+                  _id: resultReserwationPopulate._id,
+                  sendSMSReserwation: false,
                 },
-              },
-            });
-            return User.bulkWrite(bulkArrayToUpdate).then(() => {
+                {
+                  $set: {
+                    sendSMSReserwation: true,
+                  },
+                }
+              ).then(() => {});
+            }
+            const bulkArrayToUpdate = [];
+            if (!!resultReserwationPopulate.fromUser) {
+              if (!!resultReserwationPopulate.fromUser.stamps) {
+                const userResult = resultReserwationPopulate.fromUser;
+                if (
+                  !!!resultReserwationPopulate.activePromotion &&
+                  !!!resultReserwationPopulate.activeHappyHour &&
+                  !!!resultReserwationPopulate.activeStamp &&
+                  userResult._id.toString() ===
+                    resultReserwationPopulate.fromUser._id.toString()
+                ) {
+                  if (!!resultReserwationPopulate.company.companyStamps) {
+                    const findCompanyStamp =
+                      resultReserwationPopulate.company.companyStamps.find(
+                        (itemStamp) => {
+                          const isInStampsService = itemStamp.servicesId.some(
+                            (stampService) =>
+                              stampService.toString() ===
+                              resultReserwationPopulate.serviceId.toString()
+                          );
+                          return isInStampsService;
+                        }
+                      );
+
+                    if (!!findCompanyStamp) {
+                      if (!!!findCompanyStamp.disabled) {
+                        const findStampId = userResult.stamps.findIndex(
+                          (itemStamp) => {
+                            return (
+                              itemStamp.companyId.toString() ===
+                              resultReserwationPopulate.company._id.toString()
+                            );
+                          }
+                        );
+
+                        if (findStampId >= 0) {
+                          bulkArrayToUpdate.push({
+                            updateOne: {
+                              filter: {
+                                _id: userResult._id,
+                                "stamps._id":
+                                  userResult.stamps[findStampId]._id,
+                              },
+                              update: {
+                                $addToSet: {
+                                  "stamps.$.reserwations":
+                                    resultReserwationPopulate._id,
+                                },
+                              },
+                            },
+                          });
+                        } else {
+                          const newStamp = {
+                            companyId: resultReserwationPopulate.company,
+                            reserwations: [resultReserwationPopulate._id],
+                          };
+
+                          bulkArrayToUpdate.push({
+                            updateOne: {
+                              filter: {
+                                _id: userResult._id,
+                              },
+                              update: {
+                                $addToSet: {
+                                  stamps: newStamp,
+                                },
+                              },
+                            },
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            if (bulkArrayToUpdate.length > 0) {
+              return User.bulkWrite(bulkArrayToUpdate)
+                .then(() => {
+                  return resultReserwationPopulate;
+                })
+                .catch((err) => {
+                  console.log(err);
+                  const error = new Error(
+                    "Błąd podczas wysyłania powiadomień użytkownikom. Rezerwaca została odwołana."
+                  );
+                  error.statusCode = 422;
+                  throw error;
+                });
+            } else {
               return resultReserwationPopulate;
-            });
+            }
           }
         );
     })
@@ -4746,27 +4896,9 @@ exports.addWorkerClientReserwation = (req, res, next) => {
       }
     })
     .then((reserwation) => {
-      if (!!reserwation) {
-        if (!!reserwation.fromUser) {
-          if (!!reserwation.fromUser._id) {
-            res.status(201).json({
-              reserwation: reserwation,
-            });
-          } else {
-            res.status(201).json({
-              reserwation: null,
-            });
-          }
-        } else {
-          res.status(201).json({
-            reserwation: null,
-          });
-        }
-      } else {
-        res.status(201).json({
-          reserwation: null,
-        });
-      }
+      res.status(201).json({
+        reserwation: reserwation,
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {

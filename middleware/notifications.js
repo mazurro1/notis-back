@@ -55,6 +55,7 @@ const sns = new AWS.SNS({
     },
   },
   MessageStructure: "string",
+  apiVersion: "2010-03-31",
 });
 
 const sendAlert = ({
@@ -148,23 +149,26 @@ const sendEmail = ({ email, emailTitle, emailMessage, attachments = null }) => {
   }
 };
 
-const sendVerifySMS = async ({ phoneNumber = null, message = null }) => {
+const sendVerifySMS = ({ phoneNumber = null, message = null }) => {
   if (!!phoneNumber && !!message) {
     const params = {
       Message: message,
       PhoneNumber: `+48${phoneNumber}`,
     };
-    snsResultCustom = await sns
-      .publish(params, (err, data) => {
-        if (data) {
-          return data;
+
+    return sns
+      .publish(params)
+      .promise()
+      .then((data) => {
+        if (!!data) {
+          return data.MessageId;
         } else {
           return false;
         }
       })
-      .promise();
-
-    return snsResultCustom;
+      .catch(() => {
+        return false;
+      });
   } else {
     return false;
   }
@@ -208,26 +212,26 @@ const sendSMS = ({
       { upsert: true, safe: true },
       null
     )
-      .then(async (updated) => {
+      .then((updated) => {
         const params = {
           Message: message,
           PhoneNumber: `+48${customPhone}`,
+          // PhoneNumber: `+48515873009`,
         };
-        snsResultCustom = await sns
-          .publish(params, (err, data) => {
-            if (data) {
-              return data;
+
+        return sns
+          .publish(params)
+          .promise()
+          .then((data) => {
+            if (!!data) {
+              return data.MessageId;
             } else {
-              return false;
+              return snsResultCustom;
             }
           })
-          .promise();
-
-        if (!!snsResultCustom) {
-          return snsResultCustom;
-        } else {
-          return snsResultCustom;
-        }
+          .catch(() => {
+            return snsResultCustom;
+          });
       })
       .catch((err) => {
         return snsResultCustom;
@@ -292,25 +296,26 @@ const sendSMS = ({
                 { upsert: true, safe: true },
                 null
               )
-                .then(async () => {
+                .then(() => {
                   const params = {
                     Message: message,
                     PhoneNumber: `+48${userPhone}`,
+                    // PhoneNumber: `+48515873009`,
                   };
-                  snsResult = await sns
-                    .publish(params, (err, data) => {
-                      if (data) {
-                        return data;
+
+                  return sns
+                    .publish(params)
+                    .promise()
+                    .then((data) => {
+                      if (!!data) {
+                        return data.MessageId;
                       } else {
                         return false;
                       }
                     })
-                    .promise();
-                  if (!!snsResult) {
-                    return snsResult;
-                  } else {
-                    return snsResult;
-                  }
+                    .catch(() => {
+                      return false;
+                    });
                 })
                 .catch((err) => {
                   return snsResult;
@@ -390,7 +395,7 @@ const sendAll = async ({
     }
   }
 
-  if (!!clientId) {
+  if (usersId.length > 0) {
     return User.find({
       _id: { $in: usersId },
     })
@@ -398,10 +403,12 @@ const sendAll = async ({
         "_id email phoneVerified phone whiteListVerifiedPhones vapidEndpoint accountVerified"
       )
       .then(async (users) => {
-        const client = users.find(
-          (user) => user._id.toString() == clientId.toString()
-        );
-
+        let client = null;
+        if (!!clientId) {
+          client = users.find(
+            (user) => user._id.toString() == clientId.toString()
+          );
+        }
         if (!!client) {
           if (!!emailContent) {
             if (
