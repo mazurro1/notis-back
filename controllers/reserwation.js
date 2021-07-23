@@ -2688,37 +2688,78 @@ exports.updateWorkerReserwation = (req, res, next) => {
       const emailSubject = `${validTextStatusReserwation}`;
       const message = `${validTextStatusReserwation}, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
 
-      const { resultSMS } = await notifications.sendAll({
-        usersId: [
-          resultReserwation.fromUser._id,
-          resultReserwation.toWorkerUserId._id,
-        ],
-        clientId: resultReserwation.fromUser._id,
-        emailContent: !!!resultReserwation.workerReserwation &&
-          !!validStatusReserwation && {
-            customEmail: null,
-            emailTitle: emailSubject,
-            emailMessage: emailContent,
+      let resultSMSConfirm = false;
+      if (!!resultReserwation.fromUser) {
+        const { resultSMS } = await notifications.sendAll({
+          usersId: [
+            resultReserwation.fromUser._id,
+            resultReserwation.toWorkerUserId._id,
+          ],
+          clientId: resultReserwation.fromUser._id,
+          emailContent: !!!resultReserwation.workerReserwation &&
+            !!validStatusReserwation && {
+              customEmail: null,
+              emailTitle: emailSubject,
+              emailMessage: emailContent,
+            },
+          notificationContent: {
+            typeAlert: "reserwationId",
+            dateAlert: resultReserwation,
+            typeNotification: reserwationStatus,
+            payload: payload,
+            companyChanged: true,
           },
-        notificationContent: {
-          typeAlert: "reserwationId",
-          dateAlert: resultReserwation,
-          typeNotification: reserwationStatus,
-          payload: payload,
-          companyChanged: true,
-        },
-        smsContent: !!!resultReserwation.workerReserwation &&
-          !!validStatusReserwation && {
-            companyId: resultReserwation.company._id,
-            customPhone: null,
-            companySendSMSValidField: reserwationValidCompanySMS,
-            titleCompanySendSMS: reserwationValidCompanySMSMessage,
-            message: message,
+          smsContent: !!!resultReserwation.workerReserwation &&
+            !!validStatusReserwation && {
+              companyId: resultReserwation.company._id,
+              customPhone: null,
+              companySendSMSValidField: reserwationValidCompanySMS,
+              titleCompanySendSMS: reserwationValidCompanySMSMessage,
+              message: message,
+            },
+        });
+        resultSMSConfirm = resultSMS;
+      } else {
+        const customEmail = !!resultReserwation.email
+          ? resultReserwation.email
+          : null;
+        let userPhone = null;
+        if (!!resultReserwation.phone) {
+          userPhone = Buffer.from(resultReserwation.phone, "base64").toString(
+            "utf-8"
+          );
+        }
+
+        const { resultSMS } = await notifications.sendAll({
+          usersId: [resultReserwation.toWorkerUserId._id],
+          clientId: null,
+          emailContent: !!!resultReserwation.workerReserwation &&
+            !!validStatusReserwation && {
+              customEmail: customEmail,
+              emailTitle: emailSubject,
+              emailMessage: emailContent,
+            },
+          notificationContent: {
+            typeAlert: "reserwationId",
+            dateAlert: resultReserwation,
+            typeNotification: reserwationStatus,
+            payload: payload,
+            companyChanged: true,
           },
-      });
+          smsContent: !!!resultReserwation.workerReserwation &&
+            !!validStatusReserwation && {
+              companyId: resultReserwation.company._id,
+              customPhone: userPhone,
+              companySendSMSValidField: reserwationValidCompanySMS,
+              titleCompanySendSMS: reserwationValidCompanySMSMessage,
+              message: message,
+            },
+        });
+        resultSMSConfirm = resultSMS;
+      }
 
       if (
-        !!resultSMS &&
+        !!resultSMSConfirm &&
         !!!resultReserwation.workerReserwation &&
         !!validStatusReserwation
       ) {
@@ -4028,7 +4069,7 @@ exports.changeReserwation = (req, res, next) => {
               notificationContent: {
                 typeAlert: "reserwationId",
                 dateAlert: resultReserwationPopulate,
-                typeNotification: "reserwation_user_changed",
+                typeNotification: "reserwation_changed",
                 payload: payload,
                 companyChanged: false,
               },
