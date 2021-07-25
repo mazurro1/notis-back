@@ -7806,15 +7806,14 @@ exports.companyAddCommuniting = (req, res, next) => {
 
             if (isActiveUser) {
               if (!!resultToUser) {
-                let userIsInWorkersInCompany = companyData.owner == userId;
-                if (!!resultToUser) {
-                  if (!userIsInWorkersInCompany) {
-                    userIsInWorkersInCompany = companyData.workers.some(
-                      (worker) => {
-                        return worker.user == resultToUser._id;
-                      }
-                    );
-                  }
+                let userIsInWorkersInCompany =
+                  companyData.owner == resultToUser._id;
+                if (!userIsInWorkersInCompany) {
+                  userIsInWorkersInCompany = companyData.workers.some(
+                    (worker) => {
+                      return worker.user == resultToUser._id;
+                    }
+                  );
                 }
                 if (!userIsInWorkersInCompany) {
                   if (addWorkerTime) {
