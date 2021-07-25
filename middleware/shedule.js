@@ -80,9 +80,11 @@ const updateCompanyFunction = async (
   }
 };
 
+//reserwation
 for (let i = 0; i < 24; i++) {
   schedule.scheduleJob(
     `${i < 12 ? i * 5 : (i - 12) * 5} ${i < 12 ? 10 : 1 < 24 ? 11 : 12} * * *`,
+    // `33 15 * * *`,
     async () => {
       const validDate = new Date(new Date().setDate(new Date().getDate() + 1));
       const dateStartValid = new Date(
@@ -432,8 +434,7 @@ for (let i = 0; i < 24; i++) {
 
   //notification one day before communiting
   schedule.scheduleJob(
-    // `${i < 12 ? i * 5 : (i - 12) * 5} ${i < 12 ? 10 : 1 < 24 ? 11 : 12} * * *`,
-    `52 15 * * *`,
+    `${i < 12 ? i * 5 : (i - 12) * 5} ${i < 12 ? 10 : 1 < 24 ? 11 : 12} * * *`,
     async () => {
       const validDate = new Date(new Date().setDate(new Date().getDate() + 1));
       const dateStartValid = new Date(
