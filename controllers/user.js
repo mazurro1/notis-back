@@ -227,6 +227,10 @@ exports.login = (req, res, next) => {
       "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate oldReserwationId"
     )
     .populate({
+      path: "alerts.alertDefaultCompanyId",
+      select: "_id name linkPath",
+    })
+    .populate({
       path: "alerts.reserwationId",
       select:
         "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company name surname",
@@ -668,6 +672,10 @@ exports.getMoreAlerts = (req, res, next) => {
     .select("alerts _id")
     .slice("alerts", [10 * page, 10])
     .populate({
+      path: "alerts.alertDefaultCompanyId",
+      select: "_id name linkPath",
+    })
+    .populate({
       path: "alerts.reserwationId",
       select:
         "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company name surname",
@@ -747,6 +755,10 @@ exports.autoLogin = (req, res, next) => {
       "allCompanys",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
+    .populate({
+      path: "alerts.alertDefaultCompanyId",
+      select: "_id name linkPath",
+    })
     .populate({
       path: "alerts.reserwationId",
       select:

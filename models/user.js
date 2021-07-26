@@ -138,6 +138,11 @@ const userSchema = new Schema(
     },
     alerts: [
       {
+        alertDefaultCompanyId: {
+          type: Schema.Types.ObjectId,
+          ref: "Companys",
+          required: false,
+        },
         reserwationId: {
           type: Schema.Types.ObjectId,
           ref: "Reserwations",

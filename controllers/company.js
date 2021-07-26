@@ -6794,16 +6794,16 @@ exports.companyAddService = (req, res, next) => {
           .then((resultToUser) => {
             if (isActiveUser) {
               if (!!resultToUser) {
-                let userIsInWorkersInCompany = companyData.owner == userId;
-                if (!!resultToUser) {
-                  if (!userIsInWorkersInCompany) {
-                    userIsInWorkersInCompany = companyData.workers.some(
-                      (worker) => {
-                        return worker.user == resultToUser._id;
-                      }
-                    );
-                  }
+                let userIsInWorkersInCompany =
+                  companyData.owner == resultToUser._id;
+                if (!userIsInWorkersInCompany) {
+                  userIsInWorkersInCompany = companyData.workers.some(
+                    (worker) => {
+                      return worker.user == resultToUser._id;
+                    }
+                  );
                 }
+
                 if (!userIsInWorkersInCompany) {
                   const newService = new Service({
                     userId: !!resultToUser ? resultToUser._id : null,
@@ -7211,15 +7211,15 @@ exports.companyDeleteServices = (req, res, next) => {
         notificationContent: {
           typeAlert: "serviceId",
           dateAlert: savedServiceDoc,
-          typeNotification: "service_deleted",
+          typeNotification: "service_canceled",
           payload: payload,
           companyChanged: true,
         },
         smsContent: {
           companyId: companyId,
           customPhone: customPhone,
-          companySendSMSValidField: "smsServiceDeletedAvaible",
-          titleCompanySendSMS: "sms_deleted_service",
+          companySendSMSValidField: "smsServiceCanceledAvaible",
+          titleCompanySendSMS: "sms_canceled_service",
           message: message,
         },
       });

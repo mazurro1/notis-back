@@ -717,7 +717,7 @@ schedule.scheduleJob(`10 8 * * *`, () => {
       $lte: 50,
     },
   })
-    .select("_id owner email notifactionNoSMS sms")
+    .select("_id owner email notifactionNoSMS sms linkPath name")
     .then((companysSMSNotifaction) => {
       if (!!companysSMSNotifaction) {
         const bulkArrayToUpdateCompany = [];
@@ -735,8 +735,21 @@ schedule.scheduleJob(`10 8 * * *`, () => {
               },
             },
           });
+
           const itemAlert = {
-            reserwationId: null,
+            alertDefaultCompanyId: {
+              _id: companysSMSNotifaction._id,
+              name: companysSMSNotifaction.name,
+              linkPath: companysSMSNotifaction.linkPath,
+            },
+            active: true,
+            type: "alert_notifaction_sms",
+            creationTime: new Date(),
+            companyChanged: true,
+          };
+
+          const itemAlertPush = {
+            alertDefaultCompanyId: companysSMSNotifaction._id,
             active: true,
             type: "alert_notifaction_sms",
             creationTime: new Date(),
@@ -757,7 +770,7 @@ schedule.scheduleJob(`10 8 * * *`, () => {
                 $inc: { alertActiveCount: 1 },
                 $push: {
                   alerts: {
-                    $each: [itemAlert],
+                    $each: [itemAlertPush],
                     $position: 0,
                   },
                 },
@@ -806,7 +819,7 @@ schedule.scheduleJob(`20 8 * * *`, () => {
       $lte: validDateToCheckPremium,
     },
   })
-    .select("_id owner email notifactionNoPremium premium")
+    .select("_id name owner email notifactionNoPremium premium linkPath")
     .then((companysSMSNotifaction) => {
       if (!!companysSMSNotifaction) {
         const bulkArrayToUpdateCompany = [];
@@ -825,7 +838,19 @@ schedule.scheduleJob(`20 8 * * *`, () => {
             },
           });
           const itemAlert = {
-            reserwationId: null,
+            alertDefaultCompanyId: {
+              _id: companysSMSNotifaction._id,
+              name: companysSMSNotifaction.name,
+              linkPath: companysSMSNotifaction.linkPath,
+            },
+            active: true,
+            type: "alert_notifaction_premium",
+            creationTime: new Date(),
+            companyChanged: true,
+          };
+
+          const itemAlertPush = {
+            alertDefaultCompanyId: companysSMSNotifaction._id,
             active: true,
             type: "alert_notifaction_premium",
             creationTime: new Date(),
@@ -846,7 +871,7 @@ schedule.scheduleJob(`20 8 * * *`, () => {
                 $inc: { alertActiveCount: 1 },
                 $push: {
                   alerts: {
-                    $each: [itemAlert],
+                    $each: [itemAlertPush],
                     $position: 0,
                   },
                 },
