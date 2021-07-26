@@ -297,13 +297,11 @@ for (let i = 0; i < 24; i++) {
           });
 
           for (const itemCompany of filteredCompany) {
-            // filteredCompany.forEach(async (itemCompany) => {
             const resultFunctionUpdate = await updateCompanyFunction(
               itemCompany
             );
             if (!!resultFunctionUpdate) {
               for (const itemReserwation of itemCompany.allReserwations) {
-                // itemCompany.allReserwations.forEach((itemReserwation) => {
                 if (itemReserwation.fromUser) {
                   let selectedPhoneNumber = null;
                   if (!!itemReserwation.fromUser.phoneVerified) {
@@ -615,14 +613,12 @@ for (let i = 0; i < 24; i++) {
           });
 
           for (const itemCompany of filteredCompany) {
-            // filteredCompany.forEach(async (itemCompany) => {
             const resultFunctionUpdate = await updateCompanyFunction(
               itemCompany,
               "sms_notifaction_communiting"
             );
             if (!!resultFunctionUpdate) {
               for (const itemReserwation of itemCompany.allReserwations) {
-                // itemCompany.allReserwations.forEach((itemReserwation) => {
                 if (itemReserwation.userId) {
                   let selectedPhoneNumber = null;
                   if (!!itemReserwation.userId.phoneVerified) {
@@ -678,9 +674,9 @@ for (let i = 0; i < 24; i++) {
                         },
                       },
                     };
-                    // sns.publish(params, function (err, data) {
-                    //   if (err) console.log(err, err.stack);
-                    // });
+                    sns.publish(params, function (err, data) {
+                      if (err) console.log(err, err.stack);
+                    });
                   }
                 }
               }

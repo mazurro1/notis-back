@@ -1,4 +1,5 @@
 const User = require("../models/user");
+const Alert = require("../models/alert");
 const Company = require("../models/company");
 const Reserwation = require("../models/reserwation");
 const Service = require("../models/service");
@@ -755,120 +756,158 @@ exports.autoLogin = (req, res, next) => {
       "allCompanys",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
-    .populate({
-      path: "alerts.alertDefaultCompanyId",
-      select: "_id name linkPath",
-    })
-    .populate({
-      path: "alerts.reserwationId",
-      select:
-        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId name surname",
-      populate: {
-        path: "company fromUser",
-        select: "name surname linkPath",
-      },
-    })
-    .populate({
-      path: "alerts.serviceId",
-      select:
-        "_id objectName description userId companyId month year day createdAt",
-      populate: {
-        path: "companyId userId",
-        select: "name surname linkPath",
-      },
-    })
-    .populate({
-      path: "alerts.communitingId",
-      select:
-        "_id city description userId companyId month year day timeStart timeEnd",
-      populate: {
-        path: "companyId userId",
-        select: "name surname linkPath",
-      },
-    })
+    // .populate({
+    //   path: "alerts.alertDefaultCompanyId",
+    //   select: "_id name linkPath",
+    // })
+    // .populate({
+    //   path: "alerts.reserwationId",
+    //   select:
+    //     "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId name surname",
+    //   populate: {
+    //     path: "company fromUser",
+    //     select: "name surname linkPath",
+    //   },
+    // })
+    // .populate({
+    //   path: "alerts.serviceId",
+    //   select:
+    //     "_id objectName description userId companyId month year day createdAt",
+    //   populate: {
+    //     path: "companyId userId",
+    //     select: "name surname linkPath",
+    //   },
+    // })
+    // .populate({
+    //   path: "alerts.communitingId",
+    //   select:
+    //     "_id city description userId companyId month year day timeStart timeEnd",
+    //   populate: {
+    //     path: "companyId userId",
+    //     select: "name surname linkPath",
+    //   },
+    // })
     .then((user) => {
       if (!!user) {
-        const userName = Buffer.from(user.name, "base64").toString("utf-8");
-        const userSurname = Buffer.from(user.surname, "base64").toString(
-          "utf-8"
-        );
-        let validUserActiveCount = 0;
-        if (!!user.alertActiveCount) {
-          if (user.alertActiveCount > 0) {
-            validUserActiveCount = user.alertActiveCount;
-          }
-        }
-        const isNotCompanyStamps = user.stamps.some((stamp) => {
-          const isInReserwationsStampsCanceled = stamp.reserwations.some(
-            (itemStamp) => itemStamp.visitCanceled
-          );
-          return stamp.companyId === null || isInReserwationsStampsCanceled;
-        });
-        const isNotCompanyFavourites = user.favouritesCompanys.some(
-          (fav) => fav === null
-        );
-        if (isNotCompanyStamps || isNotCompanyFavourites) {
-          if (isNotCompanyStamps) {
-            const newUserStamps = [];
-            user.stamps.forEach((stamp) => {
-              if (stamp.companyId !== null) {
-                const filterCompanyNoActiveStamps = stamp.reserwations.filter(
-                  (itemStamp) => !itemStamp.visitCanceled
-                );
-                stamp.reserwations = filterCompanyNoActiveStamps;
-                newUserStamps.push({
-                  _id: stamp._id,
-                  reserwations: filterCompanyNoActiveStamps,
-                  companyId: stamp.companyId,
-                });
-              }
-            });
-            user.stamps = newUserStamps;
-          }
-          if (isNotCompanyFavourites) {
-            const filterFavUser = user.favouritesCompanys.filter(
-              (fav) => fav !== null
+        return Alert.find({
+          toUserId: user._id,
+        })
+          .sort({ createdAt: -1 })
+          .limit(10)
+          .populate("alertDefaultCompanyId", "_id name linkPath")
+          .populate({
+            path: "reserwationId",
+            select:
+              "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId name surname",
+            populate: {
+              path: "company fromUser",
+              select: "name surname linkPath",
+            },
+          })
+          .populate({
+            path: "serviceId",
+            select:
+              "_id objectName description userId companyId month year day createdAt",
+            populate: {
+              path: "companyId userId",
+              select: "name surname linkPath",
+            },
+          })
+          .populate({
+            path: "communitingId",
+            select:
+              "_id city description userId companyId month year day timeStart timeEnd",
+            populate: {
+              path: "companyId userId",
+              select: "name surname linkPath",
+            },
+          })
+          .then((userAlerts) => {
+            const userName = Buffer.from(user.name, "base64").toString("utf-8");
+            const userSurname = Buffer.from(user.surname, "base64").toString(
+              "utf-8"
             );
-            user.favouritesCompanys = filterFavUser;
-          }
-          user.save();
-        }
-        let findCompanyInAllCompanys = null;
-        if (!!user.company) {
-          findCompanyInAllCompanys = user.allCompanys.find((itemCompany) => {
-            return itemCompany._id.toString() == user.company.toString();
-          });
-        }
+            let validUserActiveCount = 0;
+            if (!!user.alertActiveCount) {
+              if (user.alertActiveCount > 0) {
+                validUserActiveCount = user.alertActiveCount;
+              }
+            }
+            const isNotCompanyStamps = user.stamps.some((stamp) => {
+              const isInReserwationsStampsCanceled = stamp.reserwations.some(
+                (itemStamp) => itemStamp.visitCanceled
+              );
+              return stamp.companyId === null || isInReserwationsStampsCanceled;
+            });
+            const isNotCompanyFavourites = user.favouritesCompanys.some(
+              (fav) => fav === null
+            );
+            if (isNotCompanyStamps || isNotCompanyFavourites) {
+              if (isNotCompanyStamps) {
+                const newUserStamps = [];
+                user.stamps.forEach((stamp) => {
+                  if (stamp.companyId !== null) {
+                    const filterCompanyNoActiveStamps =
+                      stamp.reserwations.filter(
+                        (itemStamp) => !itemStamp.visitCanceled
+                      );
+                    stamp.reserwations = filterCompanyNoActiveStamps;
+                    newUserStamps.push({
+                      _id: stamp._id,
+                      reserwations: filterCompanyNoActiveStamps,
+                      companyId: stamp.companyId,
+                    });
+                  }
+                });
+                user.stamps = newUserStamps;
+              }
+              if (isNotCompanyFavourites) {
+                const filterFavUser = user.favouritesCompanys.filter(
+                  (fav) => fav !== null
+                );
+                user.favouritesCompanys = filterFavUser;
+              }
+              user.save();
+            }
+            let findCompanyInAllCompanys = null;
+            if (!!user.company) {
+              findCompanyInAllCompanys = user.allCompanys.find(
+                (itemCompany) => {
+                  return itemCompany._id.toString() == user.company.toString();
+                }
+              );
+            }
 
-        res.status(200).json({
-          userId: user._id.toString(),
-          email: user.email,
-          token: user.loginToken,
-          accountVerified: user.accountVerified,
-          userName: userName,
-          userSurname: userSurname,
-          company: !!findCompanyInAllCompanys
-            ? findCompanyInAllCompanys
-            : user.allCompanys.length > 0
-            ? user.allCompanys[0]
-            : null,
-          defaultCompany: !!user.company
-            ? user.company
-            : user.allCompanys.length > 0
-            ? user.allCompanys[0]._id
-            : null,
-          allCompanys: user.allCompanys,
-          alerts: user.alerts,
-          alertActiveCount: validUserActiveCount,
-          imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
-          hasPhone: user.hasPhone,
-          stamps: user.stamps,
-          favouritesCompanys: user.favouritesCompanys,
-          phoneVerified: user.phoneVerified,
-          blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
-          blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
-          vapidPublic: PUBLIC_KEY_VAPID,
-        });
+            res.status(200).json({
+              userId: user._id.toString(),
+              email: user.email,
+              token: user.loginToken,
+              accountVerified: user.accountVerified,
+              userName: userName,
+              userSurname: userSurname,
+              company: !!findCompanyInAllCompanys
+                ? findCompanyInAllCompanys
+                : user.allCompanys.length > 0
+                ? user.allCompanys[0]
+                : null,
+              defaultCompany: !!user.company
+                ? user.company
+                : user.allCompanys.length > 0
+                ? user.allCompanys[0]._id
+                : null,
+              allCompanys: user.allCompanys,
+              alerts: !!userAlerts ? userAlerts : [],
+              alertActiveCount: validUserActiveCount,
+              imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
+              hasPhone: user.hasPhone,
+              stamps: user.stamps,
+              favouritesCompanys: user.favouritesCompanys,
+              phoneVerified: user.phoneVerified,
+              blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
+              blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
+              vapidPublic: PUBLIC_KEY_VAPID,
+            });
+          });
       } else {
         res.status(422).json({
           message: "Brak użytkownika",

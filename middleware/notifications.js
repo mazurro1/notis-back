@@ -1,5 +1,7 @@
 const User = require("../models/user");
+const Alert = require("../models/alert");
 const Company = require("../models/company");
+const Communiting = require("../models/Communiting");
 const webpush = require("web-push");
 const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
@@ -72,7 +74,7 @@ const sendAlert = ({
   },
   companyChanged = true,
 }) => {
-  const bulkArrayToUpdate = [];
+  const newInserItems = [];
   let newAlertData = null;
 
   for (const userDoc of usersResult) {
@@ -83,6 +85,7 @@ const sendAlert = ({
         type: typeNotification,
         creationTime: new Date(),
         companyChanged: companyChanged,
+        toUserId: userDoc._id,
       };
 
       io.getIO().emit(`user${userDoc._id}`, {
@@ -97,22 +100,7 @@ const sendAlert = ({
       });
     }
     if (!!newAlertData) {
-      bulkArrayToUpdate.push({
-        updateOne: {
-          filter: {
-            _id: userDoc._id,
-          },
-          update: {
-            $inc: { alertActiveCount: 1 },
-            $push: {
-              alerts: {
-                $each: [newAlertData],
-                $position: 0,
-              },
-            },
-          },
-        },
-      });
+      newInserItems.push(newAlertData);
     }
 
     if (!!payload) {
@@ -124,9 +112,90 @@ const sendAlert = ({
       }
     }
   }
+  if (newInserItems.length > 0) {
+    Alert.insertMany(newInserItems)
+      .then(() => {})
+      .catch(() => {
+        const error = new Error("Błąd podczas aktualizacji powiadomień.");
+        error.statusCode = 422;
+        throw error;
+      });
+  }
+};
 
-  if (bulkArrayToUpdate.length > 0) {
-    User.bulkWrite(bulkArrayToUpdate)
+const sendMultiAlert = ({
+  typeAlert = "reserwationId",
+  typeNotification = "reserwation_created",
+  workerUserField = "",
+  usersResultWithItems = [],
+  avaibleSendAlertToWorker = false,
+  payload = {
+    title: "",
+    body: "",
+    icon: "",
+  },
+  companyChanged = true,
+}) => {
+  const newInserItems = [];
+  for (const userDoc of usersResultWithItems) {
+    for (const userItem of userDoc.items) {
+      if (!!typeNotification && !!typeAlert) {
+        const newAlertDataUser = {
+          [typeAlert]: userItem._id,
+          active: true,
+          type: typeNotification,
+          creationTime: new Date(),
+          companyChanged: companyChanged,
+          toUserId: userDoc.userId,
+        };
+        newInserItems.push(newAlertDataUser);
+
+        io.getIO().emit(`user${userDoc.userId}`, {
+          action: "update-alerts",
+          alertData: {
+            [typeAlert]: userItem,
+            active: true,
+            type: typeNotification,
+            creationTime: new Date(),
+            companyChanged: companyChanged,
+          },
+        });
+
+        if (!!avaibleSendAlertToWorker && !!workerUserField) {
+          const newAlertDataWorker = {
+            [typeAlert]: userItem._id,
+            active: true,
+            type: typeNotification,
+            creationTime: new Date(),
+            companyChanged: companyChanged,
+            toUserId: userItem[workerUserField],
+          };
+          io.getIO().emit(`user${userItem[workerUserField]}`, {
+            action: "update-alerts",
+            alertData: {
+              [typeAlert]: userItem,
+              active: true,
+              type: typeNotification,
+              creationTime: new Date(),
+              companyChanged: companyChanged,
+            },
+          });
+          newInserItems.push(newAlertDataWorker);
+        }
+      }
+
+      if (!!payload) {
+        if (!!userDoc.vapidEndpoint && !!payload.title && !!payload.body) {
+          webpush
+            .sendNotification(userDoc.vapidEndpoint, JSON.stringify(payload))
+            .then(() => {})
+            .catch(() => {});
+        }
+      }
+    }
+  }
+  if (newInserItems.length > 0) {
+    Alert.insertMany(newInserItems)
       .then(() => {})
       .catch(() => {
         const error = new Error("Błąd podczas aktualizacji powiadomień.");
@@ -464,6 +533,218 @@ const sendAll = async ({
   }
 };
 
+const updateCompanyFunction = async ({
+  companyId = null,
+  countItems = 0,
+  titleCompanySendSMSAlert = null,
+  smsCompanyFieldValid = null,
+}) => {
+  if (
+    !!companyId &&
+    countItems > 0 &&
+    !!titleCompanySendSMSAlert &&
+    !!smsCompanyFieldValid
+  ) {
+    try {
+      const result = await Company.updateOne(
+        {
+          _id: companyId,
+          sms: { $gte: countItems },
+          [smsCompanyFieldValid]: true,
+        },
+        {
+          $inc: {
+            sms: -countItems,
+          },
+          $addToSet: {
+            raportSMS: {
+              year: new Date().getFullYear(),
+              month: new Date().getMonth() + 1,
+              count: countItems,
+              isAdd: false,
+              title: titleCompanySendSMSAlert,
+            },
+          },
+        },
+        { upsert: true, safe: true },
+        null
+      );
+      if (!!result) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  } else {
+    return false;
+  }
+};
+
+const updateAllCommuniting = async ({
+  companyId = null,
+  filtersCommuniting = {},
+  emailContent = {
+    emailTitle: "Odwołano wizyte w firmie",
+    emailMessage: "Odwołano wizytę w firmie",
+  },
+  notificationContent = {
+    typeAlert: "",
+    typeNotification: "",
+    payload: {
+      title: "",
+      body: "",
+      icon: "",
+    },
+    companyChanged: true,
+  },
+  smsContent = {
+    companyId: null,
+    companySendSMSValidField: null,
+    titleCompanySendSMS: "",
+    titleCompanySMSAlert: "",
+    message: "",
+  },
+}) => {
+  return Communiting.find(filtersCommuniting)
+    .select(
+      "_id city description userId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd"
+    )
+    .populate("userId", "_id name surname")
+    .populate("companyId", "_id name linkPath owner")
+    .then(async (allCommunitings) => {
+      const allUsers = [];
+      const allUsersWithItems = [];
+      for (const communitingItem of allCommunitings) {
+        if (!!communitingItem.userId) {
+          if (!!communitingItem.userId._id) {
+            const isUserInAllUsers = allUsers.findIndex(
+              (itemUser) => itemUser == communitingItem.userId._id
+            );
+            if (isUserInAllUsers < 0) {
+              allUsers.push(communitingItem.userId._id);
+              const newItemUserWithItem = {
+                userId: communitingItem.userId._id,
+                items: [communitingItem],
+              };
+              allUsersWithItems.push(newItemUserWithItem);
+            } else {
+              allUsersWithItems[isUserInAllUsers].items.push(communitingItem);
+            }
+          }
+        }
+      }
+      return User.find({
+        _id: { $in: allUsers },
+      })
+        .select(
+          "_id email phoneVerified phone whiteListVerifiedPhones vapidEndpoint accountVerified"
+        )
+        .then(async (usersResult) => {
+          let avaibleSendSMS = false;
+          if (!!smsContent) {
+            if (
+              !!smsContent.companyId &&
+              !!smsContent.companySendSMSValidField &&
+              !!smsContent.message &&
+              !!smsContent.titleCompanySMSAlert
+            ) {
+              const resultFunctionUpdate = await updateCompanyFunction({
+                companyId: companyId,
+                countItems: allCommunitings.length,
+                titleCompanySendSMSAlert: smsContent.titleCompanySMSAlert,
+                smsCompanyFieldValid: smsContent.companySendSMSValidField,
+              });
+              if (resultFunctionUpdate) {
+                avaibleSendSMS = true;
+              }
+            }
+          }
+          const allUsersWithItemsWithVapid = [...allUsersWithItems];
+          for (const userResult of usersResult) {
+            const findUserWithItems = allUsersWithItems.find(
+              (userWithItem) =>
+                userWithItem.userId.toString() == userResult._id.toString()
+            );
+            if (!!findUserWithItems) {
+              const findIndexUserWithVapid =
+                allUsersWithItemsWithVapid.findIndex(
+                  (userWithItem) => userWithItem.userId == userResult._id
+                );
+              if (findIndexUserWithVapid > 0) {
+                allUsersWithItemsWithVapid[
+                  findIndexUserWithVapid
+                ].vapidEndpoint = userResult.vapidEndpoint;
+              }
+              for (const itemUser of findUserWithItems.items) {
+                if (avaibleSendSMS) {
+                  let selectedPhoneNumber = null;
+                  if (!!userResult.phoneVerified) {
+                    selectedPhoneNumber = userResult.phone;
+                  } else {
+                    if (!!userResult.whiteListVerifiedPhones) {
+                      if (userResult.whiteListVerifiedPhones.length > 0) {
+                        selectedPhoneNumber =
+                          userResult.whiteListVerifiedPhones[
+                            userResult.whiteListVerifiedPhones.length - 1
+                          ];
+                      }
+                    }
+                  }
+
+                  if (!!selectedPhoneNumber) {
+                    const userPhone = Buffer.from(
+                      selectedPhoneNumber,
+                      "base64"
+                    ).toString("utf-8");
+                    sendVerifySMS({
+                      phoneNumber: userPhone,
+                      message: `${smsContent.message}, data: ${itemUser.day}-${itemUser.month}-${itemUser.year}, godzina: ${itemUser.timeStart}-${itemUser.timeEnd}, miasto: ${itemUser.city}`,
+                    });
+                  }
+                }
+                if (!!emailContent) {
+                  if (
+                    !!userResult.email &&
+                    !!emailContent.emailTitle &&
+                    !!emailContent.emailMessage
+                  ) {
+                    sendEmail({
+                      email: userResult.email,
+                      emailTitle: emailContent.emailTitle,
+                      emailMessage: `${emailContent.emailMessage}, data: ${itemUser.day}-${itemUser.month}-${itemUser.year}, godzina: ${itemUser.timeStart}-${itemUser.timeEnd}, miasto: ${itemUser.city}`,
+                    });
+                  }
+                }
+              }
+            }
+          }
+          if (!!notificationContent) {
+            if (
+              !!notificationContent.typeAlert &&
+              !!notificationContent.typeNotification
+            ) {
+              sendMultiAlert({
+                typeAlert: notificationContent.typeAlert,
+                typeNotification: notificationContent.typeNotification,
+                workerUserField: "workerUserId",
+                usersResultWithItems: allUsersWithItemsWithVapid,
+                avaibleSendAlertToWorker: true,
+                payload: {
+                  title: notificationContent.payload.title,
+                  body: `${notificationContent.payload.body}`,
+                  icon: "",
+                },
+                companyChanged: notificationContent.companyChanged,
+              });
+            }
+          }
+        });
+    });
+};
+
+exports.updateAllCommuniting = updateAllCommuniting;
 exports.sendVerifySMS = sendVerifySMS;
 exports.sendSMS = sendSMS;
 exports.sendEmail = sendEmail;

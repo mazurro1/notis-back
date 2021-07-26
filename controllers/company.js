@@ -10,6 +10,7 @@ const Service = require("../models/service");
 const Communiting = require("../models/Communiting");
 const mongoose = require("mongoose");
 const User = require("../models/user");
+const Alert = require("../models/alert");
 const { validationResult } = require("express-validator");
 const AWS = require("aws-sdk");
 const getImgBuffer = require("../getImgBuffer");
@@ -1303,27 +1304,27 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                             emailTitle: `Usunięto z firmy ${companyDoc.name}`,
                             emailMessage: `<h1>Konto zostało usunięte z firmy</h1>`,
                           });
-
-                          return Company.updateOne(
-                            {
-                              _id: companyId,
-                            },
-                            {
-                              $pull: {
-                                workers: { user: workerUserId },
-                              },
-                            }
-                          )
-                            .then(() => {
-                              return userWorkerDoc.save();
-                            })
-                            .catch(() => {
-                              const error = new Error(
-                                "Nie można usunąć pracownika."
-                              );
-                              error.statusCode = 501;
-                              throw error;
-                            });
+                          return userWorkerDoc;
+                          // return Company.updateOne(
+                          //   {
+                          //     _id: companyId,
+                          //   },
+                          //   {
+                          //     $pull: {
+                          //       workers: { user: workerUserId },
+                          //     },
+                          //   }
+                          // )
+                          //   .then(() => {
+                          //     return userWorkerDoc.save();
+                          //   })
+                          //   .catch(() => {
+                          //     const error = new Error(
+                          //       "Nie można usunąć pracownika."
+                          //     );
+                          //     error.statusCode = 501;
+                          //     throw error;
+                          //   });
                         })
                         .catch(() => {
                           const error = new Error("Nie znaleziono pracownika.");
@@ -1406,7 +1407,8 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               allWorkerReserwations.push(newUserData);
             }
           });
-          return Reserwation.bulkWrite(bulkArrayToUpdate)
+          // return Reserwation.bulkWrite(bulkArrayToUpdate)
+          return Reserwation.bulkWrite([])
             .then(() => {
               return {
                 allUsersReserwation: allUsersReserwations,
@@ -1451,12 +1453,22 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               },
             });
 
-            const userAlertToSave = {
+            const userAlertToSaveWorker = {
               serviceId: workerService._id,
               active: true,
               type: "service_deleted",
               creationTime: new Date(),
               companyChanged: true,
+              toUserId: workerService.userId._id,
+            };
+
+            const userAlertToSaveUser = {
+              serviceId: workerService._id,
+              active: true,
+              type: "service_deleted",
+              creationTime: new Date(),
+              companyChanged: true,
+              toUserId: workerService.workerUserId,
             };
 
             io.getIO().emit(`user${workerService.workerUserId}`, {
@@ -1480,41 +1492,44 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                   companyChanged: true,
                 },
               });
-              bulkArrayToUpdateUsers.push({
-                updateOne: {
-                  filter: {
-                    _id: workerService.userId._id,
-                  },
-                  update: {
-                    $inc: { alertActiveCount: 1 },
-                    $push: {
-                      alerts: {
-                        $each: [userAlertToSave],
-                        $position: 0,
-                      },
-                    },
-                  },
-                },
-              });
+              bulkArrayToUpdateUsers.push(userAlertToSaveUser);
+              // bulkArrayToUpdateUsers.push({
+              //   updateOne: {
+              //     filter: {
+              //       _id: workerService.userId._id,
+              //     },
+              //     update: {
+              //       $inc: { alertActiveCount: 1 },
+              //       $push: {
+              //         alerts: {
+              //           $each: [userAlertToSave],
+              //           $position: 0,
+              //         },
+              //       },
+              //     },
+              //   },
+              // });
             }
-            bulkArrayToUpdateUsers.push({
-              updateOne: {
-                filter: {
-                  _id: workerService.workerUserId,
-                },
-                update: {
-                  $inc: { alertActiveCount: 1 },
-                  $push: {
-                    alerts: {
-                      $each: [userAlertToSave],
-                      $position: 0,
-                    },
-                  },
-                },
-              },
-            });
+            bulkArrayToUpdateUsers.push(userAlertToSaveWorker);
+            // bulkArrayToUpdateUsers.push({
+            //   updateOne: {
+            //     filter: {
+            //       _id: workerService.workerUserId,
+            //     },
+            //     update: {
+            //       $inc: { alertActiveCount: 1 },
+            //       $push: {
+            //         alerts: {
+            //           $each: [userAlertToSave],
+            //           $position: 0,
+            //         },
+            //       },
+            //     },
+            //   },
+            // });
           }
-          return Service.bulkWrite(bulkArrayToUpdateServices)
+          // return Service.bulkWrite(bulkArrayToUpdateServices)
+          return Service.bulkWrite([])
             .then(() => {
               return {
                 allUsersReserwation: allUsersReserwation,
@@ -1533,12 +1548,53 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         });
     })
     .then(
-      ({
+      async ({
         allUsersReserwation,
         allWorkerReserwations,
         userDoc,
         bulkArrayToUpdateUsers,
       }) => {
+        await notifications.updateAllCommuniting({
+          companyId: companyId,
+          filtersCommuniting: {
+            workerUserId: userDoc._id,
+            companyId: companyId,
+            isDeleted: { $in: [false, null] },
+            statusValue: { $in: [1, 2] },
+            fullDate: {
+              $gte: new Date().toISOString(),
+            },
+          },
+          emailContent: {
+            emailTitle: "Odwołano wizyte w firmie",
+            emailMessage: "Odwołano wizytę w firmie",
+          },
+          notificationContent: {
+            typeAlert: "communitingId",
+            typeNotification: "commuting_canceled",
+            payload: {
+              title: "Odwołano wizyte w firmie",
+              body: "Odwołano wizyte w firmie",
+              icon: "",
+            },
+            companyChanged: true,
+          },
+          smsContent: {
+            companyId: companyId,
+            companySendSMSValidField: "smsCommunitingCanceledAvaible",
+            titleCompanySendSMS: "Odwołano wizyte",
+            titleCompanySMSAlert: "sms_canceled_communiting",
+            message: "Odwołano wizyte w firmie",
+          },
+        });
+
+        return {
+          allUsersReserwation: allUsersReserwation,
+          allWorkerReserwations: allWorkerReserwations,
+          userDoc: userDoc,
+          bulkArrayToUpdateUsers: bulkArrayToUpdateUsers,
+        };
+        /*
         return Communiting.find({
           workerUserId: userDoc._id,
           companyId: companyId,
@@ -1549,7 +1605,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
           },
         })
           .select(
-            "_id city description userId companyId month year day createdAt workerUserId dateEndValid"
+            "_id city description userId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd"
           )
           .populate("companyId userId", "_id name surname linkPath")
           .then((communitingItems) => {
@@ -1568,13 +1624,23 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                   },
                 },
               });
-
-              const userAlertToSave = {
+              console.log(communitingItem);
+              const userAlertToSaveWorker = {
                 communitingId: communitingItem._id,
                 active: true,
                 type: "commuting_deleted",
                 creationTime: new Date(),
                 companyChanged: true,
+                toUserId: communitingItem.workerUserId,
+              };
+
+              const userAlertToSaveUser = {
+                communitingId: communitingItem.userId._id,
+                active: true,
+                type: "commuting_deleted",
+                creationTime: new Date(),
+                companyChanged: true,
+                toUserId: communitingItem.workerUserId,
               };
 
               io.getIO().emit(`user${communitingItem.workerUserId}`, {
@@ -1587,6 +1653,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                   companyChanged: true,
                 },
               });
+              bulkArrayToUpdateUsersCommuniting.push(userAlertToSaveWorker);
               if (!!communitingItem.userId) {
                 io.getIO().emit(`user${communitingItem.userId._id}`, {
                   action: "update-alerts",
@@ -1598,42 +1665,44 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                     companyChanged: true,
                   },
                 });
-                bulkArrayToUpdateUsersCommuniting.push({
-                  updateOne: {
-                    filter: {
-                      _id: communitingItem.userId._id,
-                    },
-                    update: {
-                      $inc: { alertActiveCount: 1 },
-                      $push: {
-                        alerts: {
-                          $each: [userAlertToSave],
-                          $position: 0,
-                        },
-                      },
-                    },
-                  },
-                });
+                bulkArrayToUpdateUsersCommuniting.push(userAlertToSaveUser);
+                // bulkArrayToUpdateUsersCommuniting.push({
+                //   updateOne: {
+                //     filter: {
+                //       _id: communitingItem.userId._id,
+                //     },
+                //     update: {
+                //       $inc: { alertActiveCount: 1 },
+                //       $push: {
+                //         alerts: {
+                //           $each: [userAlertToSave],
+                //           $position: 0,
+                //         },
+                //       },
+                //     },
+                //   },
+                // });
               }
-              bulkArrayToUpdateUsersCommuniting.push({
-                updateOne: {
-                  filter: {
-                    _id: communitingItem.workerUserId,
-                  },
-                  update: {
-                    $inc: { alertActiveCount: 1 },
-                    $push: {
-                      alerts: {
-                        $each: [userAlertToSave],
-                        $position: 0,
-                      },
-                    },
-                  },
-                },
-              });
+              // bulkArrayToUpdateUsersCommuniting.push({
+              //   updateOne: {
+              //     filter: {
+              //       _id: communitingItem.workerUserId,
+              //     },
+              //     update: {
+              //       $inc: { alertActiveCount: 1 },
+              //       $push: {
+              //         alerts: {
+              //           $each: [userAlertToSave],
+              //           $position: 0,
+              //         },
+              //       },
+              //     },
+              //   },
+              // });
             }
-
-            return Communiting.bulkWrite(bulkArrayToUpdate)
+            console.log(bulkArrayToUpdateUsersCommuniting);
+            // return Communiting.bulkWrite(bulkArrayToUpdate)
+            return Communiting.bulkWrite([])
               .then(() => {
                 return {
                   allUsersReserwation: allUsersReserwation,
@@ -1650,6 +1719,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                 next(err);
               });
           });
+          */
       }
     )
     .then(
@@ -1663,12 +1733,13 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
           const allUserAlertsToSave = [];
 
           for (const itemReserwation of userDoc.items) {
-            const userAlertToSave = {
+            const userAlertToSaveUser = {
               reserwationId: itemReserwation._id,
               active: true,
               type: "reserwation_canceled",
               creationTime: new Date(),
               companyChanged: true,
+              toUserId: userDoc.userId,
             };
 
             io.getIO().emit(`user${userDoc.userId}`, {
@@ -1682,25 +1753,26 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               },
             });
 
-            allUserAlertsToSave.push(userAlertToSave);
+            allUserAlertsToSave.push(userAlertToSaveUser);
           }
           if (!!userDoc.userId) {
-            bulkArrayToUpdate.push({
-              updateOne: {
-                filter: {
-                  _id: userDoc.userId._id,
-                },
-                update: {
-                  $inc: { alertActiveCount: allUserAlertsToSave.length },
-                  $push: {
-                    alerts: {
-                      $each: allUserAlertsToSave,
-                      $position: 0,
-                    },
-                  },
-                },
-              },
-            });
+            // bulkArrayToUpdate.push({
+            //   updateOne: {
+            //     filter: {
+            //       _id: userDoc.userId._id,
+            //     },
+            //     update: {
+            //       $inc: { alertActiveCount: allUserAlertsToSave.length },
+            //       $push: {
+            //         alerts: {
+            //           $each: allUserAlertsToSave,
+            //           $position: 0,
+            //         },
+            //       },
+            //     },
+            //   },
+            // });
+            bulkArrayToUpdate.push(...allUserAlertsToSave);
           }
         });
         for (const userDoc of allWorkerReserwations) {
@@ -1713,6 +1785,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               type: "reserwation_canceled",
               creationTime: new Date(),
               companyChanged: true,
+              toUserId: userDoc.workerUserId,
             };
 
             io.getIO().emit(`user${userDoc.workerUserId}`, {
@@ -1728,32 +1801,33 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
 
             allWorkerAlertsToSave.push(userAlertToSave);
           });
-
-          bulkArrayToUpdate.push({
-            updateOne: {
-              filter: {
-                _id: userDoc.workerUserId,
-              },
-              update: {
-                $inc: { alertActiveCount: allWorkerAlertsToSave.length },
-                $push: {
-                  alerts: {
-                    $each: allWorkerAlertsToSave,
-                    $position: 0,
-                  },
-                },
-              },
-            },
-          });
+          bulkArrayToUpdate.push(...allWorkerAlertsToSave);
+          // bulkArrayToUpdate.push({
+          //   updateOne: {
+          //     filter: {
+          //       _id: userDoc.workerUserId,
+          //     },
+          //     update: {
+          //       $inc: { alertActiveCount: allWorkerAlertsToSave.length },
+          //       $push: {
+          //         alerts: {
+          //           $each: allWorkerAlertsToSave,
+          //           $position: 0,
+          //         },
+          //       },
+          //     },
+          //   },
+          // });
         }
-
-        return User.bulkWrite(bulkArrayToUpdate)
+        // console.log(bulkArrayToUpdate);
+        return Alert.insertMany(bulkArrayToUpdate)
           .then(() => {
             res.status(201).json({
               message: "Użytkownik został usunięty",
             });
           })
           .catch((err) => {
+            console.log(err);
             if (!err.statusCode) {
               err.statusCode = 501;
               err.message = "Błąd podczas wysyłania powiadomień.";
