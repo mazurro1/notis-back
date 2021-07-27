@@ -1380,31 +1380,33 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               },
             });
 
-            const findUserReserwations = allUsersReserwations.findIndex(
-              (reserwation) => reserwation.userId == item.fromUser._id
-            );
-            if (findUserReserwations >= 0) {
-              allUsersReserwations[findUserReserwations].items.push(item);
-            } else {
-              const newUserData = {
-                userId: item.fromUser._id,
-                items: [item],
-              };
-              allUsersReserwations.push(newUserData);
-            }
-            const findWorkerReserwations = allWorkerReserwations.findIndex(
-              (reserwation) =>
-                reserwation.workerUserId.toString() ==
-                item.toWorkerUserId._id.toString()
-            );
-            if (findWorkerReserwations >= 0) {
-              allWorkerReserwations[findWorkerReserwations].items.push(item);
-            } else {
-              const newUserData = {
-                workerUserId: item.toWorkerUserId._id,
-                items: [item],
-              };
-              allWorkerReserwations.push(newUserData);
+            if (!!item.fromUser) {
+              const findUserReserwations = allUsersReserwations.findIndex(
+                (reserwation) => reserwation.userId == item.fromUser._id
+              );
+              if (findUserReserwations >= 0) {
+                allUsersReserwations[findUserReserwations].items.push(item);
+              } else {
+                const newUserData = {
+                  userId: item.fromUser._id,
+                  items: [item],
+                };
+                allUsersReserwations.push(newUserData);
+              }
+              const findWorkerReserwations = allWorkerReserwations.findIndex(
+                (reserwation) =>
+                  reserwation.workerUserId.toString() ==
+                  item.toWorkerUserId._id.toString()
+              );
+              if (findWorkerReserwations >= 0) {
+                allWorkerReserwations[findWorkerReserwations].items.push(item);
+              } else {
+                const newUserData = {
+                  workerUserId: item.toWorkerUserId._id,
+                  items: [item],
+                };
+                allWorkerReserwations.push(newUserData);
+              }
             }
           });
           // return Reserwation.bulkWrite(bulkArrayToUpdate)
@@ -1554,8 +1556,16 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         userDoc,
         bulkArrayToUpdateUsers,
       }) => {
-        await notifications.updateAllCommuniting({
+        const resultUpdated = await notifications.updateAllCollection({
           companyId: companyId,
+          collection: "Communiting",
+          collectionItems:
+            "_id city description userId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          changeFieldCollection: "isDeleted",
+          valueChangeFieldCollection: true,
           filtersCommuniting: {
             workerUserId: userDoc._id,
             companyId: companyId,
@@ -1565,6 +1575,8 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
               $gte: new Date().toISOString(),
             },
           },
+          userField: "userId",
+          workerField: "workerUserId",
           emailContent: {
             emailTitle: "Odwołano wizyte w firmie",
             emailMessage: "Odwołano wizytę w firmie",
@@ -1580,14 +1592,13 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             companyChanged: true,
           },
           smsContent: {
-            companyId: companyId,
             companySendSMSValidField: "smsCommunitingCanceledAvaible",
             titleCompanySendSMS: "Odwołano wizyte",
             titleCompanySMSAlert: "sms_canceled_communiting",
             message: "Odwołano wizyte w firmie",
           },
         });
-
+        console.log("resultUpdated", resultUpdated);
         return {
           allUsersReserwation: allUsersReserwation,
           allWorkerReserwations: allWorkerReserwations,
@@ -7914,7 +7925,6 @@ exports.companyAddCommuniting = (req, res, next) => {
                       isDeleted: false,
                     });
                   }
-
                   const newCommuniting = new Communiting({
                     userId: !!resultToUser ? resultToUser._id : null,
                     companyId: companyData._id,
@@ -8025,6 +8035,7 @@ exports.companyAddCommuniting = (req, res, next) => {
                 timeEnd: timeEnd,
                 city: cityInput,
                 street: streetInput,
+                fullDate: actualDate,
                 reserwationId: !!newReserwationWorker
                   ? newReserwationWorker._id
                   : null,
@@ -8126,13 +8137,17 @@ exports.companyAddCommuniting = (req, res, next) => {
                 "utf-8"
               );
             }
-
+            const validHasUser = !!populateCommuniting.userId
+              ? [
+                  populateCommuniting.userId._id,
+                  populateCommuniting.workerUserId._id,
+                ]
+              : [populateCommuniting.workerUserId._id];
             const { resultSMS } = await notifications.sendAll({
-              usersId: [
-                populateCommuniting.userId._id,
-                populateCommuniting.workerUserId._id,
-              ],
-              clientId: populateCommuniting.userId._id,
+              usersId: validHasUser,
+              clientId: !!populateCommuniting.userId
+                ? populateCommuniting.userId._id
+                : null,
               emailContent: {
                 customEmail: null,
                 emailTitle: emailSubject,
