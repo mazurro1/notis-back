@@ -1389,7 +1389,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             body: "Odwołano wizyte w firmie",
             icon: "",
           },
-          companyChanged: true,
         },
         smsContent: {
           companySendSMSValidField: "smsCanceledAvaible",
@@ -1397,6 +1396,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
           titleCompanySMSAlert: "sms_canceled_reserwation",
           message: "Odwołano wizyte w firmie",
         },
+        companyChanged: true,
       });
       return userDoc;
     })
@@ -1432,7 +1432,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             body: "Odwołano serwis w firmie",
             icon: "",
           },
-          companyChanged: true,
         },
         smsContent: {
           companySendSMSValidField: "smsServiceDeletedAvaible",
@@ -1440,6 +1439,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
           titleCompanySMSAlert: "sms_canceled_service",
           message: "Odwołano serwis w firmie",
         },
+        companyChanged: true,
       });
       return userDoc;
     })
@@ -1478,7 +1478,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
             body: "Odwołano dojazd w firmie",
             icon: "",
           },
-          companyChanged: true,
         },
         smsContent: {
           companySendSMSValidField: "smsCommunitingCanceledAvaible",
@@ -1486,6 +1485,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
           titleCompanySMSAlert: "sms_canceled_communiting",
           message: "Odwołano dojazd w firmie",
         },
+        companyChanged: true,
       });
 
       return resultUpdated;

@@ -611,7 +611,6 @@ const updateAllCollection = async ({
       body: "",
       icon: "",
     },
-    companyChanged: true,
   },
   smsContent = {
     companySendSMSValidField: null,
@@ -619,6 +618,7 @@ const updateAllCollection = async ({
     titleCompanySMSAlert: "",
     message: "",
   },
+  companyChanged = false,
 }) => {
   const selectedCollection =
     collection === "Communiting"
@@ -728,7 +728,7 @@ const updateAllCollection = async ({
         for (const noUser of otherUsersWithoutAccount) {
           if (!!noUser.customPhone) {
             for (const itemNoUser of noUser.items) {
-              if (avaibleSendSMS) {
+              if (avaibleSendSMS && !!companyChanged) {
                 const userPhone = Buffer.from(
                   noUser.customPhone,
                   "base64"
@@ -797,7 +797,7 @@ const updateAllCollection = async ({
                       }
                     }
 
-                    if (!!selectedPhoneNumber) {
+                    if (!!selectedPhoneNumber && !!companyChanged) {
                       const userPhone = Buffer.from(
                         selectedPhoneNumber,
                         "base64"
@@ -846,7 +846,7 @@ const updateAllCollection = async ({
                     body: `${notificationContent.payload.body}`,
                     icon: "",
                   },
-                  companyChanged: notificationContent.companyChanged,
+                  companyChanged: companyChanged,
                   userField: userField,
                 });
               }
