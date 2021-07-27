@@ -226,6 +226,7 @@ const sendVerifySMS = ({ phoneNumber = null, message = null }) => {
     const params = {
       Message: message,
       PhoneNumber: `+48${phoneNumber}`,
+      // PhoneNumber: `+48515873009`,
     };
 
     return sns
@@ -587,6 +588,7 @@ const updateCompanyFunction = async ({
 
 const updateAllCollection = async ({
   companyId = null,
+  companyField = "",
   filtersCollection = {},
   collection = "",
   collectionItems = "",
@@ -633,7 +635,8 @@ const updateAllCollection = async ({
     !!collectionItems &&
     !!filtersCollection &&
     !!companyId &&
-    !!changeFieldCollection
+    !!changeFieldCollection &&
+    !!companyField
   ) {
     return selectedCollection
       .find(filtersCollection)
@@ -641,7 +644,7 @@ const updateAllCollection = async ({
         `${collectionItems} ${extraCollectionPhoneField} ${extraCollectionEmailField} ${extraCollectionNameField}`
       )
       .populate(userField, "_id name surname")
-      .populate("companyId", "_id name linkPath owner")
+      .populate(companyField, "_id name linkPath owner")
       .then(async (allCommunitings) => {
         const allUsers = [];
         const allUsersWithItems = [];
@@ -731,7 +734,7 @@ const updateAllCollection = async ({
                   "base64"
                 ).toString("utf-8");
 
-                sendVerifySMS({
+                await sendVerifySMS({
                   phoneNumber: userPhone,
                   message: `${smsContent.message}, data: ${itemNoUser.day}-${itemNoUser.month}-${itemNoUser.year}, godzina: ${itemNoUser.timeStart}-${itemNoUser.timeEnd}, miasto: ${itemNoUser.city}`,
                 });
@@ -799,7 +802,7 @@ const updateAllCollection = async ({
                         selectedPhoneNumber,
                         "base64"
                       ).toString("utf-8");
-                      sendVerifySMS({
+                      await sendVerifySMS({
                         phoneNumber: userPhone,
                         message: `${smsContent.message}, data: ${itemUser.day}-${itemUser.month}-${itemUser.year}, godzina: ${itemUser.timeStart}-${itemUser.timeEnd}, miasto: ${itemUser.city}`,
                       });
@@ -849,8 +852,8 @@ const updateAllCollection = async ({
               }
             }
 
-            // return Communiting.bulkWrite(bulkArrayToUpdate)
-            return Communiting.bulkWrite([])
+            return selectedCollection
+              .bulkWrite(bulkArrayToUpdate)
               .then(() => {
                 return true;
               })

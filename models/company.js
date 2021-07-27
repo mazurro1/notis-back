@@ -133,10 +133,12 @@ const companySchema = new Schema(
       required: false,
     },
     smsNotifactionAvaible: {
+      // powiadomienia 1 dzień przed rezerwacją
       type: Boolean,
       required: false,
     },
     smsCanceledAvaible: {
+      // powiadomienia podczas anulowania rezerwacji
       type: Boolean,
       required: false,
     },
