@@ -8,6 +8,7 @@ const AWS = require("aws-sdk");
 const Invoice = require("../models/invoice");
 const { createInvoice } = require("../generateInvoice");
 const Communiting = require("../models/Communiting");
+const notifications = require("../middleware/notifications");
 
 require("dotenv").config();
 const {
@@ -117,6 +118,7 @@ for (let i = 0; i < 24; i++) {
           $lte: dateStartValidEnd.toISOString(),
         },
         isDeleted: { $in: [false, null] },
+        hasCommuniting: { $in: [false, null] },
       })
         .select(
           "_id fromUser dateYear dateMonth dateDay toWorkerUserId serviceName dateStart dateEnd visitNotFinished visitCanceled visitChanged workerReserwation fullDate phone name surname email"

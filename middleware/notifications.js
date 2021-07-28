@@ -8,6 +8,7 @@ const webpush = require("web-push");
 const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const io = require("../socket");
+const ejs = require("ejs");
 require("dotenv").config();
 const {
   MAIL_HOST,
@@ -208,16 +209,31 @@ const sendMultiAlert = ({
   }
 };
 
-const sendEmail = ({ email, emailTitle, emailMessage, attachments = null }) => {
+const sendEmail = async ({
+  email,
+  emailTitle,
+  emailMessage,
+  attachments = null,
+}) => {
   if ((!!email && !!emailTitle, !!emailMessage)) {
-    const validAttachments = !!attachments ? attachments : {};
-    transporter.sendMail({
-      to: email,
-      from: MAIL_INFO,
-      subject: emailTitle,
-      html: emailMessage,
-      ...validAttachments,
-    });
+    ejs.renderFile(
+      __dirname + "/mailTemplate.ejs",
+      { message: emailMessage },
+      (err, data) => {
+        if (err) {
+          const validAttachments = !!attachments ? attachments : {};
+          transporter.sendMail({
+            to: email,
+            from: MAIL_INFO,
+            subject: emailTitle,
+            html: data,
+            ...validAttachments,
+          });
+        } else {
+          throw new Error("Not found email template");
+        }
+      }
+    );
   }
 };
 
@@ -589,7 +605,7 @@ const updateCompanyFunction = async ({
 const updateAllCollection = async ({
   companyId = null,
   companyField = "",
-  filtersCollection = {},
+  filtersCollection = null,
   collection = "",
   collectionItems = "",
   extraCollectionPhoneField = "",
@@ -597,8 +613,7 @@ const updateAllCollection = async ({
   extraCollectionNameField = "",
   userField = "",
   workerField = "",
-  changeFieldCollection = "",
-  valueChangeFieldCollection = null,
+  updateCollectionItemObject = null,
   emailContent = {
     emailTitle: "Odwołano wizyte w firmie",
     emailMessage: "Odwołano wizytę w firmie",
@@ -635,7 +650,7 @@ const updateAllCollection = async ({
     !!collectionItems &&
     !!filtersCollection &&
     !!companyId &&
-    !!changeFieldCollection &&
+    !!updateCollectionItemObject &&
     !!companyField
   ) {
     return selectedCollection
@@ -677,7 +692,7 @@ const updateAllCollection = async ({
                 _id: communitingItem._id,
               },
               update: {
-                $set: { [changeFieldCollection]: valueChangeFieldCollection },
+                $set: updateCollectionItemObject,
               },
             },
           });
@@ -701,25 +716,27 @@ const updateAllCollection = async ({
               }
             }
           } else {
-            if (!!communitingItem[extraCollectionPhoneField]) {
-              const findIndexItemNoUser = otherUsersWithoutAccount.findIndex(
-                (itemNoUser) =>
-                  itemNoUser.customPhone ==
-                  communitingItem[extraCollectionPhoneField]
-              );
-              if (findIndexItemNoUser > 0) {
-                otherUsersWithoutAccount[findIndexItemNoUser].items.push(
-                  communitingItem
+            if (!!extraCollectionPhoneField && !!extraCollectionEmailField) {
+              if (!!communitingItem[extraCollectionPhoneField]) {
+                const findIndexItemNoUser = otherUsersWithoutAccount.findIndex(
+                  (itemNoUser) =>
+                    itemNoUser.customPhone ==
+                    communitingItem[extraCollectionPhoneField]
                 );
-              } else {
-                const newItemNoUser = {
-                  customPhone: communitingItem[extraCollectionPhoneField],
-                  customEmail: !!communitingItem[extraCollectionEmailField]
-                    ? communitingItem[extraCollectionEmailField]
-                    : null,
-                  items: [communitingItem],
-                };
-                otherUsersWithoutAccount.push(newItemNoUser);
+                if (findIndexItemNoUser > 0) {
+                  otherUsersWithoutAccount[findIndexItemNoUser].items.push(
+                    communitingItem
+                  );
+                } else {
+                  const newItemNoUser = {
+                    customPhone: communitingItem[extraCollectionPhoneField],
+                    customEmail: !!communitingItem[extraCollectionEmailField]
+                      ? communitingItem[extraCollectionEmailField]
+                      : null,
+                    items: [communitingItem],
+                  };
+                  otherUsersWithoutAccount.push(newItemNoUser);
+                }
               }
             }
           }

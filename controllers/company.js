@@ -1304,27 +1304,26 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                             emailTitle: `Usunięto z firmy ${companyDoc.name}`,
                             emailMessage: `<h1>Konto zostało usunięte z firmy</h1>`,
                           });
-                          return userWorkerDoc;
-                          // return Company.updateOne(
-                          //   {
-                          //     _id: companyId,
-                          //   },
-                          //   {
-                          //     $pull: {
-                          //       workers: { user: workerUserId },
-                          //     },
-                          //   }
-                          // )
-                          //   .then(() => {
-                          //     return userWorkerDoc.save();
-                          //   })
-                          //   .catch(() => {
-                          //     const error = new Error(
-                          //       "Nie można usunąć pracownika."
-                          //     );
-                          //     error.statusCode = 501;
-                          //     throw error;
-                          //   });
+                          return Company.updateOne(
+                            {
+                              _id: companyId,
+                            },
+                            {
+                              $pull: {
+                                workers: { user: workerUserId },
+                              },
+                            }
+                          )
+                            .then(() => {
+                              return userWorkerDoc.save();
+                            })
+                            .catch(() => {
+                              const error = new Error(
+                                "Nie można usunąć pracownika."
+                              );
+                              error.statusCode = 501;
+                              throw error;
+                            });
                         })
                         .catch(() => {
                           const error = new Error("Nie znaleziono pracownika.");
@@ -1360,8 +1359,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         extraCollectionPhoneField: "phone",
         extraCollectionEmailField: "email",
         extraCollectionNameField: "name surname",
-        changeFieldCollection: "visitCanceled",
-        valueChangeFieldCollection: true,
+        updateCollectionItemObject: { visitCanceled: true },
         filtersCollection: {
           toWorkerUserId: mongoose.Types.ObjectId(userDoc._id),
           company: mongoose.Types.ObjectId(companyId),
@@ -1410,8 +1408,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         extraCollectionPhoneField: "phone",
         extraCollectionEmailField: "email",
         extraCollectionNameField: "name surname",
-        changeFieldCollection: "isDeleted",
-        valueChangeFieldCollection: true,
+        updateCollectionItemObject: { isDeleted: true },
         filtersCollection: {
           workerUserId: userDoc._id,
           companyId: companyId,
@@ -1453,8 +1450,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         extraCollectionPhoneField: "phone",
         extraCollectionEmailField: "email",
         extraCollectionNameField: "name surname",
-        changeFieldCollection: "isDeleted",
-        valueChangeFieldCollection: true,
+        updateCollectionItemObject: { isDeleted: true },
         filtersCollection: {
           workerUserId: userDoc._id,
           companyId: companyId,

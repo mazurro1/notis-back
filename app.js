@@ -13,6 +13,7 @@ const cors = require("cors");
 const companyUsersInformationsRoutes = require("./routes/companyUsersInformations");
 const { MONGODB_PASSWORD, MONGODB_CLUSTER, MONGODB_DATABASE, MONGODB_USER } =
   process.env;
+app.set("view engine", "ejs");
 app.use(
   cors({
     credentials: true,
