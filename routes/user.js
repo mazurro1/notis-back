@@ -281,4 +281,11 @@ router.post(
 
 router.post("/download-service", [body("serviceId")], user.downloadService);
 
+router.post(
+  "/update-user-props",
+  isAuth,
+  [body("language"), body("darkMode"), body("blindMode")],
+  user.userUpdateProps
+);
+
 module.exports = router;

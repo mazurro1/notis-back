@@ -9,6 +9,8 @@ const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const io = require("../socket");
 const ejs = require("ejs");
+const generateEmail = require("./generateContentEmail");
+
 require("dotenv").config();
 const {
   MAIL_HOST,
@@ -220,7 +222,7 @@ const sendEmail = async ({
       __dirname + "/mailTemplate.ejs",
       { message: emailMessage },
       (err, data) => {
-        if (err) {
+        if (!err) {
           const validAttachments = !!attachments ? attachments : {};
           transporter.sendMail({
             to: email,
@@ -489,7 +491,7 @@ const sendAll = async ({
       _id: { $in: usersId },
     })
       .select(
-        "_id email phoneVerified phone whiteListVerifiedPhones vapidEndpoint accountVerified"
+        "_id email phoneVerified phone whiteListVerifiedPhones vapidEndpoint accountVerified language"
       )
       .then(async (users) => {
         let client = null;
@@ -777,7 +779,7 @@ const updateAllCollection = async ({
           _id: { $in: allUsers },
         })
           .select(
-            "_id email phoneVerified phone whiteListVerifiedPhones vapidEndpoint accountVerified"
+            "_id email phoneVerified phone whiteListVerifiedPhones vapidEndpoint accountVerified language"
           )
           .then(async (usersResult) => {
             const allUsersWithItemsWithVapid = [...allUsersWithItems];
@@ -837,10 +839,19 @@ const updateAllCollection = async ({
                       !!emailContent.emailTitle &&
                       !!emailContent.emailMessage
                     ) {
+                      const { title } = generateEmail.generateContentEmail({
+                        alertType: notificationContent.typeNotification,
+                        companyChanged: companyChanged,
+                        language: !!userResult.language
+                          ? userResult.language
+                          : "PL",
+                        itemAlert: itemUser,
+                        collection: collection,
+                      });
                       sendEmail({
                         email: selectedEmail,
-                        emailTitle: emailContent.emailTitle,
-                        emailMessage: `${emailContent.emailMessage}, data: ${itemUser.day}-${itemUser.month}-${itemUser.year}, godzina: ${itemUser.timeStart}-${itemUser.timeEnd}, miasto: ${itemUser.city}`,
+                        emailTitle: title,
+                        emailMessage: title,
                       });
                     }
                   }
@@ -869,18 +880,21 @@ const updateAllCollection = async ({
               }
             }
 
-            return selectedCollection
-              .bulkWrite(bulkArrayToUpdate)
-              .then(() => {
-                return true;
-              })
-              .catch((err) => {
-                if (!err.statusCode) {
-                  err.statusCode = 501;
-                  err.message = "Błąd podczas wysyłania powiadomień.";
-                }
-                next(err);
-              });
+            return (
+              selectedCollection
+                // .bulkWrite(bulkArrayToUpdate)
+                .bulkWrite([])
+                .then(() => {
+                  return true;
+                })
+                .catch((err) => {
+                  if (!err.statusCode) {
+                    err.statusCode = 501;
+                    err.message = "Błąd podczas wysyłania powiadomień.";
+                  }
+                  next(err);
+                })
+            );
           });
       });
   }

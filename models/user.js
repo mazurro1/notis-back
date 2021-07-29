@@ -3,6 +3,18 @@ const Schema = mongoose.Schema;
 
 const userSchema = new Schema(
   {
+    language: {
+      type: String,
+      required: false,
+    },
+    darkMode: {
+      type: Boolean,
+      required: false,
+    },
+    blindMode: {
+      type: Boolean,
+      required: false,
+    },
     email: {
       type: String,
       required: true,

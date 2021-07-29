@@ -1,4 +1,4 @@
-export const Translates = {
+exports.Translates = {
   PL: {
     buttons: {
       language: "Język",
@@ -13,6 +13,54 @@ export const Translates = {
       all: "Wszystko",
     },
     alerts: {
+      collections: {
+        changeCompany: {
+          reserwation_created: "Dodano nową rezerwację",
+          reserwation_changed: "Twoja rezerwacja uległa zmianie",
+          reserwation_canceled: "Twoja rezerwacje została anulowana",
+          reserwation_finished:
+            "Twoja rezerwacja została oznaczona jako dobyta",
+          reserwation_not_finished:
+            "Twoja rezerwacja została oznaczona jako niedobyta",
+          opinion_client: "Dodano opinię",
+          opinion_client_edit: "Opinia została edytowana",
+          opinion_from_company: "Odpowiedziano na Twoją opinię",
+          commuting_created: "Dodano nowy dojazd",
+          commuting_changed: "Twój dojazd uległ zmianie",
+          commuting_deleted: "Twój dojazd został anulowany",
+          commuting_canceled: "Twój dojazd został anulowany",
+          service_created: "Dodano nowy serwis",
+          service_changed: "Twój serwis uległ zmianie",
+          service_deleted: "Twój serwis został anulowany",
+          service_canceled: "Twój serwis został anulowany",
+          service_finished: "Twój serwis został zakończony",
+          alert_notifaction_sms: "Mała ilość SMS",
+          alert_notifaction_premium: "Konto premium kończy się",
+        },
+        changeNoCompany: {
+          reserwation_created: "Dodano nową rezerwację",
+          reserwation_changed: "Twoja rezerwacja uległa zmianie",
+          reserwation_canceled: "Twoja rezerwacje została anulowana",
+          reserwation_finished:
+            "Twoja rezerwacja została oznaczona jako dobyta",
+          reserwation_not_finished:
+            "Twoja rezerwacja została oznaczona jako niedobyta",
+          opinion_client: "Dodano opinię",
+          opinion_client_edit: "Opinia została edytowana",
+          opinion_from_company: "Odpowiedziano na Twoją opinię",
+          commuting_created: "Dodano nowy dojazd",
+          commuting_changed: "Twój dojazd uległ zmianie",
+          commuting_deleted: "Twój dojazd został anulowany",
+          commuting_canceled: "Twój dojazd został anulowany",
+          service_created: "Dodano nowy serwis",
+          service_changed: "Twój serwis uległ zmianie",
+          service_deleted: "Twój serwis został anulowany",
+          service_canceled: "Twój serwis został anulowany",
+          service_finished: "Twój serwis został zakończony",
+          alert_notifaction_sms: "Mała ilość SMS",
+          alert_notifaction_premium: "Konto premium kończy się",
+        },
+      },
       general: {
         dayText: "dnia",
         hoursText: "w godzinach",
@@ -498,4 +546,4 @@ export const Translates = {
       },
     },
   },
-}
+};

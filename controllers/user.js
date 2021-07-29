@@ -134,6 +134,9 @@ exports.registration = (req, res, next) => {
                       phoneVerified: false,
                       stamps: [],
                       alerts: [],
+                      language: "pl",
+                      darkMode: false,
+                      blindMode: false,
                     });
                     const token = jwt.sign(
                       {
@@ -211,7 +214,7 @@ exports.login = (req, res, next) => {
     email: email,
   })
     .select(
-      "email blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified alertActiveCount imageOther"
+      "darkMode blindMode language email blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified alertActiveCount imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -355,6 +358,9 @@ exports.login = (req, res, next) => {
               blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
               blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
               vapidPublic: PUBLIC_KEY_VAPID,
+              language: !!user.language ? user.language : "pl",
+              darkMode: !!user.darkMode ? user.darkMode : false,
+              blindMode: !!user.blindMode ? user.blindMode : false,
             });
           })
           .catch((err) => {
@@ -740,7 +746,7 @@ exports.autoLogin = (req, res, next) => {
     loginToken: token,
   })
     .select(
-      "_id loginToken blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified imageUrl hasPhone imageOther"
+      "_id darkMode blindMode language loginToken blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified imageUrl hasPhone imageOther"
     )
     .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
@@ -756,37 +762,6 @@ exports.autoLogin = (req, res, next) => {
       "allCompanys",
       "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
-    // .populate({
-    //   path: "alerts.alertDefaultCompanyId",
-    //   select: "_id name linkPath",
-    // })
-    // .populate({
-    //   path: "alerts.reserwationId",
-    //   select:
-    //     "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId name surname",
-    //   populate: {
-    //     path: "company fromUser",
-    //     select: "name surname linkPath",
-    //   },
-    // })
-    // .populate({
-    //   path: "alerts.serviceId",
-    //   select:
-    //     "_id objectName description userId companyId month year day createdAt",
-    //   populate: {
-    //     path: "companyId userId",
-    //     select: "name surname linkPath",
-    //   },
-    // })
-    // .populate({
-    //   path: "alerts.communitingId",
-    //   select:
-    //     "_id city description userId companyId month year day timeStart timeEnd",
-    //   populate: {
-    //     path: "companyId userId",
-    //     select: "name surname linkPath",
-    //   },
-    // })
     .then((user) => {
       if (!!user) {
         return Alert.find({
@@ -906,6 +881,9 @@ exports.autoLogin = (req, res, next) => {
               blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
               blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
               vapidPublic: PUBLIC_KEY_VAPID,
+              language: !!user.language ? user.language : "pl",
+              darkMode: !!user.darkMode ? user.darkMode : false,
+              blindMode: !!user.blindMode ? user.blindMode : false,
             });
           });
       } else {
@@ -1468,6 +1446,9 @@ exports.loginFacebookNew = (req, res, next) => {
                   phoneVerified: false,
                   stamps: [],
                   alerts: [],
+                  language: "pl",
+                  darkMode: false,
+                  blindMode: false,
                 });
                 const token = jwt.sign(
                   {
@@ -1657,6 +1638,9 @@ exports.loginGoogle = (req, res, next) => {
                   phoneVerified: false,
                   stamps: [],
                   alerts: [],
+                  language: "pl",
+                  darkMode: false,
+                  blindMode: false,
                 });
                 const token = jwt.sign(
                   {
@@ -2631,6 +2615,49 @@ exports.downloadService = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.userUpdateProps = (req, res, next) => {
+  const userId = req.userId;
+  const language = req.body.language;
+  const darkMode = req.body.darkMode;
+  const blindMode = req.body.blindMode;
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  User.findOne({
+    _id: userId,
+  })
+    .select("_id language darkMode blindMode")
+    .then((user) => {
+      if (!!user) {
+        user.language = language;
+        user.darkMode = darkMode;
+        user.blindMode = blindMode;
+        return user.save();
+      } else {
+        res.status(422).json({
+          message: "Brak użytkownika",
+        });
+      }
+    })
+    .then(() => {
+      res.status(200).json({
+        message: "Zaktualizowano ustawienia użytkownika",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd serwera.";
       }
       next(err);
     });
