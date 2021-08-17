@@ -573,8 +573,8 @@ exports.registrationCompany = (req, res, next) => {
 
             notifications.sendEmail({
               email: result.email,
-              emailTitle: "Tworzenie konta firmowego zakończone powodzeniem",
-              emailMessage: `<h1>Utworzono nowe konto firmowe</h1> ${unhashedCodeToVerified}`,
+              title: "Tworzenie konta firmowego zakończone powodzeniem",
+              defaultText: `Utworzono nowe konto firmowe ${unhashedCodeToVerified}`,
             });
 
             res.status(200).json({
@@ -620,8 +620,8 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
 
       notifications.sendEmail({
         email: companyData.email,
-        emailTitle: "Tworzenie konta firmowego zakończone powodzeniem",
-        emailMessage: `<h1>Utworzono nowe konto firmowe</h1> ${unhashedCodeToVerified}`,
+        title: "Tworzenie konta firmowego zakończone powodzeniem",
+        defaultText: `Utworzono nowe konto firmowe ${unhashedCodeToVerified}`,
       });
 
       res.status(201).json({
@@ -1045,8 +1045,8 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
 
               notifications.sendEmail({
                 email: emailWorker,
-                emailTitle: `Potwierdzenie dodania do listy pracowników w firmie ${result.name}`,
-                emailMessage: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${result._id}&${hashedEmail}&${hashedRandomValue}">kliknij tutaj</a>`,
+                title: `Potwierdzenie dodania do listy pracowników w firmie ${result.name}`,
+                defaultText: `Kliknij link aby potwierdzić <a href="${SITE_FRONT}/confirm-added-worker-to-company?${result._id}&${hashedEmail}&${hashedRandomValue}">kliknij tutaj</a>`,
               });
 
               res.status(201).json({
@@ -1109,8 +1109,8 @@ exports.sentAgainEmailToActiveCompanyWorker = (req, res, next) => {
 
           notifications.sendEmail({
             email: emailWorker,
-            emailTitle: `Potwierdzenie dodania do listy pracowników w firmie ${companyData.name}`,
-            emailMessage: `<h1>Kliknij link aby potwierdzić</h1> <a href="${SITE_FRONT}/confirm-added-worker-to-company?${companyData._id}&${hashedEmail}&${thisWorker.codeToActive}">kliknij tutaj</a>`,
+            title: `Potwierdzenie dodania do listy pracowników w firmie ${companyData.name}`,
+            defaultText: `Kliknij link aby potwierdzić <a href="${SITE_FRONT}/confirm-added-worker-to-company?${companyData._id}&${hashedEmail}&${thisWorker.codeToActive}">kliknij tutaj</a>`,
           });
 
           res.status(201).json({
@@ -1240,8 +1240,8 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
     .then((userDoc) => {
       notifications.sendEmail({
         email: userDoc.email,
-        emailTitle: `Potwierdzenie dodania do pracy`,
-        emailMessage: `<h1>Dodano do pracy!</h1>`,
+        title: `Potwierdzenie dodania do pracy`,
+        defaultText: `Dodano do pracy!`,
       });
       res.status(201).json({
         message: "Użytkownik został dodany do firmy",
@@ -1301,30 +1301,29 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
 
                           notifications.sendEmail({
                             email: userWorkerDoc.email,
-                            emailTitle: `Usunięto z firmy ${companyDoc.name}`,
-                            emailMessage: `Konto zostało usunięte z firmy`,
+                            title: `Usunięto z firmy ${companyDoc.name}`,
+                            defaultText: `Konto zostało usunięte z firmy`,
                           });
-                          return userWorkerDoc;
-                          // return Company.updateOne(
-                          //   {
-                          //     _id: companyId,
-                          //   },
-                          //   {
-                          //     $pull: {
-                          //       workers: { user: workerUserId },
-                          //     },
-                          //   }
-                          // )
-                          //   .then(() => {
-                          //     return userWorkerDoc.save();
-                          //   })
-                          //   .catch(() => {
-                          //     const error = new Error(
-                          //       "Nie można usunąć pracownika."
-                          //     );
-                          //     error.statusCode = 501;
-                          //     throw error;
-                          //   });
+                          return Company.updateOne(
+                            {
+                              _id: companyId,
+                            },
+                            {
+                              $pull: {
+                                workers: { user: workerUserId },
+                              },
+                            }
+                          )
+                            .then(() => {
+                              return userWorkerDoc.save();
+                            })
+                            .catch(() => {
+                              const error = new Error(
+                                "Nie można usunąć pracownika."
+                              );
+                              error.statusCode = 501;
+                              throw error;
+                            });
                         })
                         .catch(() => {
                           const error = new Error("Nie znaleziono pracownika.");
@@ -5044,8 +5043,8 @@ exports.companySentCodeDeleteCompany = (req, res, next) => {
 
       notifications.sendEmail({
         email: companyData.email,
-        emailTitle: `Potwierdzenie usunięcia działalności ${companyData.name}`,
-        emailMessage: `<h1>Kod do usunięcia działalności: ${codeToDelete.toUpperCase()}</h1>`,
+        title: `Potwierdzenie usunięcia działalności ${companyData.name}`,
+        defaultText: `Kod do usunięcia działalności: ${codeToDelete.toUpperCase()}`,
       });
       res.status(201).json({
         message: "Wysłano kod do usunięcia działalności",
@@ -5568,8 +5567,8 @@ exports.companyDeleteCompany = (req, res, next) => {
           if (!!companyData) {
             notifications.sendEmail({
               email: companyData.email,
-              emailTitle: `Usunięto działalność!`,
-              emailMessage: `<h1>Działalność została usunięta</h1>`,
+              title: `Usunięto działalność!`,
+              defaultText: `Działalność została usunięta`,
             });
             return true;
           } else {
@@ -5679,8 +5678,8 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
           if (!!companyData) {
             notifications.sendEmail({
               email: companyData.email,
-              emailTitle: `Usunięto działalność!`,
-              emailMessage: `<h1>Działalność została usunięta</h1>`,
+              title: `Usunięto działalność!`,
+              defaultText: `Działalność została usunięta`,
             });
             return true;
           } else {

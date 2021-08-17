@@ -1,63 +1,5 @@
 const AllTranslates = require("./Translates");
 
-const generateAlertFromProps = ({
-  title = null,
-  day = null,
-  hours = null,
-  reserwation = null,
-  service = null,
-  communiting = null,
-  defaultText = null,
-  texts,
-}) => {
-  const dayText = texts.general.dayText;
-  const hoursText = texts.general.hoursText;
-  const reserwationText = texts.general.reserwationText;
-  const serviceText = texts.general.serviceText;
-  const communitingText = texts.general.communitingText;
-  const styleInline = { display: "inline-block" };
-  const styleInlineBold = { fontWeight: "bold", display: "inline-block" };
-  const styleInlineBoldCapitalize = {
-    fontWeight: "bold",
-    display: "inline-block",
-    textTransform: "capitalize",
-  };
-  return `<div>
-      {!!title && (
-        <div style={{ fontWeight: "bold", display: "inline-block" }}>
-          {title}
-        </div>
-      )}
-      {!!day && (
-        <div style={styleInline}>
-          {dayText}: <div style={styleInlineBold}>{day},</div>
-        </div>
-      )}
-      {!!hours && (
-        <div style={styleInline}>
-          {hoursText}: <div style={styleInlineBold}>{hours},</div>
-        </div>
-      )}
-      {!!reserwation && (
-        <div style={styleInline}>
-          {reserwationText}: <div style={styleInlineBold}>{reserwation}</div>
-        </div>
-      )}
-      {!!service && (
-        <div style={styleInline}>
-          {serviceText}: <div style={styleInlineBold}>{service}</div>
-        </div>
-      )}
-      {!!communiting && (
-        <div style={styleInline}>
-          {communitingText}:{" "}
-          <div style={styleInlineBoldCapitalize}>{communiting}</div>
-        </div>
-      )}
-      {!!defaultText && <div style={styleInlineBold}>{defaultText}</div>}
-    </div>`;
-};
-
 exports.generateContentEmail = ({
   alertType,
   companyChanged = false,
@@ -69,12 +11,9 @@ exports.generateContentEmail = ({
   let isCompanyChanged = !!companyChanged ? companyChanged : false;
   let alertDate = "00-00-0000";
   let timeStartEnd = "0:00 - 0:00";
-  let city = "None";
   let companyName = "Brak firmy";
   let companyLink = null;
   let title = null;
-  let day = null;
-  let hours = null;
   let reserwation = null;
   let service = null;
   let communiting = null;
@@ -85,12 +24,18 @@ exports.generateContentEmail = ({
     if (!!itemAlert.dateStart && !!itemAlert.dateEnd) {
       timeStartEnd = `${itemAlert.dateStart}-${itemAlert.dateEnd}`;
     }
+
     if (!!itemAlert.company) {
       if (!!itemAlert.company.name && !!itemAlert.company.linkPath) {
         companyName = itemAlert.company.name.toUpperCase();
         companyLink = itemAlert.company.linkPath;
       }
     }
+
+    if (!!itemAlert.serviceName) {
+      reserwation = itemAlert.serviceName;
+    }
+
     if (!!itemAlert.dateDay && !!itemAlert.dateMonth && !!itemAlert.dateYear) {
       alertDate = `${
         itemAlert.dateDay < 10 ? `0${itemAlert.dateDay}` : itemAlert.dateDay
@@ -103,7 +48,7 @@ exports.generateContentEmail = ({
   } else if (collection === "Communiting") {
     //communiting
     if (!!alertDate.city) {
-      city = alertDate.city;
+      communiting = alertDate.city;
     }
     if (!!alertDate.timeStart && !!alertDate.timeEnd) {
       timeStartEnd = `${alertDate.timeStart}-${alertDate.timeEnd}`;
@@ -128,6 +73,9 @@ exports.generateContentEmail = ({
         companyName = itemAlert.company.name.toUpperCase();
         companyLink = itemAlert.company.linkPath;
       }
+    }
+    if (!!alertDate.serviceName) {
+      service = alertDate.serviceName;
     }
     if (!!alertDate.day && !!alertDate.month && !!alertDate.year) {
       alertDate = `${
@@ -328,17 +276,27 @@ exports.generateContentEmail = ({
     }
   }
 
+  const dayText = texts.general.dayText;
+  const hoursText = texts.general.hoursText;
+  const reserwationText = texts.general.reserwationText;
+  const serviceText = texts.general.serviceText;
+  const communitingText = texts.general.communitingText;
+
   return {
     alertColor: alertColor,
     title: title,
-    day: day,
-    hours: hours,
+    day: alertDate,
+    hours: timeStartEnd,
     reserwation: reserwation,
     service: service,
     communiting: communiting,
-    city: city,
     alertDate: alertDate,
     timeStartEnd: timeStartEnd,
     companyLink: companyLink,
+    dayText: dayText,
+    hoursText: hoursText,
+    reserwationText: reserwationText,
+    serviceText: serviceText,
+    communitingText: communitingText,
   };
 };

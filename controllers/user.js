@@ -177,8 +177,8 @@ exports.registration = (req, res, next) => {
 
       notifications.sendEmail({
         email: result.email,
-        emailTitle: "Tworzenie konta zakończone powodzeniem",
-        emailMessage: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified}`,
+        title: "Tworzenie konta zakończone powodzeniem",
+        defaultText: `Utworzono nowe konto ${unhashedCodeToVerified}`,
       });
 
       res.status(200).json({
@@ -400,8 +400,8 @@ exports.sentAgainVerifiedEmail = (req, res, next) => {
         ).toString("utf-8");
         notifications.sendEmail({
           email: user.email,
-          emailTitle: "Tworzenie konta zakończone powodzeniem",
-          emailMessage: `<h1>Utworzono nowe konto</h1> ${unhashedCodeToVerified.toUpperCase()}`,
+          title: "Tworzenie konta zakończone powodzeniem",
+          defaultText: `Utworzono nowe konto ${unhashedCodeToVerified.toUpperCase()}`,
         });
         res.status(201).json({
           message: "Email został wysłany",
@@ -583,8 +583,8 @@ exports.veryfiedEmail = (req, res, next) => {
     .then((result) => {
       notifications.sendEmail({
         email: result.email,
-        emailTitle: "Tworzenie konta zakończone powodzeniem",
-        emailMessage: `<h1>Adres e-mail został zweryfikowany</h1>`,
+        title: "Tworzenie konta zakończone powodzeniem",
+        defaultText: `Adres e-mail został zweryfikowany`,
       });
       res.status(201).json({
         accountVerified: result.accountVerified,
@@ -1045,8 +1045,8 @@ exports.edit = (req, res, next) => {
 
               notifications.sendEmail({
                 email: userSavedData.email,
-                emailTitle: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
-                emailMessage: `<h1>Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}</h1>`,
+                title: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
+                defaultText: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
               });
             }
             return userSavedData;
@@ -1058,8 +1058,8 @@ exports.edit = (req, res, next) => {
 
             notifications.sendEmail({
               email: result.email,
-              emailTitle: "Edycja konta zakończone powodzeniem",
-              emailMessage: `<h1>Edycja konta zakończona pomyślnie</h1>`,
+              title: "Edycja konta zakończone powodzeniem",
+              defaultText: `Edycja konta zakończona pomyślnie`,
             });
 
             res.status(201).json({
@@ -1151,9 +1151,9 @@ exports.sentEmailResetPassword = (req, res, next) => {
 
       notifications.sendEmail({
         email: result.email,
-        emailTitle: "Kod z kodem resetującym hasło na Meetsy",
-        emailMessage: `<h1>Kod resetujący hasło</h1> ${codeToResetPassword}.
-        <h2>Data wygaśnięcia kodu: ${showDate}</h2>`,
+        title: "Kod z kodem resetującym hasło na Meetsy",
+        defaultText: `Kod resetujący hasło: ${codeToResetPassword}.
+        Data wygaśnięcia kodu: ${showDate}`,
       });
 
       res.status(200).json({
@@ -1232,8 +1232,8 @@ exports.resetPassword = (req, res, next) => {
     .then((result) => {
       notifications.sendEmail({
         email: result.email,
-        emailTitle: "Tworzenie konta zakończone powodzeniem",
-        emailMessage: `<h1>Hasło zostało zmienione</h1>`,
+        title: "Tworzenie konta zakończone powodzeniem",
+        defaultText: `Hasło zostało zmienione`,
       });
 
       res.status(200).json({
@@ -1465,9 +1465,9 @@ exports.loginFacebookNew = (req, res, next) => {
                   if (!!!err) {
                     notifications.sendEmail({
                       email: userSaved.email,
-                      emailTitle: "Tworzenie konta zakończone powodzeniem",
-                      emailMessage: `<h1>Utworzono nowe konto za pomocą facebook-a</h1>
-                      <p>Twoje nowe wygenerowane hasło to: <b>${randomPassword}</b>. Możesz go zmienić w ustawieniach konta na stronie nootis.pl</p>`,
+                      title: "Tworzenie konta zakończone powodzeniem",
+                      defaultText: `Utworzono nowe konto za pomocą facebook-a
+                      Twoje nowe wygenerowane hasło to: ${randomPassword}. Możesz go zmienić w ustawieniach konta na stronie meetsy.pl`,
                     });
 
                     res.redirect(
@@ -1657,9 +1657,9 @@ exports.loginGoogle = (req, res, next) => {
                   if (!!!err) {
                     notifications.sendEmail({
                       email: userSaved.email,
-                      emailTitle: "Tworzenie konta zakończone powodzeniem",
-                      emailMessage: `<h1>Utworzono nowe konto za pomocą googla</h1>
-                      <p>Twoje nowe wygenerowane hasło to: <b>${randomPassword}</b>. Możesz go zmienić w ustawieniach konta na stronie nootis.pl</p>`,
+                      title: "Tworzenie konta zakończone powodzeniem",
+                      defaultText: `Utworzono nowe konto za pomocą googla>
+                      Twoje nowe wygenerowane hasło to: ${randomPassword}. Możesz go zmienić w ustawieniach konta na stronie meetsy.pl`,
                     });
                     res.redirect(
                       303,
@@ -1738,8 +1738,8 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
 
       notifications.sendEmail({
         email: userSavedData.email,
-        emailTitle: `Potwierdzenie usunięcia konta ${userName} ${userSurname}`,
-        emailMessage: `<h1>Kod do usunięcia konta: ${codeToDelete.toUpperCase()}</h1>`,
+        title: `Potwierdzenie usunięcia konta ${userName} ${userSurname}`,
+        defaultText: `Kod do usunięcia konta: ${codeToDelete.toUpperCase()}`,
       });
       res.status(201).json({
         message: "Wysłano kod do usunięcia konta",
@@ -1820,8 +1820,8 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
 
       notifications.sendEmail({
         email: userSavedData.email,
-        emailTitle: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
-        emailMessage: `<h1>Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}</h1>`,
+        title: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
+        defaultText: `Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}`,
       });
       res.status(201).json({
         blockUserSendVerifiedPhoneSms:
@@ -2169,8 +2169,8 @@ exports.deleteUserAccount = (req, res, next) => {
           if (!!userDoc) {
             notifications.sendEmail({
               email: userDoc.email,
-              emailTitle: "Usunięto konto!",
-              emailMessage: "<h1>Konto została usunięte</h1>",
+              title: "Usunięto konto!",
+              defaultText: "Konto została usunięte",
             });
             return true;
           } else {
@@ -2240,8 +2240,8 @@ exports.verifiedUserPhone = (req, res, next) => {
     .then((userDoc) => {
       notifications.sendEmail({
         email: userDoc.email,
-        emailTitle: "Zweryfikowano numer telefonu!",
-        emailMessage: "<h1>Numer telefonu został zweryfikowany</h1>",
+        title: "Zweryfikowano numer telefonu!",
+        defaultText: "Numer telefonu został zweryfikowany",
       });
       return true;
     })

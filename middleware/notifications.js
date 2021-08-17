@@ -213,26 +213,66 @@ const sendMultiAlert = ({
 
 const sendEmail = async ({
   email,
-  emailTitle,
-  emailMessage,
   attachments = null,
+  title,
+  alertColor,
+  day = null,
+  hours = null,
+  reserwation = null,
+  service = null,
+  communiting = null,
+  alertDate,
+  timeStartEnd,
+  companyLink,
+  dayText,
+  hoursText,
+  reserwationText,
+  serviceText,
+  communitingText,
+  defaultText = null,
 }) => {
-  if ((!!email && !!emailTitle, !!emailMessage)) {
+  if (
+    !!email &&
+    !!title &&
+    (!!defaultText ||
+      !!reserwation ||
+      !!service ||
+      !!communiting ||
+      !!hours ||
+      !!day)
+  ) {
     ejs.renderFile(
       __dirname + "/mailTemplate.ejs",
-      { message: emailMessage },
+      {
+        title: title,
+        alertColor: alertColor,
+        day: day,
+        hours: hours,
+        reserwation: reserwation,
+        service: service,
+        communiting: communiting,
+        alertDate: alertDate,
+        timeStartEnd: timeStartEnd,
+        companyLink: companyLink,
+        dayText: dayText,
+        hoursText: hoursText,
+        reserwationText: reserwationText,
+        serviceText: serviceText,
+        communitingText: communitingText,
+        defaultText: defaultText,
+      },
       (err, data) => {
         if (!err) {
           const validAttachments = !!attachments ? attachments : {};
           transporter.sendMail({
             to: email,
             from: MAIL_INFO,
-            subject: emailTitle,
+            subject: title,
             html: data,
             ...validAttachments,
           });
         } else {
-          throw new Error("Not found email template");
+          throw new Error(err);
         }
       }
     );
@@ -764,6 +804,7 @@ const updateAllCollection = async ({
                   !!emailContent.emailTitle &&
                   !!emailContent.emailMessage
                 ) {
+                  console.log("??????????");
                   sendEmail({
                     email: noUser.customEmail,
                     emailTitle: emailContent.emailTitle,
@@ -827,31 +868,29 @@ const updateAllCollection = async ({
                       });
                     }
                   }
-
                   if (!!userResult.email) {
                     selectedEmail = !!userResult.email
                       ? userResult.email
                       : null;
                   }
+                  console.log(selectedEmail);
                   if (!!emailContent) {
-                    if (
-                      !!selectedEmail &&
-                      !!emailContent.emailTitle &&
-                      !!emailContent.emailMessage
-                    ) {
-                      const { title } = generateEmail.generateContentEmail({
-                        alertType: notificationContent.typeNotification,
-                        companyChanged: companyChanged,
-                        language: !!userResult.language
-                          ? userResult.language
-                          : "PL",
-                        itemAlert: itemUser,
-                        collection: collection,
-                      });
+                    if (!!selectedEmail) {
+                      const propsGenerator = generateEmail.generateContentEmail(
+                        {
+                          alertType: notificationContent.typeNotification,
+                          companyChanged: companyChanged,
+                          language: !!userResult.language
+                            ? userResult.language
+                            : "PL",
+                          itemAlert: itemUser,
+                          collection: collection,
+                        }
+                      );
+                      // console.log(propsGenerator);
                       sendEmail({
                         email: selectedEmail,
-                        emailTitle: title,
-                        emailMessage: title,
+                        ...propsGenerator,
                       });
                     }
                   }

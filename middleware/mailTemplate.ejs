@@ -117,6 +117,26 @@
           overflow: hidden;
         }
       }
+
+      .titleStyle {
+        font-weight: "bold";
+        display: "inline-block";
+      }
+
+      .styleInline {
+        display: "inline-block";
+      }
+
+      .styleInlineBold {
+        font-weight: "bold";
+        display: "inline-block";
+      }
+
+      .styleInlineBoldCapitalize {
+        font-weight: "bold";
+        display: "inline-block";
+        text-transform: "capitalize";
+      }
     </style>
 
     <!--[if !mso]><!-->
@@ -451,26 +471,51 @@
                                 "
                                 align="left"
                               >
-                                <div
-                                  style="
-                                    color: #7a7676;
-                                    line-height: 150%;
-                                    text-align: left;
-                                    word-wrap: break-word;
-                                  "
-                                >
-                                  <p
-                                    style="
-                                      font-size: 14px;
-                                      line-height: 150%;
-                                      text-align: left;
-                                    "
-                                  >
-                                    <span
-                                      style="font-size: 16px; line-height: 24px"
-                                      ><%= message %></span
-                                    >
-                                  </p>
+                                <div>
+                                  <div>
+                                    <% if (!!title) { %>
+                                    <div class="titleStyle"><%= title %></div>
+                                    <% } %> <% if (!!day) { %>
+                                    <div class="styleInline">
+                                      <%= dayText %>
+                                      <div class="styleInlineBold">
+                                        <%= day %>,
+                                      </div>
+                                    </div>
+                                    <% } %> <% if (!!hours) { %>
+                                    <div class="styleInline">
+                                      <%= hoursText %>
+                                      <div class="styleInlineBold">
+                                        <%= hours %>,
+                                      </div>
+                                    </div>
+                                    <% } %> <% if (!!reserwation) { %>
+                                    <div class="styleInline">
+                                      <%= reserwationText %>
+                                      <div class="styleInlineBold">
+                                        <%= reserwation %>,
+                                      </div>
+                                    </div>
+                                    <% } %> <% if (!!service) { %>
+                                    <div class="styleInline">
+                                      <%= serviceText %>
+                                      <div class="styleInlineBold">
+                                        <%= service %>,
+                                      </div>
+                                    </div>
+                                    <% } %> <% if (!!communiting) { %>
+                                    <div class="styleInline">
+                                      <%= communitingText %>
+                                      <div class="styleInlineBold">
+                                        <%= communiting %>,
+                                      </div>
+                                    </div>
+                                    <% } %> <% if (!!defaultText) { %>
+                                    <div class="styleInlineBold">
+                                      <%= defaultText %>,
+                                    </div>
+                                    <% } %>
+                                  </div>
                                 </div>
                               </td>
                             </tr>

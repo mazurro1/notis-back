@@ -374,8 +374,8 @@ exports.updateOrderProcess = async (req, res, next) => {
             ).then(() => {
               notifications.sendEmail({
                 email: resultCompanyDoc.email,
-                emailTitle: `Dziękujemy za zakup!`,
-                emailMessage: `Dziękujemy za zakup! Faktura vat zostanie wysłana w ciagu 1 dnia roboczego.`,
+                title: `Dziękujemy za zakup!`,
+                defaultText: `Dziękujemy za zakup! Faktura vat zostanie wysłana w ciagu 1 dnia roboczego.`,
               });
               return true;
             });
@@ -432,10 +432,8 @@ exports.sendInvoiceToCompany = async (req, res, next) => {
                 if (!err) {
                   notifications.sendEmail({
                     email: resultInvoice.companyId.email,
-                    emailTitle: "Faktura vat za dokonany zakup",
-                    emailMessage: `<h1>Witamy</h1>
-                    Przesyłamy w załączniku fakture vat za dokonane zakupy!
-                    `,
+                    title: "Faktura vat za dokonany zakup",
+                    defaultText: `Przesyłamy w załączniku fakture vat za dokonane zakupy!`,
                     attachments: [
                       {
                         content: data.Body,
