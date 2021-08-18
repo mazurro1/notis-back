@@ -1375,26 +1375,19 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         userField: "fromUser",
         workerField: "toWorkerUserId",
-        emailContent: {
-          emailTitle: "Odwołano wizyte w firmie",
-          emailMessage: "Odwołano wizytę w firmie",
-        },
+        sendEmailValid: true,
         notificationContent: {
           typeAlert: "reserwationId",
-          typeNotification: "reserwation_canceled",
-          payload: {
-            title: "Odwołano wizyte w firmie",
-            body: "Odwołano wizyte w firmie",
-            icon: "",
-          },
         },
         smsContent: {
           companySendSMSValidField: "smsCanceledAvaible",
-          titleCompanySendSMS: "Odwołano wizyte",
           titleCompanySMSAlert: "sms_canceled_reserwation",
-          message: "Odwołano wizyte w firmie",
+          collectionFieldSMSOnSuccess: {
+            sendSMSCanceled: true,
+          },
         },
         companyChanged: true,
+        typeNotification: "reserwation_canceled",
       });
       return userDoc;
     })
@@ -1417,26 +1410,19 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         userField: "userId",
         workerField: "workerUserId",
-        emailContent: {
-          emailTitle: "Odwołano serwis w firmie",
-          emailMessage: "Odwołano serwis w firmie",
-        },
+        sendEmailValid: true,
         notificationContent: {
           typeAlert: "serviceId",
-          typeNotification: "service_deleted",
-          payload: {
-            title: "Odwołano serwis w firmie",
-            body: "Odwołano serwis w firmie",
-            icon: "",
-          },
         },
         smsContent: {
           companySendSMSValidField: "smsServiceDeletedAvaible",
-          titleCompanySendSMS: "Odwołano serwis",
           titleCompanySMSAlert: "sms_canceled_service",
-          message: "Odwołano serwis w firmie",
+          collectionFieldSMSOnSuccess: {
+            canceledSMS: true,
+          },
         },
         companyChanged: true,
+        typeNotification: "service_deleted",
       });
       return userDoc;
     })
@@ -1462,26 +1448,19 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         userField: "userId",
         workerField: "workerUserId",
-        emailContent: {
-          emailTitle: "Odwołano dojazd w firmie",
-          emailMessage: "Odwołano dojazd w firmie",
-        },
+        sendEmailValid: true,
         notificationContent: {
           typeAlert: "communitingId",
-          typeNotification: "commuting_canceled",
-          payload: {
-            title: "Odwołano dojazd w firmie",
-            body: "Odwołano dojazd w firmie",
-            icon: "",
-          },
         },
         smsContent: {
           companySendSMSValidField: "smsCommunitingCanceledAvaible",
-          titleCompanySendSMS: "Odwołano dojazd",
           titleCompanySMSAlert: "sms_canceled_communiting",
-          message: "Odwołano dojazd w firmie",
+          collectionFieldSMSOnSuccess: {
+            canceledSMS: true,
+          },
         },
         companyChanged: true,
+        typeNotification: "commuting_canceled",
       });
 
       return resultUpdated;

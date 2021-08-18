@@ -75,7 +75,6 @@ const sendAlert = ({
   payload = {
     title: "",
     body: "",
-    icon: "",
   },
   companyChanged = true,
 }) => {
@@ -111,7 +110,14 @@ const sendAlert = ({
     if (!!payload) {
       if (!!userDoc.vapidEndpoint && !!payload.title && !!payload.body) {
         webpush
-          .sendNotification(userDoc.vapidEndpoint, JSON.stringify(payload))
+          .sendNotification(
+            userDoc.vapidEndpoint,
+            JSON.stringify({
+              title: payload.title,
+              body: payload.body,
+              icon: "",
+            })
+          )
           .then(() => {})
           .catch(() => {});
       }
@@ -135,48 +141,100 @@ const sendMultiAlert = ({
   usersResultWithItems = [],
   avaibleSendAlertToWorker = false,
   payload = {
-    title: "",
-    body: "",
-    icon: "",
+    extraTitle: "",
+    collection: "",
   },
   companyChanged = true,
   userField = "",
 }) => {
-  const newInserItems = [];
-  for (const userDoc of usersResultWithItems) {
-    for (const userItem of userDoc.items) {
-      if (!!typeNotification && !!typeAlert) {
-        const newAlertDataUser = {
-          [typeAlert]: userItem._id,
-          active: true,
-          type: typeNotification,
-          creationTime: new Date(),
-          companyChanged: companyChanged,
-          toUserId: userDoc[userField],
-        };
-        newInserItems.push(newAlertDataUser);
+  if (!!typeNotification) {
+    const newInserItems = [];
+    for (const userDoc of usersResultWithItems) {
+      for (const userItem of userDoc.items) {
+        if (!!payload) {
+          if (!!userDoc.vapidEndpoint && !!payload.collection) {
+            const {
+              title,
+              day,
+              dayText,
+              hours,
+              hoursText,
+              reserwation,
+              reserwationText,
+              service,
+              serviceText,
+              communiting,
+              communitingText,
+              defaultText,
+            } = generateEmail.generateContentEmail({
+              alertType: typeNotification,
+              companyChanged: companyChanged,
+              language: !!userDoc.language ? userDoc.language : "PL",
+              itemAlert: userItem,
+              collection: payload.collection,
+            });
 
-        io.getIO().emit(`user${userDoc[userField]}`, {
-          action: "update-alerts",
-          alertData: {
-            [typeAlert]: userItem,
-            active: true,
-            type: typeNotification,
-            creationTime: new Date(),
-            companyChanged: companyChanged,
-          },
-        });
+            const bodyPayload = `${!!title ? title : ""} ${
+              !!day ? `${dayText}: ${day}` : ""
+            } ${!!hours ? `${hoursText}: ${hours}` : ""} ${
+              !!reserwation ? `${reserwationText}: ${reserwation}` : ""
+            } ${!!service ? `${serviceText}: ${service}` : ""} ${
+              !!communiting ? `${communitingText}: ${communiting}` : ""
+            } ${!!defaultText ? defaultText : ""}`;
 
-        if (!!avaibleSendAlertToWorker && !!workerUserField) {
-          const newAlertDataWorker = {
+            const titlePayload = !!payload.extraTitle
+              ? `Meetsy - ${payload.extraTitle}`
+              : "Meetsy";
+
+            webpush
+              .sendNotification(
+                userDoc.vapidEndpoint,
+                JSON.stringify({
+                  title: titlePayload,
+                  body: bodyPayload,
+                  icon: "",
+                })
+              )
+              .then(() => {})
+              .catch(() => {});
+
+            if (!!userItem.toWorkerUserId) {
+              if (!!userItem.toWorkerUserId.vapidEndpoint) {
+                webpush
+                  .sendNotification(
+                    userItem.toWorkerUserId.vapidEndpoint,
+                    JSON.stringify({
+                      title: titlePayload,
+                      body:
+                        userItem.toWorkerUserId.language == "PL"
+                          ? "Nowe powiadomienie"
+                          : "New notification",
+                      icon: "",
+                    })
+                  )
+                  .then(() => {})
+                  .catch(() => {});
+              }
+            }
+          }
+        }
+        if (!!typeAlert) {
+          if (!!workerUserField) {
+            if (!!userItem[workerUserField]._id) {
+              userItem[workerUserField] = userItem[workerUserField]._id;
+            }
+          }
+          const newAlertDataUser = {
             [typeAlert]: userItem._id,
             active: true,
             type: typeNotification,
             creationTime: new Date(),
             companyChanged: companyChanged,
-            toUserId: userItem[workerUserField],
+            toUserId: userDoc[userField],
           };
-          io.getIO().emit(`user${userItem[workerUserField]}`, {
+          newInserItems.push(newAlertDataUser);
+
+          io.getIO().emit(`user${userDoc[userField]}`, {
             action: "update-alerts",
             alertData: {
               [typeAlert]: userItem,
@@ -186,28 +244,40 @@ const sendMultiAlert = ({
               companyChanged: companyChanged,
             },
           });
-          newInserItems.push(newAlertDataWorker);
-        }
-      }
 
-      if (!!payload) {
-        if (!!userDoc.vapidEndpoint && !!payload.title && !!payload.body) {
-          webpush
-            .sendNotification(userDoc.vapidEndpoint, JSON.stringify(payload))
-            .then(() => {})
-            .catch(() => {});
+          if (!!avaibleSendAlertToWorker && !!workerUserField) {
+            const newAlertDataWorker = {
+              [typeAlert]: userItem._id,
+              active: true,
+              type: typeNotification,
+              creationTime: new Date(),
+              companyChanged: companyChanged,
+              toUserId: userItem[workerUserField],
+            };
+            io.getIO().emit(`user${userItem[workerUserField]}`, {
+              action: "update-alerts",
+              alertData: {
+                [typeAlert]: userItem,
+                active: true,
+                type: typeNotification,
+                creationTime: new Date(),
+                companyChanged: companyChanged,
+              },
+            });
+            newInserItems.push(newAlertDataWorker);
+          }
         }
       }
     }
-  }
-  if (newInserItems.length > 0) {
-    Alert.insertMany(newInserItems)
-      .then(() => {})
-      .catch(() => {
-        const error = new Error("Błąd podczas aktualizacji powiadomień.");
-        error.statusCode = 422;
-        throw error;
-      });
+    if (newInserItems.length > 0) {
+      Alert.insertMany(newInserItems)
+        .then(() => {})
+        .catch(() => {
+          const error = new Error("Błąd podczas aktualizacji powiadomień.");
+          error.statusCode = 422;
+          throw error;
+        });
+    }
   }
 };
 
@@ -283,8 +353,8 @@ const sendVerifySMS = ({ phoneNumber = null, message = null }) => {
   if (!!phoneNumber && !!message) {
     const params = {
       Message: message,
-      PhoneNumber: `+48${phoneNumber}`,
-      // PhoneNumber: `+48515873009`,
+      // PhoneNumber: `+48${phoneNumber}`,
+      PhoneNumber: `+48515873009`,
     };
 
     return sns
@@ -346,8 +416,8 @@ const sendSMS = ({
       .then((updated) => {
         const params = {
           Message: message,
-          PhoneNumber: `+48${customPhone}`,
-          // PhoneNumber: `+48515873009`,
+          // PhoneNumber: `+48${customPhone}`,
+          PhoneNumber: `+48515873009`,
         };
 
         return sns
@@ -430,8 +500,8 @@ const sendSMS = ({
                 .then(() => {
                   const params = {
                     Message: message,
-                    PhoneNumber: `+48${userPhone}`,
-                    // PhoneNumber: `+48515873009`,
+                    // PhoneNumber: `+48${userPhone}`,
+                    PhoneNumber: `+48515873009`,
                   };
 
                   return sns
@@ -656,26 +726,17 @@ const updateAllCollection = async ({
   userField = "",
   workerField = "",
   updateCollectionItemObject = null,
-  emailContent = {
-    emailTitle: "Odwołano wizyte w firmie",
-    emailMessage: "Odwołano wizytę w firmie",
-  },
+  sendEmailValid = true,
   notificationContent = {
     typeAlert: "",
-    typeNotification: "",
-    payload: {
-      title: "",
-      body: "",
-      icon: "",
-    },
   },
   smsContent = {
     companySendSMSValidField: null,
-    titleCompanySendSMS: "",
+    collectionFieldSMSOnSuccess: null,
     titleCompanySMSAlert: "",
-    message: "",
   },
   companyChanged = false,
+  typeNotification = "",
 }) => {
   const selectedCollection =
     collection === "Communiting"
@@ -685,6 +746,7 @@ const updateAllCollection = async ({
       : collection === "Reserwation"
       ? Reserwation
       : null;
+
   if (
     !!selectedCollection &&
     !!workerField &&
@@ -693,7 +755,8 @@ const updateAllCollection = async ({
     !!filtersCollection &&
     !!companyId &&
     !!updateCollectionItemObject &&
-    !!companyField
+    !!companyField &&
+    !!typeNotification
   ) {
     return selectedCollection
       .find(filtersCollection)
@@ -701,6 +764,7 @@ const updateAllCollection = async ({
         `${collectionItems} ${extraCollectionPhoneField} ${extraCollectionEmailField} ${extraCollectionNameField}`
       )
       .populate(userField, "_id name surname")
+      .populate(workerField, "_id vapidEndpoint language")
       .populate(companyField, "_id name linkPath owner")
       .then(async (allCommunitings) => {
         const allUsers = [];
@@ -711,7 +775,6 @@ const updateAllCollection = async ({
         if (!!smsContent) {
           if (
             !!smsContent.companySendSMSValidField &&
-            !!smsContent.message &&
             !!smsContent.titleCompanySMSAlert &&
             !!companyId
           ) {
@@ -787,32 +850,89 @@ const updateAllCollection = async ({
         for (const noUser of otherUsersWithoutAccount) {
           if (!!noUser.customPhone) {
             for (const itemNoUser of noUser.items) {
+              const propsGenerator = generateEmail.generateContentEmail({
+                alertType: typeNotification,
+                companyChanged: companyChanged,
+                language: "PL",
+                itemAlert: itemNoUser,
+                collection: collection,
+              });
               if (avaibleSendSMS && !!companyChanged) {
                 const userPhone = Buffer.from(
                   noUser.customPhone,
                   "base64"
                 ).toString("utf-8");
 
-                await sendVerifySMS({
+                const bodySMS = `${
+                  !!propsGenerator.title ? propsGenerator.title : ""
+                } ${
+                  !!propsGenerator.day
+                    ? `${propsGenerator.dayText}: ${propsGenerator.day}`
+                    : ""
+                } ${
+                  !!propsGenerator.hours
+                    ? `${propsGenerator.hoursText}: ${propsGenerator.hours}`
+                    : ""
+                } ${
+                  !!propsGenerator.reserwation
+                    ? `${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
+                    : ""
+                } ${
+                  !!propsGenerator.service
+                    ? `${propsGenerator.serviceText}: ${propsGenerator.service}`
+                    : ""
+                } ${
+                  !!propsGenerator.communiting
+                    ? `${propsGenerator.communitingText}: ${propsGenerator.communiting}`
+                    : ""
+                } ${
+                  !!propsGenerator.defaultText ? propsGenerator.defaultText : ""
+                }`;
+
+                const resultSMS = await sendVerifySMS({
                   phoneNumber: userPhone,
-                  message: `${smsContent.message}, data: ${itemNoUser.day}-${itemNoUser.month}-${itemNoUser.year}, godzina: ${itemNoUser.timeStart}-${itemNoUser.timeEnd}, miasto: ${itemNoUser.city}`,
+                  message: bodySMS,
                 });
+
+                if (!!resultSMS) {
+                  bulkArrayToUpdate.push({
+                    updateOne: {
+                      filter: {
+                        _id: itemNoUser._id,
+                      },
+                      update: {
+                        $set: smsContent.collectionFieldSMSOnSuccess,
+                      },
+                    },
+                  });
+                }
               }
-              if (!!emailContent) {
-                if (
-                  !!noUser.customEmail &&
-                  !!emailContent.emailTitle &&
-                  !!emailContent.emailMessage
-                ) {
-                  console.log("??????????");
+              if (!!sendEmailValid) {
+                if (!!noUser.customEmail) {
                   sendEmail({
-                    email: noUser.customEmail,
-                    emailTitle: emailContent.emailTitle,
-                    emailMessage: `${emailContent.emailMessage}, data: ${itemNoUser.day}-${itemNoUser.month}-${itemNoUser.year}, godzina: ${itemNoUser.timeStart}-${itemNoUser.timeEnd}, miasto: ${itemNoUser.city}`,
+                    email: selectedEmail,
+                    ...propsGenerator,
                   });
                 }
               }
             }
+          }
+        }
+
+        if (!!notificationContent) {
+          if (!!notificationContent.typeAlert && !!typeNotification) {
+            sendMultiAlert({
+              typeAlert: notificationContent.typeAlert,
+              typeNotification: typeNotification,
+              workerUserField: workerField,
+              usersResultWithItems: otherUsersWithoutAccount,
+              avaibleSendAlertToWorker: true,
+              payload: {
+                collection: collection,
+              },
+              companyChanged: companyChanged,
+              userField: userField,
+            });
           }
         }
 
@@ -835,14 +955,32 @@ const updateAllCollection = async ({
                   allUsersWithItemsWithVapid.findIndex(
                     (userWithItem) => userWithItem[userField] == userResult._id
                   );
-                if (findIndexUserWithVapid > 0) {
-                  allUsersWithItemsWithVapid[
-                    findIndexUserWithVapid
-                  ].vapidEndpoint = userResult.vapidEndpoint;
+                if (findIndexUserWithVapid >= 0) {
+                  if (!!userResult.vapidEndpoint) {
+                    allUsersWithItemsWithVapid[
+                      findIndexUserWithVapid
+                    ].vapidEndpoint = userResult.vapidEndpoint;
+                  }
+                  if (!!userResult.language) {
+                    allUsersWithItemsWithVapid[
+                      findIndexUserWithVapid
+                    ].language = userResult.language;
+                  }
                 }
                 for (const itemUser of findUserWithItems.items) {
+                  const propsGenerator = generateEmail.generateContentEmail({
+                    alertType: typeNotification,
+                    companyChanged: companyChanged,
+                    language: !!userResult.language
+                      ? userResult.language
+                      : "PL",
+                    itemAlert: itemUser,
+                    collection: collection,
+                  });
+
                   let selectedPhoneNumber = null;
                   let selectedEmail = null;
+
                   if (avaibleSendSMS) {
                     if (!!userResult.phoneVerified) {
                       selectedPhoneNumber = userResult.phone;
@@ -856,16 +994,57 @@ const updateAllCollection = async ({
                         }
                       }
                     }
-
-                    if (!!selectedPhoneNumber && !!companyChanged) {
+                    if (!!selectedPhoneNumber) {
                       const userPhone = Buffer.from(
                         selectedPhoneNumber,
                         "base64"
                       ).toString("utf-8");
-                      await sendVerifySMS({
+
+                      const bodySMS = `${
+                        !!propsGenerator.title ? propsGenerator.title : ""
+                      } ${
+                        !!propsGenerator.day
+                          ? `${propsGenerator.dayText}: ${propsGenerator.day}`
+                          : ""
+                      } ${
+                        !!propsGenerator.hours
+                          ? `${propsGenerator.hoursText}: ${propsGenerator.hours}`
+                          : ""
+                      } ${
+                        !!propsGenerator.reserwation
+                          ? `${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
+                          : ""
+                      } ${
+                        !!propsGenerator.service
+                          ? `${propsGenerator.serviceText}: ${propsGenerator.service}`
+                          : ""
+                      } ${
+                        !!propsGenerator.communiting
+                          ? `${propsGenerator.communitingText}: ${propsGenerator.communiting}`
+                          : ""
+                      } ${
+                        !!propsGenerator.defaultText
+                          ? propsGenerator.defaultText
+                          : ""
+                      }`;
+
+                      const resultSMS = await sendVerifySMS({
                         phoneNumber: userPhone,
-                        message: `${smsContent.message}, data: ${itemUser.day}-${itemUser.month}-${itemUser.year}, godzina: ${itemUser.timeStart}-${itemUser.timeEnd}, miasto: ${itemUser.city}`,
+                        message: bodySMS,
                       });
+
+                      if (!!resultSMS) {
+                        bulkArrayToUpdate.push({
+                          updateOne: {
+                            filter: {
+                              _id: itemUser._id,
+                            },
+                            update: {
+                              $set: smsContent.collectionFieldSMSOnSuccess,
+                            },
+                          },
+                        });
+                      }
                     }
                   }
                   if (!!userResult.email) {
@@ -873,21 +1052,9 @@ const updateAllCollection = async ({
                       ? userResult.email
                       : null;
                   }
-                  console.log(selectedEmail);
-                  if (!!emailContent) {
+
+                  if (!!sendEmailValid) {
                     if (!!selectedEmail) {
-                      const propsGenerator = generateEmail.generateContentEmail(
-                        {
-                          alertType: notificationContent.typeNotification,
-                          companyChanged: companyChanged,
-                          language: !!userResult.language
-                            ? userResult.language
-                            : "PL",
-                          itemAlert: itemUser,
-                          collection: collection,
-                        }
-                      );
-                      // console.log(propsGenerator);
                       sendEmail({
                         email: selectedEmail,
                         ...propsGenerator,
@@ -898,44 +1065,48 @@ const updateAllCollection = async ({
               }
             }
             if (!!notificationContent) {
-              if (
-                !!notificationContent.typeAlert &&
-                !!notificationContent.typeNotification
-              ) {
+              if (!!notificationContent.typeAlert && !!typeNotification) {
                 sendMultiAlert({
                   typeAlert: notificationContent.typeAlert,
-                  typeNotification: notificationContent.typeNotification,
+                  typeNotification: typeNotification,
                   workerUserField: workerField,
                   usersResultWithItems: allUsersWithItemsWithVapid,
                   avaibleSendAlertToWorker: true,
                   payload: {
-                    title: notificationContent.payload.title,
-                    body: `${notificationContent.payload.body}`,
-                    icon: "",
+                    collection: collection,
                   },
                   companyChanged: companyChanged,
                   userField: userField,
                 });
               }
             }
-
-            return (
-              selectedCollection
-                // .bulkWrite(bulkArrayToUpdate)
-                .bulkWrite([])
-                .then(() => {
-                  return true;
-                })
-                .catch((err) => {
-                  if (!err.statusCode) {
-                    err.statusCode = 501;
-                    err.message = "Błąd podczas wysyłania powiadomień.";
-                  }
-                  next(err);
-                })
-            );
+            return selectedCollection
+              .bulkWrite(bulkArrayToUpdate)
+              .then(() => {
+                return true;
+              })
+              .catch((err) => {
+                if (!err.statusCode) {
+                  err.statusCode = 501;
+                  err.message = "Błąd podczas wysyłania powiadomień.";
+                }
+                next(err);
+              });
           });
       });
+  } else {
+    console.log(
+      !!selectedCollection,
+      !!workerField,
+      !!userField,
+      !!collectionItems,
+      !!filtersCollection,
+      !!companyId,
+      !!updateCollectionItemObject,
+      !!companyField,
+      !!typeNotification
+    );
+    throw new Error("Error valid notifications");
   }
 };
 
