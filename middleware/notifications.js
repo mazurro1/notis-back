@@ -46,6 +46,12 @@ AWS.config.update({
   region: AWS_REGION_APP,
 });
 
+const validateEmail = (email) => {
+  const re =
+    /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  return re.test(String(email).toLowerCase());
+};
+
 const sns = new AWS.SNS({
   MessageAttributes: {
     "AWS.SNS.SMS.SenderID": {
@@ -224,37 +230,18 @@ const sendMultiAlert = ({
               userItem[workerUserField] = userItem[workerUserField]._id;
             }
           }
-          const newAlertDataUser = {
-            [typeAlert]: userItem._id,
-            active: true,
-            type: typeNotification,
-            creationTime: new Date(),
-            companyChanged: companyChanged,
-            toUserId: userDoc[userField],
-          };
-          newInserItems.push(newAlertDataUser);
-
-          io.getIO().emit(`user${userDoc[userField]}`, {
-            action: "update-alerts",
-            alertData: {
-              [typeAlert]: userItem,
-              active: true,
-              type: typeNotification,
-              creationTime: new Date(),
-              companyChanged: companyChanged,
-            },
-          });
-
-          if (!!avaibleSendAlertToWorker && !!workerUserField) {
-            const newAlertDataWorker = {
+          if (!!userItem.fromUser) {
+            const newAlertDataUser = {
               [typeAlert]: userItem._id,
               active: true,
               type: typeNotification,
               creationTime: new Date(),
               companyChanged: companyChanged,
-              toUserId: userItem[workerUserField],
+              toUserId: userDoc[userField],
             };
-            io.getIO().emit(`user${userItem[workerUserField]}`, {
+            newInserItems.push(newAlertDataUser);
+
+            io.getIO().emit(`user${userDoc[userField]}`, {
               action: "update-alerts",
               alertData: {
                 [typeAlert]: userItem,
@@ -264,7 +251,29 @@ const sendMultiAlert = ({
                 companyChanged: companyChanged,
               },
             });
-            newInserItems.push(newAlertDataWorker);
+          }
+          if (!!userItem.toWorkerUserId) {
+            if (!!avaibleSendAlertToWorker && !!workerUserField) {
+              const newAlertDataWorker = {
+                [typeAlert]: userItem._id,
+                active: true,
+                type: typeNotification,
+                creationTime: new Date(),
+                companyChanged: companyChanged,
+                toUserId: userItem[workerUserField],
+              };
+              io.getIO().emit(`user${userItem[workerUserField]}`, {
+                action: "update-alerts",
+                alertData: {
+                  [typeAlert]: userItem,
+                  active: true,
+                  type: typeNotification,
+                  creationTime: new Date(),
+                  companyChanged: companyChanged,
+                },
+              });
+              newInserItems.push(newAlertDataWorker);
+            }
           }
         }
       }
@@ -272,8 +281,8 @@ const sendMultiAlert = ({
     if (newInserItems.length > 0) {
       Alert.insertMany(newInserItems)
         .then(() => {})
-        .catch(() => {
-          const error = new Error("Błąd podczas aktualizacji powiadomień.");
+        .catch((err) => {
+          const error = new Error(err);
           error.statusCode = 422;
           throw error;
         });
@@ -909,10 +918,12 @@ const updateAllCollection = async ({
               }
               if (!!sendEmailValid) {
                 if (!!noUser.customEmail) {
-                  sendEmail({
-                    email: selectedEmail,
-                    ...propsGenerator,
-                  });
+                  if (validateEmail(noUser.customEmail)) {
+                    sendEmail({
+                      email: noUser.customEmail,
+                      ...propsGenerator,
+                    });
+                  }
                 }
               }
             }
@@ -1055,10 +1066,12 @@ const updateAllCollection = async ({
 
                   if (!!sendEmailValid) {
                     if (!!selectedEmail) {
-                      sendEmail({
-                        email: selectedEmail,
-                        ...propsGenerator,
-                      });
+                      if (validateEmail(selectedEmail)) {
+                        sendEmail({
+                          email: selectedEmail,
+                          ...propsGenerator,
+                        });
+                      }
                     }
                   }
                 }

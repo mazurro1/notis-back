@@ -3154,13 +3154,17 @@ exports.changeReserwation = (req, res, next) => {
                       workerReserwation: false,
                       isDraft: true,
                       hasCommuniting: false,
+                      sendSMSReserwation: false,
+                      sendSMSNotifaction: false,
+                      sendSMSCanceled: false,
+                      sendSMSChanged: false,
                     });
                     newReserwationDraftId = newReserwationToValid._id;
                   }
                   if (!!newReserwationToValid) {
                     return newReserwationToValid
                       .save()
-                      .then((resultSavePreBooking) => {
+                      .then(async (resultSavePreBooking) => {
                         let userIsBlocked = false;
                         const validUserInformation =
                           !!companyDocData.usersInformation
@@ -3704,118 +3708,117 @@ exports.changeReserwation = (req, res, next) => {
                                           100
                                       );
 
-                                    return Reserwation.updateOne(
-                                      {
+                                    await notifications.updateAllCollection({
+                                      companyId: companyId,
+                                      companyField: "company",
+                                      collection: "Reserwation",
+                                      collectionItems:
+                                        "_id serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+                                      extraCollectionPhoneField: "phone",
+                                      extraCollectionEmailField: "email",
+                                      extraCollectionNameField: "name surname",
+                                      updateCollectionItemObject: {
+                                        isDraft: false,
+                                        dateStart: dateStart,
+                                        dateEnd: timeEndService,
+                                        costReserwation:
+                                          resultPriceAfterPromotion,
+                                        timeReserwation: selectedServices.time,
+                                        serviceName:
+                                          selectedServices.serviceName,
+                                        visitNotFinished: false,
+                                        visitCanceled: false,
+                                        visitChanged: true,
+                                        extraCost: selectedServices.extraCost,
+                                        extraTime: selectedServices.extraTime,
+                                        reserwationMessage: reserwationMessage,
+                                        workerReserwation: false,
+                                        serviceId: selectedServices._id,
+                                        fullDate: actualDate,
+                                        activePromotion: !!promotionNumber
+                                          ? true
+                                          : false,
+                                        activeHappyHour: !!happyHourNumber
+                                          ? true
+                                          : false,
+                                        activeStamp: !!stampNumber
+                                          ? true
+                                          : false,
+                                        basicPrice:
+                                          selectedServices.serviceCost,
+                                        isDeleted: false,
+                                        oldReserwationId: selectedReserwationId,
+                                      },
+                                      filtersCollection: {
                                         _id: newReserwationDraftId._id,
+                                      },
+                                      userField: "fromUser",
+                                      workerField: "toWorkerUserId",
+                                      sendEmailValid: true,
+                                      notificationContent: {
+                                        typeAlert: "reserwationId",
+                                      },
+                                      smsContent: {
+                                        companySendSMSValidField:
+                                          "smsReserwationChangedUserAvaible",
+                                        titleCompanySMSAlert:
+                                          "sms_user_changed_reserwation",
+                                        collectionFieldSMSOnSuccess: {
+                                          sendSMSReserwationUserChanged: true,
+                                        },
+                                      },
+                                      companyChanged: false,
+                                      typeNotification: "reserwation_changed",
+                                    });
+
+                                    newReserwationDraftId.isDeleted = false;
+                                    newReserwationToValid.isDraft = false;
+                                    newReserwationToValid.dateStart = dateStart;
+                                    newReserwationToValid.dateEnd =
+                                      timeEndService;
+                                    newReserwationToValid.costReserwation =
+                                      resultPriceAfterPromotion;
+                                    newReserwationToValid.timeReserwation =
+                                      selectedServices.time;
+                                    newReserwationToValid.serviceName =
+                                      selectedServices.serviceName;
+                                    newReserwationToValid.visitNotFinished = false;
+                                    newReserwationToValid.visitCanceled = false;
+                                    newReserwationToValid.visitChanged = false;
+                                    newReserwationToValid.extraCost =
+                                      selectedServices.extraCost;
+                                    newReserwationToValid.extraTime =
+                                      selectedServices.extraTime;
+                                    newReserwationToValid.reserwationMessage =
+                                      reserwationMessage;
+                                    newReserwationToValid.workerReserwation = false;
+                                    newReserwationToValid.serviceId =
+                                      selectedServices._id;
+                                    newReserwationToValid.fullDate = actualDate;
+                                    newReserwationToValid.activePromotion =
+                                      !!promotionNumber ? true : false;
+                                    newReserwationToValid.activeHappyHour =
+                                      !!happyHourNumber ? true : false;
+                                    newReserwationToValid.activeStamp =
+                                      !!stampNumber ? true : false;
+                                    newReserwationToValid.basicPrice =
+                                      selectedServices.serviceCost;
+
+                                    Reserwation.updateOne(
+                                      {
+                                        _id: selectedReserwationId,
                                       },
                                       {
                                         $set: {
-                                          sendSMSReserwation: false,
-                                          sendSMSNotifaction: false,
-                                          sendSMSCanceled: false,
-                                          sendSMSChanged: false,
-                                          isDraft: false,
-                                          dateStart: dateStart,
-                                          dateEnd: timeEndService,
-                                          costReserwation:
-                                            resultPriceAfterPromotion,
-                                          timeReserwation:
-                                            selectedServices.time,
-                                          serviceName:
-                                            selectedServices.serviceName,
-                                          visitNotFinished: false,
-                                          visitCanceled: false,
-                                          visitChanged: true,
-                                          extraCost: selectedServices.extraCost,
-                                          extraTime: selectedServices.extraTime,
-                                          reserwationMessage:
-                                            reserwationMessage,
-                                          workerReserwation: false,
-                                          serviceId: selectedServices._id,
-                                          fullDate: actualDate,
-                                          activePromotion: !!promotionNumber
-                                            ? true
-                                            : false,
-                                          activeHappyHour: !!happyHourNumber
-                                            ? true
-                                            : false,
-                                          activeStamp: !!stampNumber
-                                            ? true
-                                            : false,
-                                          basicPrice:
-                                            selectedServices.serviceCost,
-                                          isDeleted: false,
-                                          oldReserwationId:
-                                            selectedReserwationId,
+                                          isDeleted: true,
                                         },
                                       }
-                                    )
-                                      .then(() => {
-                                        newReserwationDraftId.isDeleted = false;
-                                        newReserwationDraftId.sendSMSReserwation = false;
-                                        newReserwationDraftId.sendSMSNotifaction = false;
-                                        newReserwationDraftId.sendSMSCanceled = false;
-                                        newReserwationDraftId.sendSMSChanged = false;
-                                        newReserwationToValid.isDraft = false;
-                                        newReserwationToValid.dateStart =
-                                          dateStart;
-                                        newReserwationToValid.dateEnd =
-                                          timeEndService;
-                                        newReserwationToValid.costReserwation =
-                                          resultPriceAfterPromotion;
-                                        newReserwationToValid.timeReserwation =
-                                          selectedServices.time;
-                                        newReserwationToValid.serviceName =
-                                          selectedServices.serviceName;
-                                        newReserwationToValid.visitNotFinished = false;
-                                        newReserwationToValid.visitCanceled = false;
-                                        newReserwationToValid.visitChanged = false;
-                                        newReserwationToValid.extraCost =
-                                          selectedServices.extraCost;
-                                        newReserwationToValid.extraTime =
-                                          selectedServices.extraTime;
-                                        newReserwationToValid.reserwationMessage =
-                                          reserwationMessage;
-                                        newReserwationToValid.workerReserwation = false;
-                                        newReserwationToValid.serviceId =
-                                          selectedServices._id;
-                                        newReserwationToValid.fullDate =
-                                          actualDate;
-                                        newReserwationToValid.activePromotion =
-                                          !!promotionNumber ? true : false;
-                                        newReserwationToValid.activeHappyHour =
-                                          !!happyHourNumber ? true : false;
-                                        newReserwationToValid.activeStamp =
-                                          !!stampNumber ? true : false;
-                                        newReserwationToValid.basicPrice =
-                                          selectedServices.serviceCost;
+                                    ).then(() => {});
 
-                                        Reserwation.updateOne(
-                                          {
-                                            _id: selectedReserwationId,
-                                          },
-                                          {
-                                            $set: {
-                                              isDeleted: true,
-                                            },
-                                          }
-                                        ).then(() => {});
-
-                                        return {
-                                          companyDoc: companyDocData,
-                                          newReserwation: newReserwationToValid,
-                                        };
-                                      })
-                                      .catch((err) => {
-                                        Reserwation.deleteOne({
-                                          _id: resultSavePreBooking._id,
-                                        }).then(() => {});
-                                        const error = new Error(
-                                          "Błąd podczas składania rezerwacji."
-                                        );
-                                        error.statusCode = 420;
-                                        throw error;
-                                      });
+                                    return {
+                                      companyDoc: companyDocData,
+                                      newReserwation: newReserwationToValid,
+                                    };
                                   } else {
                                     Reserwation.deleteOne({
                                       _id: resultSavePreBooking._id,
@@ -3918,104 +3921,6 @@ exports.changeReserwation = (req, res, next) => {
           }
           next(err);
         });
-    })
-    .then((result) => {
-      const resultReserwation = result.newReserwation;
-      return resultReserwation
-        .populate(
-          "reserwationId",
-          "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company"
-        )
-        .populate(
-          {
-            path: "company fromUser toWorkerUserId",
-            select:
-              "_id name surname linkPath smsChangedAvaible sms companyStamps",
-          },
-          async (err, resultReserwationPopulate) => {
-            const emailContent = `Dokonano zmiany rezerwacji, nazwa usługi: ${
-              resultReserwationPopulate.serviceName
-            },termin: ${resultReserwationPopulate.dateDay}-${
-              resultReserwationPopulate.dateMonth
-            }-${resultReserwationPopulate.dateYear}, godzina: ${
-              resultReserwationPopulate.dateStart
-            }, czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
-              resultReserwationPopulate.extraTime ? "+" : ""
-            }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
-              resultReserwationPopulate.extraCost ? "+" : ""
-            }.`;
-
-            const payload = {
-              title: `Dokonano zmiany rezerwacji, nazwa usługi: ${
-                resultReserwationPopulate.serviceName
-              },termin: ${resultReserwationPopulate.dateDay}-${
-                resultReserwationPopulate.dateMonth
-              }-${resultReserwationPopulate.dateYear}, godzina: ${
-                resultReserwationPopulate.dateStart
-              }, czas trwania: ${
-                resultReserwationPopulate.timeReserwation
-              }min ${resultReserwationPopulate.extraTime ? "+" : ""}, koszt: ${
-                resultReserwationPopulate.costReserwation
-              } zł ${resultReserwationPopulate.extraCost ? "+" : ""}.`,
-              body: "this is the body",
-              icon: "images/someImageInPath.png",
-            };
-
-            const emailSubject = `Dokonano zmiany rezerwacji`;
-            const message = `Dokonano zmiany rezerwacji, nazwa usługi: ${
-              resultReserwationPopulate.serviceName
-            },termin: ${resultReserwationPopulate.dateDay}-${
-              resultReserwationPopulate.dateMonth
-            }-${resultReserwationPopulate.dateYear}, godzina: ${
-              resultReserwationPopulate.dateStart
-            }, czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
-              resultReserwationPopulate.extraTime ? "+" : ""
-            }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
-              resultReserwationPopulate.extraCost ? "+" : ""
-            }.`;
-
-            const { resultSMS } = await notifications.sendAll({
-              usersId: [
-                resultReserwationPopulate.fromUser._id,
-                resultReserwationPopulate.toWorkerUserId._id,
-              ],
-              clientId: resultReserwationPopulate.fromUser._id,
-              emailContent: {
-                customEmail: null,
-                emailTitle: emailSubject,
-                emailMessage: emailContent,
-              },
-              notificationContent: {
-                typeAlert: "reserwationId",
-                dateAlert: resultReserwationPopulate,
-                typeNotification: "reserwation_changed",
-                payload: payload,
-                companyChanged: false,
-              },
-              smsContent: {
-                companyId: companyId,
-                customPhone: null,
-                companySendSMSValidField: "smsReserwationChangedUserAvaible",
-                titleCompanySendSMS: "sms_user_changed_reserwation",
-                message: message,
-              },
-            });
-
-            if (!!resultSMS) {
-              Reserwation.updateOne(
-                {
-                  _id: resultReserwationPopulate._id,
-                  sendSMSReserwationUserChanged: false,
-                },
-                {
-                  $set: {
-                    sendSMSReserwationUserChanged: true,
-                  },
-                }
-              ).then(() => {});
-            }
-          }
-        );
     })
     .then(() => {
       CompanyUsersInformations.findOne({
@@ -4617,127 +4522,36 @@ exports.addWorkerClientReserwation = (req, res, next) => {
             select: "name surname _id",
           },
           async (err, resultReserwationPopulate) => {
-            const emailContent = `
-                        Dokonano rezerwacji, nazwa usługi: ${
-                          resultReserwationPopulate.serviceName
-                        },termin: ${resultReserwationPopulate.dateDay}-${
-              resultReserwationPopulate.dateMonth
-            }-${resultReserwationPopulate.dateYear}, godzina: ${
-              resultReserwationPopulate.dateStart
-            }, czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
-              resultReserwationPopulate.extraTime ? "+" : ""
-            }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
-              resultReserwationPopulate.extraCost ? "+" : ""
-            }.`;
+            await notifications.updateAllCollection({
+              companyId: result.company,
+              companyField: "company",
+              collection: "Reserwation",
+              collectionItems:
+                "_id serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+              extraCollectionPhoneField: "phone",
+              extraCollectionEmailField: "email",
+              extraCollectionNameField: "name surname",
+              updateCollectionItemObject: {},
+              filtersCollection: {
+                _id: result._id,
+              },
+              userField: "fromUser",
+              workerField: "toWorkerUserId",
+              sendEmailValid: true,
+              notificationContent: {
+                typeAlert: "reserwationId",
+              },
+              smsContent: {
+                companySendSMSValidField: "smsReserwationAvaible",
+                titleCompanySMSAlert: "sms_created_reserwation",
+                collectionFieldSMSOnSuccess: {
+                  sendSMSReserwation: true,
+                },
+              },
+              companyChanged: true,
+              typeNotification: "reserwation_created",
+            });
 
-            const payload = {
-              title: `
-                        Dokonano rezerwacji, nazwa usługi: ${
-                          resultReserwationPopulate.serviceName
-                        },termin: ${resultReserwationPopulate.dateDay}-${
-                resultReserwationPopulate.dateMonth
-              }-${resultReserwationPopulate.dateYear}, godzina: ${
-                resultReserwationPopulate.dateStart
-              }, czas trwania: ${
-                resultReserwationPopulate.timeReserwation
-              }min ${resultReserwationPopulate.extraTime ? "+" : ""}, koszt: ${
-                resultReserwationPopulate.costReserwation
-              } zł ${resultReserwationPopulate.extraCost ? "+" : ""}.`,
-              body: "this is the body",
-              icon: "images/someImageInPath.png",
-            };
-
-            const emailSubject = `Dokonano rezerwację`;
-            const message = `
-                        Dokonano rezerwacji, nazwa usługi: ${
-                          resultReserwationPopulate.serviceName
-                        },termin: ${resultReserwationPopulate.dateDay}-${
-              resultReserwationPopulate.dateMonth
-            }-${resultReserwationPopulate.dateYear}, godzina: ${
-              resultReserwationPopulate.dateStart
-            }, czas trwania: ${resultReserwationPopulate.timeReserwation}min ${
-              resultReserwationPopulate.extraTime ? "+" : ""
-            }, koszt: ${resultReserwationPopulate.costReserwation} zł ${
-              resultReserwationPopulate.extraCost ? "+" : ""
-            }.`;
-            let resultSMSUserAndNoUser = null;
-            if (!!resultReserwationPopulate.fromUser) {
-              const { resultSMS } = await notifications.sendAll({
-                usersId: [
-                  resultReserwationPopulate.fromUser._id,
-                  resultReserwationPopulate.toWorkerUserId._id,
-                ],
-                clientId: resultReserwationPopulate.fromUser._id,
-                emailContent: {
-                  customEmail: null,
-                  emailTitle: emailSubject,
-                  emailMessage: emailContent,
-                },
-                notificationContent: {
-                  typeAlert: "reserwationId",
-                  dateAlert: resultReserwationPopulate,
-                  typeNotification: "reserwation_created",
-                  payload: payload,
-                  companyChanged: true,
-                },
-                smsContent: {
-                  companyId: companyId,
-                  customPhone: null,
-                  companySendSMSValidField: "smsReserwationAvaible",
-                  titleCompanySendSMS: "sms_created_reserwation",
-                  message: message,
-                },
-              });
-              resultSMSUserAndNoUser = resultSMS;
-            } else {
-              let userPhone = null;
-              if (!!resultReserwationPopulate.phone) {
-                userPhone = Buffer.from(
-                  resultReserwationPopulate.phone,
-                  "base64"
-                ).toString("utf-8");
-              }
-              const { resultSMS } = await notifications.sendAll({
-                usersId: [resultReserwationPopulate.toWorkerUserId._id],
-                clientId: null,
-                emailContent: {
-                  customEmail: !!resultReserwationPopulate.email
-                    ? resultReserwationPopulate.email
-                    : null,
-                  emailTitle: emailSubject,
-                  emailMessage: emailContent,
-                },
-                notificationContent: {
-                  typeAlert: "reserwationId",
-                  dateAlert: resultReserwationPopulate,
-                  typeNotification: "reserwation_created",
-                  payload: payload,
-                  companyChanged: true,
-                },
-                smsContent: {
-                  companyId: companyId,
-                  customPhone: userPhone,
-                  companySendSMSValidField: "smsReserwationAvaible",
-                  titleCompanySendSMS: "sms_created_reserwation",
-                  message: message,
-                },
-              });
-              resultSMSUserAndNoUser = resultSMS;
-            }
-
-            if (!!resultSMSUserAndNoUser) {
-              Reserwation.updateOne(
-                {
-                  _id: resultReserwationPopulate._id,
-                  sendSMSReserwation: false,
-                },
-                {
-                  $set: {
-                    sendSMSReserwation: true,
-                  },
-                }
-              ).then(() => {});
-            }
             const bulkArrayToUpdate = [];
             if (!!resultReserwationPopulate.fromUser) {
               if (!!resultReserwationPopulate.fromUser.stamps) {
