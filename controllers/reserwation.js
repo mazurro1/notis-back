@@ -2391,7 +2391,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
   })
     .populate("toWorkerUserId fromUser", "_id name surname")
     .populate("company", "_id name owner workers.user")
-    .then((reserwationsDoc) => {
+    .then(async (reserwationsDoc) => {
       if (!!reserwationsDoc) {
         const dateEndSplit = reserwationsDoc.dateEnd.split(":");
         const reserwationDate = new Date(
@@ -2497,62 +2497,45 @@ exports.updateWorkerReserwation = (req, res, next) => {
               ? "reserwation_changed"
               : "reserwation_finished";
 
-            return Reserwation.updateOne(
-              {
-                _id: reserwationsDoc._id,
+            await notifications.updateAllCollection({
+              companyId: reserwationsDoc.company._id,
+              companyField: "company",
+              collection: "Reserwation",
+              collectionItems:
+                "_id visitCanceled visitChanged visitNotFinished serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+              extraCollectionPhoneField: "phone",
+              extraCollectionEmailField: "email",
+              extraCollectionNameField: "name surname",
+              updateCollectionItemObject: {
+                dateStart: reserwationsDoc.dateStart,
+                dateEnd: reserwationsDoc.dateEnd,
+                visitCanceled: reserwationsDoc.visitCanceled,
+                visitChanged: !!reserwationsDoc.visitNotFinished
+                  ? false
+                  : reserwationsDoc.visitChanged,
+                visitNotFinished: reserwationsDoc.visitNotFinished,
+                toWorkerUserId: reserwationsDoc.toWorkerUserId,
+                fullDate: reserwationsDoc.fullDate,
+                dateYear: reserwationsDoc.dateYear,
+                dateMonth: reserwationsDoc.dateMonth,
+                dateDay: reserwationsDoc.dateDay,
               },
-              {
-                $set: {
-                  dateStart: reserwationsDoc.dateStart,
-                  dateEnd: reserwationsDoc.dateEnd,
-                  visitCanceled: reserwationsDoc.visitCanceled,
-                  visitChanged: !!reserwationsDoc.visitNotFinished
-                    ? false
-                    : reserwationsDoc.visitChanged,
-                  visitNotFinished: reserwationsDoc.visitNotFinished,
-                  toWorkerUserId: reserwationsDoc.toWorkerUserId,
-                  fullDate: reserwationsDoc.fullDate,
-                  dateYear: reserwationsDoc.dateYear,
-                  dateMonth: reserwationsDoc.dateMonth,
-                  dateDay: reserwationsDoc.dateDay,
-                },
-              }
-            )
-              .then(async () => {
-                await notifications.updateAllCollection({
-                  companyId: reserwationsDoc.company._id,
-                  companyField: "company",
-                  collection: "Reserwation",
-                  collectionItems:
-                    "_id visitCanceled visitChanged visitNotFinished serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
-                  extraCollectionPhoneField: "phone",
-                  extraCollectionEmailField: "email",
-                  extraCollectionNameField: "name surname",
-                  updateCollectionItemObject: {},
-                  filtersCollection: { _id: reserwationsDoc._id },
-                  userField: "fromUser",
-                  workerField: "toWorkerUserId",
-                  sendEmailValid: true,
-                  notificationContent: {
-                    typeAlert: "reserwationId",
-                  },
-                  smsContent: {
-                    companySendSMSValidField: reserwationValidCompanySMS,
-                    titleCompanySMSAlert: reserwationValidCompanySMSMessage,
-                    collectionFieldSMSOnSuccess: validStatusReserwation,
-                  },
-                  companyChanged: true,
-                  typeNotification: reserwationStatus,
-                });
-                return true;
-              })
-              .catch(() => {
-                const error = new Error(
-                  "Błąd podczas aktualizacji rezerwacji."
-                );
-                error.statusCode = 401;
-                throw error;
-              });
+              filtersCollection: { _id: reserwationsDoc._id },
+              userField: "fromUser",
+              workerField: "toWorkerUserId",
+              sendEmailValid: true,
+              notificationContent: {
+                typeAlert: "reserwationId",
+              },
+              smsContent: {
+                companySendSMSValidField: reserwationValidCompanySMS,
+                titleCompanySMSAlert: reserwationValidCompanySMSMessage,
+                collectionFieldSMSOnSuccess: validStatusReserwation,
+              },
+              companyChanged: true,
+              typeNotification: reserwationStatus,
+            });
+            return true;
           } else {
             const error = new Error("Brak uprawnień.");
             error.statusCode = 401;

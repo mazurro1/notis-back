@@ -781,6 +781,8 @@ const updateAllCollection = async ({
         const otherUsersWithoutAccount = [];
         const bulkArrayToUpdate = [];
         let avaibleSendSMS = false;
+
+        //check is avaible count sms to send to users
         if (!!smsContent) {
           if (
             !!smsContent.companySendSMSValidField &&
@@ -798,6 +800,8 @@ const updateAllCollection = async ({
             }
           }
         }
+
+        //filters items collections to user or not user items
         for (const communitingItem of allCommunitings) {
           let extraFields = { extra: null };
           bulkArrayToUpdate.push({
@@ -812,16 +816,24 @@ const updateAllCollection = async ({
           });
           if (!!communitingItem[userField]) {
             if (!!communitingItem[userField]._id) {
+              const newItemCollectionWithActualization = communitingItem;
               const isUserInAllUsers = allUsers.findIndex(
                 (itemUser) =>
                   itemUser == communitingItem[userField]._id.toString()
               );
+
+              //update item in collection to show ACTUAL alerts details after update
+              for (const itemUpdateCollectionItemObject in updateCollectionItemObject) {
+                newItemCollectionWithActualization[
+                  itemUpdateCollectionItemObject
+                ] = updateCollectionItemObject[itemUpdateCollectionItemObject];
+              }
+
               if (isUserInAllUsers < 0) {
                 allUsers.push(communitingItem[userField]._id.toString());
-
                 const newItemUserWithItem = {
                   [userField]: communitingItem[userField]._id.toString(),
-                  items: [communitingItem],
+                  items: [newItemCollectionWithActualization],
                   ...extraFields,
                 };
                 allUsersWithItems.push(newItemUserWithItem);
@@ -856,9 +868,11 @@ const updateAllCollection = async ({
           }
         }
 
+        // send alerts to user isn't in company
         for (const noUser of otherUsersWithoutAccount) {
           if (!!noUser.customPhone) {
             for (const itemNoUser of noUser.items) {
+              //takie fields from message generator
               const propsGenerator = generateEmail.generateContentEmail({
                 alertType: typeNotification,
                 companyChanged: companyChanged,
@@ -866,6 +880,8 @@ const updateAllCollection = async ({
                 itemAlert: itemNoUser,
                 collection: collection,
               });
+
+              //generate phone email message
               if (avaibleSendSMS && !!companyChanged) {
                 const userPhone = Buffer.from(
                   noUser.customPhone,
@@ -898,11 +914,13 @@ const updateAllCollection = async ({
                   !!propsGenerator.defaultText ? propsGenerator.defaultText : ""
                 }`;
 
+                //send sms to user
                 const resultSMS = await sendVerifySMS({
                   phoneNumber: userPhone,
                   message: bodySMS,
                 });
 
+                //update item collection when send sms success
                 if (!!resultSMS) {
                   bulkArrayToUpdate.push({
                     updateOne: {
@@ -916,6 +934,8 @@ const updateAllCollection = async ({
                   });
                 }
               }
+
+              //send email to user
               if (!!sendEmailValid) {
                 if (!!noUser.customEmail) {
                   if (validateEmail(noUser.customEmail)) {
@@ -930,6 +950,7 @@ const updateAllCollection = async ({
           }
         }
 
+        //send alert to worker
         if (!!notificationContent) {
           if (!!notificationContent.typeAlert && !!typeNotification) {
             sendMultiAlert({
@@ -947,6 +968,7 @@ const updateAllCollection = async ({
           }
         }
 
+        // send alerts to users in company
         return User.find({
           _id: { $in: allUsers },
         })
@@ -955,6 +977,8 @@ const updateAllCollection = async ({
           )
           .then(async (usersResult) => {
             const allUsersWithItemsWithVapid = [...allUsersWithItems];
+
+            //maps users
             for (const userResult of usersResult) {
               const findUserWithItems = allUsersWithItems.find(
                 (userWithItem) =>
@@ -966,6 +990,8 @@ const updateAllCollection = async ({
                   allUsersWithItemsWithVapid.findIndex(
                     (userWithItem) => userWithItem[userField] == userResult._id
                   );
+
+                //add extra field to user
                 if (findIndexUserWithVapid >= 0) {
                   if (!!userResult.vapidEndpoint) {
                     allUsersWithItemsWithVapid[
@@ -978,7 +1004,10 @@ const updateAllCollection = async ({
                     ].language = userResult.language;
                   }
                 }
+
+                //map items user
                 for (const itemUser of findUserWithItems.items) {
+                  //takie fields from message generator
                   const propsGenerator = generateEmail.generateContentEmail({
                     alertType: typeNotification,
                     companyChanged: companyChanged,
@@ -992,6 +1021,7 @@ const updateAllCollection = async ({
                   let selectedPhoneNumber = null;
                   let selectedEmail = null;
 
+                  //generate user phone and email
                   if (avaibleSendSMS) {
                     if (!!userResult.phoneVerified) {
                       selectedPhoneNumber = userResult.phone;
@@ -1039,11 +1069,13 @@ const updateAllCollection = async ({
                           : ""
                       }`;
 
+                      //send to user sms
                       const resultSMS = await sendVerifySMS({
                         phoneNumber: userPhone,
                         message: bodySMS,
                       });
 
+                      //if sms success update item collection
                       if (!!resultSMS) {
                         bulkArrayToUpdate.push({
                           updateOne: {
@@ -1064,6 +1096,7 @@ const updateAllCollection = async ({
                       : null;
                   }
 
+                  //send to user email
                   if (!!sendEmailValid) {
                     if (!!selectedEmail) {
                       if (validateEmail(selectedEmail)) {
@@ -1077,6 +1110,8 @@ const updateAllCollection = async ({
                 }
               }
             }
+
+            //send to client and worker alert
             if (!!notificationContent) {
               if (!!notificationContent.typeAlert && !!typeNotification) {
                 sendMultiAlert({
@@ -1093,6 +1128,8 @@ const updateAllCollection = async ({
                 });
               }
             }
+
+            //update items collection
             return selectedCollection
               .bulkWrite(bulkArrayToUpdate)
               .then(() => {
