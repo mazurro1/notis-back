@@ -2286,7 +2286,7 @@ exports.updateReserwation = (req, res, next) => {
     )
     .populate("toWorkerUserId fromUser", "_id name surname")
     .populate("company", "_id name linkPath")
-    .then((reserwationsDoc) => {
+    .then(async (reserwationsDoc) => {
       if (!!reserwationsDoc) {
         const dateEndSplit = reserwationsDoc.dateEnd.split(":");
         const reserwationDate = new Date(
@@ -2299,23 +2299,43 @@ exports.updateReserwation = (req, res, next) => {
         const isGoodDate = new Date() <= reserwationDate;
         if (isGoodDate) {
           if (canceled !== null) {
-            return Reserwation.updateOne(
-              {
+            await notifications.updateAllCollection({
+              companyId: reserwationsDoc.company._id,
+              companyField: "company",
+              collection: "Reserwation",
+              collectionItems:
+                "_id serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+              extraCollectionPhoneField: "phone",
+              extraCollectionEmailField: "email",
+              extraCollectionNameField: "name surname",
+              updateCollectionItemObject: {
+                visitCanceled: true,
+              },
+              filtersCollection: {
                 fromUser: userId,
                 _id: reserwationId,
                 visitCanceled: false,
                 visitNotFinished: false,
                 isDeleted: { $in: [false, null] },
               },
-              {
-                $set: {
-                  visitCanceled: true,
+              userField: "fromUser",
+              workerField: "toWorkerUserId",
+              sendEmailValid: true,
+              notificationContent: {
+                typeAlert: "reserwationId",
+              },
+              smsContent: {
+                companySendSMSValidField: "smsReserwationChangedUserAvaible",
+                titleCompanySMSAlert: "sms_user_canceled_reserwation",
+                collectionFieldSMSOnSuccess: {
+                  sendSMSReserwationUserChanged: true,
                 },
-              }
-            ).then(() => {
-              reserwationsDoc.visitCanceled = true;
-              return reserwationsDoc;
+              },
+              companyChanged: false,
+              typeNotification: "reserwation_canceled",
             });
+
+            return true;
           }
         } else {
           const error = new Error(
@@ -2330,58 +2350,7 @@ exports.updateReserwation = (req, res, next) => {
         throw error;
       }
     })
-    .then(async (resultReserwation) => {
-      const emailContent = `Odwołano rezerwację, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
-      const payload = {
-        title: `Odwołano rezerwację, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`,
-        body: "this is the body",
-        icon: "images/someImageInPath.png",
-      };
-
-      const emailSubject = `Dokonano zmiany rezerwacji`;
-      const message = `Odwołano rezerwację, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
-
-      const { resultSMS } = await notifications.sendAll({
-        usersId: [
-          resultReserwation.fromUser._id,
-          resultReserwation.toWorkerUserId._id,
-        ],
-        clientId: resultReserwation.fromUser._id,
-        emailContent: {
-          customEmail: null,
-          emailTitle: emailSubject,
-          emailMessage: emailContent,
-        },
-        notificationContent: {
-          typeAlert: "reserwationId",
-          dateAlert: resultReserwation,
-          typeNotification: "reserwation_canceled",
-          payload: payload,
-          companyChanged: false,
-        },
-        smsContent: {
-          companyId: resultReserwation.company._id,
-          customPhone: null,
-          companySendSMSValidField: "smsReserwationChangedUserAvaible",
-          titleCompanySendSMS: "sms_user_canceled_reserwation",
-          message: message,
-        },
-      });
-
-      if (!!resultSMS) {
-        Reserwation.updateOne(
-          {
-            _id: resultReserwation._id,
-            sendSMSReserwationUserChanged: false,
-          },
-          {
-            $set: {
-              sendSMSReserwationUserChanged: true,
-            },
-          }
-        ).then(() => {});
-      }
-
+    .then(() => {
       res.status(201).json({
         message: "Zaktualizowano rezerwację",
       });
@@ -2422,7 +2391,6 @@ exports.updateWorkerReserwation = (req, res, next) => {
   })
     .populate("toWorkerUserId fromUser", "_id name surname")
     .populate("company", "_id name owner workers.user")
-
     .then((reserwationsDoc) => {
       if (!!reserwationsDoc) {
         const dateEndSplit = reserwationsDoc.dateEnd.split(":");
@@ -2481,6 +2449,54 @@ exports.updateWorkerReserwation = (req, res, next) => {
             if (!!workerSelectedUserId) {
               reserwationsDoc.toWorkerUserId = workerSelectedUserId;
             }
+
+            const visitChangedValid = !!reserwationsDoc.visitNotFinished
+              ? false
+              : reserwationsDoc.visitChanged;
+
+            const reserwationValidCompanySMS = reserwationsDoc.visitNotFinished
+              ? null
+              : !!reserwationsDoc.workerReserwation
+              ? null
+              : reserwationsDoc.visitCanceled
+              ? "smsCanceledAvaible"
+              : visitChangedValid
+              ? "smsChangedAvaible"
+              : null;
+
+            const reserwationValidCompanySMSMessage =
+              reserwationsDoc.visitNotFinished
+                ? null
+                : !!reserwationsDoc.workerReserwation
+                ? null
+                : reserwationsDoc.visitCanceled
+                ? "sms_company_canceled_reserwation"
+                : visitChangedValid
+                ? "sms_company_changed_reserwation"
+                : null;
+
+            const validStatusReserwation = !!reserwationsDoc.workerReserwation
+              ? null
+              : reserwationsDoc.visitCanceled
+              ? { sendSMSCanceled: true }
+              : visitChangedValid
+              ? { sendSMSChanged: true }
+              : reserwationsDoc.visitNotFinished
+              ? null
+              : null;
+
+            const reserwationStatus = reserwationsDoc.visitNotFinished
+              ? "reserwation_not_finished"
+              : reserwationsDoc.workerReserwation
+              ? !!reserwationsDoc.visitCanceled
+                ? "reserwation_worker_canceled"
+                : "reserwation_worker_changed"
+              : reserwationsDoc.visitCanceled
+              ? "reserwation_canceled"
+              : visitChangedValid
+              ? "reserwation_changed"
+              : "reserwation_finished";
+
             return Reserwation.updateOne(
               {
                 _id: reserwationsDoc._id,
@@ -2502,8 +2518,33 @@ exports.updateWorkerReserwation = (req, res, next) => {
                 },
               }
             )
-              .then(() => {
-                return reserwationsDoc;
+              .then(async () => {
+                await notifications.updateAllCollection({
+                  companyId: reserwationsDoc.company._id,
+                  companyField: "company",
+                  collection: "Reserwation",
+                  collectionItems:
+                    "_id visitCanceled visitChanged visitNotFinished serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+                  extraCollectionPhoneField: "phone",
+                  extraCollectionEmailField: "email",
+                  extraCollectionNameField: "name surname",
+                  updateCollectionItemObject: {},
+                  filtersCollection: { _id: reserwationsDoc._id },
+                  userField: "fromUser",
+                  workerField: "toWorkerUserId",
+                  sendEmailValid: true,
+                  notificationContent: {
+                    typeAlert: "reserwationId",
+                  },
+                  smsContent: {
+                    companySendSMSValidField: reserwationValidCompanySMS,
+                    titleCompanySMSAlert: reserwationValidCompanySMSMessage,
+                    collectionFieldSMSOnSuccess: validStatusReserwation,
+                  },
+                  companyChanged: true,
+                  typeNotification: reserwationStatus,
+                });
+                return true;
               })
               .catch(() => {
                 const error = new Error(
@@ -2530,172 +2571,10 @@ exports.updateWorkerReserwation = (req, res, next) => {
         throw error;
       }
     })
-    .then((result) => {
-      result.populate("company", "linkPath name _id").populate(
-        {
-          path: "fromUser",
-          select: "name surname _id",
-        },
-        async function (err, resultReserwation) {
-          const reserwationStatus = resultReserwation.visitNotFinished
-            ? "reserwation_not_finished"
-            : resultReserwation.workerReserwation
-            ? !!resultReserwation.visitCanceled
-              ? "reserwation_worker_canceled"
-              : "reserwation_worker_changed"
-            : resultReserwation.visitCanceled
-            ? "reserwation_canceled"
-            : resultReserwation.visitChanged
-            ? "reserwation_changed"
-            : "reserwation_finished";
-
-          const reserwationValidCompanySMS = resultReserwation.visitNotFinished
-            ? null
-            : !!resultReserwation.workerReserwation
-            ? null
-            : resultReserwation.visitCanceled
-            ? "smsCanceledAvaible"
-            : resultReserwation.visitChanged
-            ? "smsChangedAvaible"
-            : null;
-
-          const reserwationValidCompanySMSMessage =
-            resultReserwation.visitNotFinished
-              ? null
-              : !!resultReserwation.workerReserwation
-              ? null
-              : resultReserwation.visitCanceled
-              ? "sms_canceled_reserwation"
-              : resultReserwation.visitChanged
-              ? "sms_changed_reserwation"
-              : null;
-
-          const validTextStatusReserwation = resultReserwation.visitNotFinished
-            ? "Oznaczono rezerwację jako nie odbytą"
-            : !!resultReserwation.workerReserwation
-            ? "Dodano rezerwację czasu"
-            : resultReserwation.visitCanceled
-            ? "Odwołano rezerwację"
-            : resultReserwation.visitChanged
-            ? "Dokonano zmiany w rezerwacji"
-            : "Oznaczono rezerwację jako odbytą";
-
-          const validStatusReserwation = !!resultReserwation.workerReserwation
-            ? null
-            : resultReserwation.visitCanceled
-            ? { sendSMSCanceled: true }
-            : resultReserwation.visitChanged
-            ? { sendSMSChanged: true }
-            : resultReserwation.visitNotFinished
-            ? null
-            : null;
-
-          const emailContent = `${validTextStatusReserwation}, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
-          const payload = {
-            title: `${validTextStatusReserwation}, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`,
-            body: "this is the body",
-            icon: "images/someImageInPath.png",
-          };
-
-          const emailSubject = `${validTextStatusReserwation}`;
-          const message = `${validTextStatusReserwation}, nazwa usługi: ${resultReserwation.serviceName},termin: ${resultReserwation.dateDay}-${resultReserwation.dateMonth}-${resultReserwation.dateYear}, godzina: ${resultReserwation.dateStart}.`;
-
-          let resultSMSConfirm = false;
-          if (!!resultReserwation.fromUser) {
-            const dataReserwationUsersId = !!resultReserwation.workerReserwation
-              ? [resultReserwation.toWorkerUserId._id]
-              : [
-                  resultReserwation.fromUser._id,
-                  resultReserwation.toWorkerUserId._id,
-                ];
-            const { resultSMS } = await notifications.sendAll({
-              usersId: dataReserwationUsersId,
-              clientId: resultReserwation.fromUser._id,
-              emailContent: !!!resultReserwation.workerReserwation &&
-                !!validStatusReserwation && {
-                  customEmail: null,
-                  emailTitle: emailSubject,
-                  emailMessage: emailContent,
-                },
-              notificationContent: {
-                typeAlert: "reserwationId",
-                dateAlert: resultReserwation,
-                typeNotification: reserwationStatus,
-                payload: payload,
-                companyChanged: true,
-              },
-              smsContent: !!!resultReserwation.workerReserwation &&
-                !!validStatusReserwation && {
-                  companyId: resultReserwation.company._id,
-                  customPhone: null,
-                  companySendSMSValidField: reserwationValidCompanySMS,
-                  titleCompanySendSMS: reserwationValidCompanySMSMessage,
-                  message: message,
-                },
-            });
-            resultSMSConfirm = resultSMS;
-          } else {
-            if (!!!resultReserwation.workerReserwation) {
-              const customEmail = !!resultReserwation.email
-                ? resultReserwation.email
-                : null;
-              let userPhone = null;
-              if (!!resultReserwation.phone) {
-                userPhone = Buffer.from(
-                  resultReserwation.phone,
-                  "base64"
-                ).toString("utf-8");
-              }
-              const { resultSMS } = await notifications.sendAll({
-                usersId: [resultReserwation.toWorkerUserId._id],
-                clientId: null,
-                emailContent: !!!resultReserwation.workerReserwation &&
-                  !!validStatusReserwation && {
-                    customEmail: customEmail,
-                    emailTitle: emailSubject,
-                    emailMessage: emailContent,
-                  },
-                notificationContent: {
-                  typeAlert: "reserwationId",
-                  dateAlert: resultReserwation,
-                  typeNotification: reserwationStatus,
-                  payload: payload,
-                  companyChanged: true,
-                },
-                smsContent: !!!resultReserwation.workerReserwation &&
-                  !!validStatusReserwation && {
-                    companyId: resultReserwation.company._id,
-                    customPhone: userPhone,
-                    companySendSMSValidField: reserwationValidCompanySMS,
-                    titleCompanySendSMS: reserwationValidCompanySMSMessage,
-                    message: message,
-                  },
-              });
-              resultSMSConfirm = resultSMS;
-            }
-          }
-
-          if (
-            !!resultSMSConfirm &&
-            !!!resultReserwation.workerReserwation &&
-            !!validStatusReserwation
-          ) {
-            Reserwation.updateOne(
-              {
-                _id: resultReserwation._id,
-                sendSMSReserwationUserChanged: false,
-              },
-              {
-                $set: validStatusReserwation,
-              }
-            ).then(() => {});
-          }
-
-          res.status(201).json({
-            message: "Zaktualizowano rezerwację",
-          });
-        }
-      );
+    .then(() => {
+      res.status(201).json({
+        message: "Zaktualizowano rezerwację",
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
