@@ -1388,6 +1388,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         companyChanged: true,
         typeNotification: "reserwation_canceled",
+        deleteOpinion: true,
       });
       return userDoc;
     })
@@ -1423,6 +1424,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         companyChanged: true,
         typeNotification: "service_deleted",
+        deleteOpinion: true,
       });
       return userDoc;
     })
@@ -1461,6 +1463,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         companyChanged: true,
         typeNotification: "commuting_canceled",
+        deleteOpinion: true,
       });
 
       return resultUpdated;
@@ -6612,119 +6615,40 @@ exports.companyAddService = (req, res, next) => {
         return resultSaveService;
       });
     })
-    .then((resultSaveService) => {
-      return resultSaveService
-        .populate({
-          path: "companyId",
-          select: "_id linkPath name",
-        })
-        .populate(
-          {
-            path: "userId workerUserId",
-            select: "name surname _id",
+    .then(async (resultSaveService) => {
+      const updatedAndPopulatedItem = await notifications.updateAllCollection({
+        companyId: companyId,
+        companyField: "companyId",
+        collection: "Service",
+        collectionItems:
+          "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
+        extraCollectionPhoneField: "phone",
+        extraCollectionEmailField: "email",
+        extraCollectionNameField: "name surname",
+        filtersCollection: {
+          _id: resultSaveService._id,
+        },
+        updateCollectionItemObject: {},
+        userField: "userId",
+        workerField: "workerUserId",
+        sendEmailValid: true,
+        notificationContent: {
+          typeAlert: "serviceId",
+        },
+        smsContent: {
+          companySendSMSValidField: "smsServiceCreatedAvaible",
+          titleCompanySMSAlert: "sms_added_service",
+          collectionFieldSMSOnSuccess: {
+            createdSMS: true,
           },
-          async function (err, populateService) {
-            const emailContent = `Utworzono serwis dnia: ${
-              resultSaveService.day < 10
-                ? `0${resultSaveService.day}`
-                : resultSaveService.day
-            }-${
-              resultSaveService.month < 10
-                ? `0${resultSaveService.month}`
-                : resultSaveService.month
-            }-${resultSaveService.year}, przedmiotu: ${
-              resultSaveService.objectName
-            }, przewidywany koszt: ${
-              !!resultSaveService.cost ? resultSaveService.cost : "nieznany"
-            }, numer serwisu: ${resultSaveService._id}`;
+        },
+        companyChanged: true,
+        typeNotification: "service_created",
+      });
 
-            const payload = {
-              title: `Utworzono serwis dnia: ${
-                resultSaveService.day < 10
-                  ? `0${resultSaveService.day}`
-                  : resultSaveService.day
-              }-${
-                resultSaveService.month < 10
-                  ? `0${resultSaveService.month}`
-                  : resultSaveService.month
-              }-${resultSaveService.year}, przedmiotu: ${
-                resultSaveService.objectName
-              }, przewidywany koszt: ${
-                !!resultSaveService.cost ? resultSaveService.cost : "nieznany"
-              }, numer serwisu: ${resultSaveService._id}`,
-              body: "this is the body",
-              icon: "images/someImageInPath.png",
-            };
-
-            const emailSubject = `Dodano serwis`;
-            const message = `Utworzono serwis dnia: ${
-              resultSaveService.day < 10
-                ? `0${resultSaveService.day}`
-                : resultSaveService.day
-            }-${
-              resultSaveService.month < 10
-                ? `0${resultSaveService.month}`
-                : resultSaveService.month
-            }-${resultSaveService.year}, przedmiotu: ${
-              resultSaveService.objectName
-            }, przewidywany koszt: ${
-              !!resultSaveService.cost ? resultSaveService.cost : "nieznany"
-            }, numer serwisu: ${resultSaveService._id}`;
-            let customPhone = !!resultSaveService.phone
-              ? resultSaveService.phone
-              : null;
-            if (!!customPhone) {
-              customPhone = Buffer.from(customPhone, "base64").toString(
-                "utf-8"
-              );
-            }
-
-            const { resultSMS } = await notifications.sendAll({
-              usersId: [
-                populateService.userId._id,
-                populateService.workerUserId._id,
-              ],
-              clientId: populateService.userId._id,
-              emailContent: {
-                customEmail: null,
-                emailTitle: emailSubject,
-                emailMessage: emailContent,
-              },
-              notificationContent: {
-                typeAlert: "serviceId",
-                dateAlert: populateService,
-                typeNotification: "service_created",
-                payload: payload,
-                companyChanged: true,
-              },
-              smsContent: {
-                companyId: companyId,
-                customPhone: customPhone,
-                companySendSMSValidField: "smsServiceCreatedAvaible",
-                titleCompanySendSMS: "sms_added_service",
-                message: message,
-              },
-            });
-
-            if (!!resultSMS) {
-              Service.updateOne(
-                {
-                  _id: resultSaveService._id,
-                },
-                {
-                  $set: {
-                    createdSMS: true,
-                  },
-                }
-              ).then(() => {});
-            }
-
-            populateService.phone = null;
-            res.status(200).json({
-              newService: populateService,
-            });
-          }
-        );
+      res.status(200).json({
+        newService: updatedAndPopulatedItem[0],
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -6838,11 +6762,6 @@ exports.companyDeleteServices = (req, res, next) => {
                 if (!!serviceDoc.statusValue !== 3) {
                   serviceDoc.isDeleted = true;
 
-                  if (!!serviceDoc.opinionId) {
-                    Opinion.deleteOne({
-                      _id: serviceDoc.opinionId,
-                    }).then(() => {});
-                  }
                   return serviceDoc.save();
                 } else {
                   const error = new Error(
@@ -6869,81 +6788,38 @@ exports.companyDeleteServices = (req, res, next) => {
       }
     })
     .then(async (savedServiceDoc) => {
-      const emailContent = `Usunięto serwis z dnia: ${
-        savedServiceDoc.day < 10
-          ? `0${savedServiceDoc.day}`
-          : savedServiceDoc.day
-      }-${
-        savedServiceDoc.month < 10
-          ? `0${savedServiceDoc.month}`
-          : savedServiceDoc.month
-      }-${savedServiceDoc.year}, przedmiotu: ${savedServiceDoc.objectName}`;
-
-      const payload = {
-        title: `Usunięto serwis z dnia: ${
-          savedServiceDoc.day < 10
-            ? `0${savedServiceDoc.day}`
-            : savedServiceDoc.day
-        }-${
-          savedServiceDoc.month < 10
-            ? `0${savedServiceDoc.month}`
-            : savedServiceDoc.month
-        }-${savedServiceDoc.year}, przedmiotu: ${savedServiceDoc.objectName}`,
-        body: "this is the body",
-        icon: "images/someImageInPath.png",
-      };
-
-      const emailSubject = `Usunięto serwis serwis`;
-      const message = `Usunięto serwis z dnia: ${
-        savedServiceDoc.day < 10
-          ? `0${savedServiceDoc.day}`
-          : savedServiceDoc.day
-      }-${
-        savedServiceDoc.month < 10
-          ? `0${savedServiceDoc.month}`
-          : savedServiceDoc.month
-      }-${savedServiceDoc.year}, przedmiotu: ${savedServiceDoc.objectName}`;
-      let customPhone = !!savedServiceDoc.phone ? savedServiceDoc.phone : null;
-      if (!!customPhone) {
-        customPhone = Buffer.from(customPhone, "base64").toString("utf-8");
-      }
-
-      const { resultSMS } = await notifications.sendAll({
-        usersId: [savedServiceDoc.userId._id, savedServiceDoc.workerUserId._id],
-        clientId: savedServiceDoc.userId._id,
-        emailContent: {
-          customEmail: null,
-          emailTitle: emailSubject,
-          emailMessage: emailContent,
+      await notifications.updateAllCollection({
+        companyId: companyId,
+        companyField: "companyId",
+        collection: "Service",
+        collectionItems:
+          "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
+        extraCollectionPhoneField: "phone",
+        extraCollectionEmailField: "email",
+        extraCollectionNameField: "name surname",
+        filtersCollection: {
+          _id: savedServiceDoc._id,
+          companyId: companyId,
         },
+        updateCollectionItemObject: {},
+        userField: "userId",
+        workerField: "workerUserId",
+        sendEmailValid: true,
         notificationContent: {
           typeAlert: "serviceId",
-          dateAlert: savedServiceDoc,
-          typeNotification: "service_canceled",
-          payload: payload,
-          companyChanged: true,
         },
         smsContent: {
-          companyId: companyId,
-          customPhone: customPhone,
           companySendSMSValidField: "smsServiceCanceledAvaible",
-          titleCompanySendSMS: "sms_canceled_service",
-          message: message,
+          titleCompanySMSAlert: "sms_canceled_service",
+          collectionFieldSMSOnSuccess: {
+            deletedSMS: true,
+          },
         },
+        companyChanged: true,
+        typeNotification: "service_canceled",
+        deleteOpinion: false,
       });
 
-      if (!!resultSMS) {
-        Service.updateOne(
-          {
-            _id: savedServiceDoc._id,
-          },
-          {
-            $set: {
-              deletedSMS: true,
-            },
-          }
-        ).then(() => {});
-      }
       res.status(200).json({
         message: "Usunieto serwis",
       });
@@ -6981,7 +6857,7 @@ exports.companyUpdateServices = (req, res, next) => {
     },
   })
     .select("_id owner workers._id workers.user workers.permissions")
-    .then((companyData) => {
+    .then(async (companyData) => {
       if (!!companyData) {
         let hasPermission = companyData.owner == userId;
         if (!hasPermission) {
@@ -7000,154 +6876,64 @@ exports.companyUpdateServices = (req, res, next) => {
         const validDateServiceEnd =
           statusValue == 3 ? { dateEnd: new Date() } : {};
 
-        return Service.updateOne(
-          {
+        await notifications.updateAllCollection({
+          companyId: companyId,
+          companyField: "companyId",
+          collection: "Service",
+          collectionItems:
+            "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          filtersCollection: {
             _id: serviceId,
             companyId: companyId,
             ...validPermission,
           },
-          {
-            $set: {
-              workerUserId: selectedWorkerUserId,
-              objectName: objectName,
-              description: description,
-              cost: cost,
-              statusValue: statusValue,
-              ...validDateService,
-              ...validDateServiceEnd,
+          updateCollectionItemObject: {
+            workerUserId: selectedWorkerUserId,
+            objectName: objectName,
+            description: description,
+            cost: cost,
+            statusValue: statusValue,
+            ...validDateService,
+            ...validDateServiceEnd,
+          },
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "serviceId",
+          },
+          smsContent: {
+            companySendSMSValidField:
+              statusValue == 3
+                ? "smsServiceFinishedAvaible"
+                : statusValue == 4
+                ? "smsServiceCanceledAvaible"
+                : "smsServiceChangedAvaible",
+            titleCompanySMSAlert:
+              statusValue == 3
+                ? "sms_finished_service"
+                : statusValue == 4
+                ? "sms_canceled_service"
+                : "sms_changed_service",
+            collectionFieldSMSOnSuccess: {
+              deletedSMS: true,
             },
-          }
-        ).then(() => {
-          return Service.findOne({
-            _id: serviceId,
-            companyId: companyId,
-            ...validPermission,
-          })
-            .select(
-              "_id city description userId companyId month year day objectName email workerUserId phone"
-            )
-            .populate("companyId userId", "name surname linkPath")
-            .then(async (resultSavetService) => {
-              if (!!resultSavetService) {
-                const nameStatusService =
-                  statusValue == 3
-                    ? "Ukończono"
-                    : statusValue == 4
-                    ? "Anulowano"
-                    : "Edytowano";
+          },
+          companyChanged: true,
+          typeNotification:
+            statusValue == 3
+              ? "service_finished"
+              : statusValue == 4
+              ? "service_canceled"
+              : "service_changed",
+          deleteOpinion: false,
+        });
 
-                const emailContent = `${nameStatusService} serwis z dnia: ${
-                  resultSavetService.day < 10
-                    ? `0${resultSavetService.day}`
-                    : resultSavetService.day
-                }-${
-                  resultSavetService.month < 10
-                    ? `0${resultSavetService.month}`
-                    : resultSavetService.month
-                }-${resultSavetService.year}, przedmiotu: ${
-                  resultSavetService.objectName
-                }`;
-
-                const payload = {
-                  title: `${nameStatusService} serwis z dnia: ${
-                    resultSavetService.day < 10
-                      ? `0${resultSavetService.day}`
-                      : resultSavetService.day
-                  }-${
-                    resultSavetService.month < 10
-                      ? `0${resultSavetService.month}`
-                      : resultSavetService.month
-                  }-${resultSavetService.year}, przedmiotu: ${
-                    resultSavetService.objectName
-                  }`,
-                  body: "this is the body",
-                  icon: "images/someImageInPath.png",
-                };
-
-                const emailSubject = `${nameStatusService} serwis`;
-                const message = `${nameStatusService} serwis z dnia: ${
-                  resultSavetService.day < 10
-                    ? `0${resultSavetService.day}`
-                    : resultSavetService.day
-                }-${
-                  resultSavetService.month < 10
-                    ? `0${resultSavetService.month}`
-                    : resultSavetService.month
-                }-${resultSavetService.year}, przedmiotu: ${
-                  resultSavetService.objectName
-                }`;
-                let customPhone = !!resultSavetService.phone
-                  ? resultSavetService.phone
-                  : null;
-                if (!!customPhone) {
-                  customPhone = Buffer.from(customPhone, "base64").toString(
-                    "utf-8"
-                  );
-                }
-
-                const { resultSMS } = await notifications.sendAll({
-                  usersId: [
-                    resultSavetService.userId._id,
-                    resultSavetService.workerUserId._id,
-                  ],
-                  clientId: resultSavetService.userId._id,
-                  emailContent: {
-                    customEmail: null,
-                    emailTitle: emailSubject,
-                    emailMessage: emailContent,
-                  },
-                  notificationContent: {
-                    typeAlert: "serviceId",
-                    dateAlert: resultSavetService,
-                    typeNotification:
-                      statusValue == 3
-                        ? "service_finished"
-                        : statusValue == 4
-                        ? "service_canceled"
-                        : "service_changed",
-                    payload: payload,
-                    companyChanged: true,
-                  },
-                  smsContent: {
-                    companyId: companyId,
-                    customPhone: customPhone,
-                    companySendSMSValidField:
-                      statusValue == 3
-                        ? "smsServiceFinishedAvaible"
-                        : statusValue == 4
-                        ? "smsServiceCanceledAvaible"
-                        : "smsServiceChangedAvaible",
-                    titleCompanySendSMS:
-                      statusValue == 3
-                        ? "sms_finished_service"
-                        : statusValue == 4
-                        ? "sms_canceled_service"
-                        : "sms_changed_service",
-                    message: message,
-                  },
-                });
-
-                if (!!resultSMS) {
-                  const validUpdateSMSObject =
-                    statusValue == 3
-                      ? { finishedSMS: true }
-                      : statusValue == 4
-                      ? { canceledSMS: true }
-                      : { changedSMS: true };
-                  Service.updateOne(
-                    {
-                      _id: resultSavetService._id,
-                    },
-                    {
-                      $set: validUpdateSMSObject,
-                    }
-                  ).then(() => {});
-                }
-                res.status(200).json({
-                  message: "Zaktualizwowano serwis",
-                });
-              }
-            });
+        res.status(200).json({
+          message: "Zaktualizwowano serwis",
         });
       } else {
         const error = new Error("Brak firmy");
@@ -7528,7 +7314,7 @@ exports.companyAddCommuniting = (req, res, next) => {
                     newReserwationWorker = new Reserwation({
                       fromUser: userId,
                       toWorkerUserId: workerUserId,
-                      company: companyId,
+                      company: companyData._id,
                       dateStart: timeStart,
                       dateEnd: timeEnd,
                       costReserwation: null,
@@ -7616,7 +7402,7 @@ exports.companyAddCommuniting = (req, res, next) => {
                 newReserwationWorker = new Reserwation({
                   fromUser: userId,
                   toWorkerUserId: workerUserId,
-                  company: companyId,
+                  company: companyData._id,
                   dateStart: timeStart,
                   dateEnd: timeEnd,
                   costReserwation: null,
@@ -7692,124 +7478,41 @@ exports.companyAddCommuniting = (req, res, next) => {
         return resultSaveCommuniting;
       });
     })
-    .then((resultSaveCommuniting) => {
-      return resultSaveCommuniting
-        .populate({
-          path: "companyId",
-          select: "_id linkPath name",
-        })
-        .populate(
-          {
-            path: "userId workerUserId",
-            select: "name surname _id",
+    .then(async (resultSaveCommuniting) => {
+      const resultUpdated = await notifications.updateAllCollection({
+        companyId: companyId,
+        companyField: "companyId",
+        collection: "Communiting",
+        collectionItems:
+          "_id cost city description userId companyId month opinionId year day createdAt workerUserId dateEndValid timeStart timeEnd fullDate statusValue city street dateStartValid dateCommunitingValid isDeleted reserwationId",
+        extraCollectionPhoneField: "phone",
+        extraCollectionEmailField: "email",
+        extraCollectionNameField: "name surname",
+        updateCollectionItemObject: {},
+        filtersCollection: {
+          _id: resultSaveCommuniting,
+          companyId: companyId,
+        },
+        userField: "userId",
+        workerField: "workerUserId",
+        sendEmailValid: true,
+        notificationContent: {
+          typeAlert: "communitingId",
+        },
+        smsContent: {
+          companySendSMSValidField: "smsCommunitingCreatedAvaible",
+          titleCompanySMSAlert: "sms_added_communiting",
+          collectionFieldSMSOnSuccess: {
+            createdSMS: true,
           },
-          async function (err, populateCommuniting) {
-            const emailContent = `Utworzono dojazd dnia: ${
-              populateCommuniting.day < 10
-                ? `0${populateCommuniting.day}`
-                : populateCommuniting.day
-            }-${
-              populateCommuniting.month < 10
-                ? `0${populateCommuniting.month}`
-                : populateCommuniting.month
-            }-${populateCommuniting.year}, miasto: ${
-              populateCommuniting.city
-            }, ulica: ${populateCommuniting.street} przewidywany koszt: ${
-              !!populateCommuniting.cost ? populateCommuniting.cost : "nieznany"
-            }, numer dojazdu: ${populateCommuniting._id}`;
-
-            const payload = {
-              title: `Utworzono dojazd dnia: ${
-                populateCommuniting.day < 10
-                  ? `0${populateCommuniting.day}`
-                  : populateCommuniting.day
-              }-${
-                populateCommuniting.month < 10
-                  ? `0${populateCommuniting.month}`
-                  : populateCommuniting.month
-              }-${populateCommuniting.year}, miasto: ${
-                populateCommuniting.city
-              }, ulica: ${populateCommuniting.street} przewidywany koszt: ${
-                !!populateCommuniting.cost
-                  ? populateCommuniting.cost
-                  : "nieznany"
-              }, numer dojazdu: ${populateCommuniting._id}`,
-              body: "this is the body",
-              icon: "images/someImageInPath.png",
-            };
-
-            const emailSubject = `Dodano dojazd`;
-            const message = `Utworzono dojazd dnia: ${
-              populateCommuniting.day < 10
-                ? `0${populateCommuniting.day}`
-                : populateCommuniting.day
-            }-${
-              populateCommuniting.month < 10
-                ? `0${populateCommuniting.month}`
-                : populateCommuniting.month
-            }-${populateCommuniting.year}, miasto: ${
-              populateCommuniting.city
-            }, ulica: ${populateCommuniting.street} przewidywany koszt: ${
-              !!populateCommuniting.cost ? populateCommuniting.cost : "nieznany"
-            }, numer dojazdu: ${populateCommuniting._id}`;
-            let customPhone = !!populateCommuniting.phone
-              ? populateCommuniting.phone
-              : null;
-            if (!!customPhone) {
-              customPhone = Buffer.from(customPhone, "base64").toString(
-                "utf-8"
-              );
-            }
-            const validHasUser = !!populateCommuniting.userId
-              ? [
-                  populateCommuniting.userId._id,
-                  populateCommuniting.workerUserId._id,
-                ]
-              : [populateCommuniting.workerUserId._id];
-            const { resultSMS } = await notifications.sendAll({
-              usersId: validHasUser,
-              clientId: !!populateCommuniting.userId
-                ? populateCommuniting.userId._id
-                : null,
-              emailContent: {
-                customEmail: null,
-                emailTitle: emailSubject,
-                emailMessage: emailContent,
-              },
-              notificationContent: {
-                typeAlert: "communitingId",
-                dateAlert: populateCommuniting,
-                typeNotification: "commuting_created",
-                payload: payload,
-                companyChanged: true,
-              },
-              smsContent: {
-                companyId: companyId,
-                customPhone: customPhone,
-                companySendSMSValidField: "smsCommunitingCreatedAvaible",
-                titleCompanySendSMS: "sms_added_communiting",
-                message: message,
-              },
-            });
-
-            if (!!resultSMS) {
-              Communiting.updateOne(
-                {
-                  _id: populateCommuniting._id,
-                },
-                {
-                  $set: {
-                    createdSMS: true,
-                  },
-                }
-              ).then(() => {});
-            }
-            populateCommuniting.phone = null;
-            res.status(200).json({
-              newCommuniting: populateCommuniting,
-            });
-          }
-        );
+        },
+        companyChanged: true,
+        typeNotification: "commuting_created",
+        deleteOpinion: false,
+      });
+      res.status(200).json({
+        newCommuniting: resultUpdated[0],
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -7838,7 +7541,7 @@ exports.companyDeleteCommuniting = (req, res, next) => {
     _id: companyId,
   })
     .select("_id owner workers._id workers.user")
-    .then((companyData) => {
+    .then(async (companyData) => {
       if (!!companyData) {
         let hasPermission = companyData.owner == userId;
         if (!hasPermission) {
@@ -7847,128 +7550,48 @@ exports.companyDeleteCommuniting = (req, res, next) => {
           });
         }
         if (!!hasPermission) {
-          if (!!opinionId) {
-            Opinion.deleteOne({
-              _id: opinionId,
-            }).then(() => {});
-          }
           if (!!reserwationId) {
             Reserwation.deleteOne({
               _id: reserwationId,
             }).then(() => {});
           }
-          return Communiting.findOne({
-            _id: communitingId,
-          })
-            .select(
-              "workerUserId companyId userId createdAt description street city timeStart timeEnd day month year"
-            )
-            .populate("companyId", "name linkPath")
-            .populate("workerUserId userId", "name surname")
-            .then(async (populateCommuniting) => {
-              return Communiting.updateOne(
-                {
-                  _id: communitingId,
-                },
-                {
-                  $set: {
-                    isDeleted: true,
-                  },
-                }
-              ).then(async () => {
-                const emailContent = `Usunięto dojazd dnia: ${
-                  populateCommuniting.day < 10
-                    ? `0${populateCommuniting.day}`
-                    : populateCommuniting.day
-                }-${
-                  populateCommuniting.month < 10
-                    ? `0${populateCommuniting.month}`
-                    : populateCommuniting.month
-                }-${populateCommuniting.year}, miasto: ${
-                  populateCommuniting.city
-                }, ulica: ${populateCommuniting.street}`;
 
-                const payload = {
-                  title: `Usunięto dojazd dnia: ${
-                    populateCommuniting.day < 10
-                      ? `0${populateCommuniting.day}`
-                      : populateCommuniting.day
-                  }-${
-                    populateCommuniting.month < 10
-                      ? `0${populateCommuniting.month}`
-                      : populateCommuniting.month
-                  }-${populateCommuniting.year}, miasto: ${
-                    populateCommuniting.city
-                  }, ulica: ${populateCommuniting.street}`,
-                  body: "this is the body",
-                  icon: "images/someImageInPath.png",
-                };
-
-                const emailSubject = `Usunięto dojazd`;
-                const message = `Utworzono dojazd dnia: ${
-                  populateCommuniting.day < 10
-                    ? `0${populateCommuniting.day}`
-                    : populateCommuniting.day
-                }-${
-                  populateCommuniting.month < 10
-                    ? `0${populateCommuniting.month}`
-                    : populateCommuniting.month
-                }-${populateCommuniting.year}, miasto: ${
-                  populateCommuniting.city
-                }, ulica: ${populateCommuniting.street}`;
-                let customPhone = !!populateCommuniting.phone
-                  ? populateCommuniting.phone
-                  : null;
-                if (!!customPhone) {
-                  customPhone = Buffer.from(customPhone, "base64").toString(
-                    "utf-8"
-                  );
-                }
-
-                const { resultSMS } = await notifications.sendAll({
-                  usersId: [
-                    populateCommuniting.userId._id,
-                    populateCommuniting.workerUserId._id,
-                  ],
-                  clientId: populateCommuniting.userId._id,
-                  emailContent: {
-                    customEmail: null,
-                    emailTitle: emailSubject,
-                    emailMessage: emailContent,
-                  },
-                  notificationContent: {
-                    typeAlert: "communitingId",
-                    dateAlert: populateCommuniting,
-                    typeNotification: "commuting_deleted",
-                    payload: payload,
-                    companyChanged: true,
-                  },
-                  smsContent: {
-                    companyId: companyId,
-                    customPhone: customPhone,
-                    companySendSMSValidField: "smsCommunitingDeletedAvaible",
-                    titleCompanySendSMS: "sms_deleted_communiting",
-                    message: message,
-                  },
-                });
-
-                if (!!resultSMS) {
-                  Communiting.updateOne(
-                    {
-                      _id: populateCommuniting._id,
-                    },
-                    {
-                      $set: {
-                        deletedSMS: true,
-                      },
-                    }
-                  ).then(() => {});
-                }
-                res.status(200).json({
-                  message: "Usunieto serwis",
-                });
-              });
-            });
+          await notifications.updateAllCollection({
+            companyId: companyId,
+            companyField: "companyId",
+            collection: "Communiting",
+            collectionItems:
+              "_id cost city description userId opinionId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd fullDate statusValue city street dateStartValid dateCommunitingValid isDeleted reserwationId",
+            extraCollectionPhoneField: "phone",
+            extraCollectionEmailField: "email",
+            extraCollectionNameField: "name surname",
+            updateCollectionItemObject: {
+              isDeleted: true,
+            },
+            filtersCollection: {
+              _id: communitingId,
+              companyId: companyId,
+            },
+            userField: "userId",
+            workerField: "workerUserId",
+            sendEmailValid: true,
+            notificationContent: {
+              typeAlert: "communitingId",
+            },
+            smsContent: {
+              companySendSMSValidField: "smsCommunitingDeletedAvaible",
+              titleCompanySMSAlert: "sms_deleted_communiting",
+              collectionFieldSMSOnSuccess: {
+                deletedSMS: true,
+              },
+            },
+            companyChanged: true,
+            typeNotification: "commuting_deleted",
+            deleteOpinion: false,
+          });
+          res.status(200).json({
+            message: "Usunieto serwis",
+          });
         } else {
           const error = new Error("Brak uprawnień");
           error.statusCode = 422;
@@ -8016,7 +7639,7 @@ exports.companyUpdateCommuniting = (req, res, next) => {
     },
   })
     .select("_id owner workers._id workers.user workers.permissions")
-    .then((companyData) => {
+    .then(async (companyData) => {
       if (!!companyData) {
         let hasPermission = companyData.owner == userId;
         if (!hasPermission) {
@@ -8067,166 +7690,77 @@ exports.companyUpdateCommuniting = (req, res, next) => {
           Number(splitDateStart[0]),
           Number(splitDateStart[1])
         );
-        return Communiting.updateOne(
-          {
+
+        const validUpdateValue =
+          statusValue == 4 ? { canceledSMS: true } : { changedSMS: true };
+
+        const validSmsValidCompany =
+          statusValue == 4
+            ? "smsCommunitingCanceledAvaible"
+            : "smsCommunitingChangedAvaible";
+
+        const validSmsTitle =
+          statusValue == 4
+            ? "sms_canceld_communiting"
+            : "sms_changed_communiting";
+
+        const validNotification =
+          statusValue == 4 ? "commuting_canceled" : "commuting_changed";
+
+        const validNotificationCanceled =
+          statusValue == 4
+            ? {
+                isDeleted: true,
+              }
+            : {};
+
+        await notifications.updateAllCollection({
+          companyId: companyId,
+          companyField: "companyId",
+          collection: "Communiting",
+          collectionItems:
+            "_id cost city description userId opinionId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd fullDate statusValue city street dateStartValid dateCommunitingValid isDeleted reserwationId",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {
+            workerUserId: selectedWorkerUserId,
+            description: description,
+            cost: cost,
+            statusValue: statusValue,
+            timeStart: timeStart,
+            timeEnd: timeEnd,
+            day: Number(splitFullDate[0]),
+            month: Number(splitFullDate[1]),
+            year: Number(splitFullDate[2]),
+            ...validDateService,
+            ...validDateServiceEnd,
+            fullDate: newFullDate,
+            ...validNotificationCanceled,
+          },
+          filtersCollection: {
             _id: communitingId,
             companyId: companyId,
             ...validPermission,
           },
-          {
-            $set: {
-              workerUserId: selectedWorkerUserId,
-              description: description,
-              cost: cost,
-              statusValue: statusValue,
-              timeStart: timeStart,
-              timeEnd: timeEnd,
-              day: Number(splitFullDate[0]),
-              month: Number(splitFullDate[1]),
-              year: Number(splitFullDate[2]),
-              ...validDateService,
-              ...validDateServiceEnd,
-              fullDate: newFullDate,
-            },
-          }
-        ).then(() => {
-          return Communiting.findOne({
-            _id: communitingId,
-            companyId: companyId,
-            ...validPermission,
-          })
-            .select(
-              "_id city description userId companyId month year day timeStart timeEnd email workerUserId street cost"
-            )
-            .populate("companyId userId", "name surname linkPath")
-            .then(async (resultSavetCommuniting) => {
-              if (!!resultSavetCommuniting) {
-                const validTextCommuniting =
-                  resultSavetCommuniting.statusValue == 4
-                    ? "Odwołano"
-                    : "Zaktualizowano";
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "communitingId",
+          },
+          smsContent: {
+            companySendSMSValidField: validSmsValidCompany,
+            titleCompanySMSAlert: validSmsTitle,
+            collectionFieldSMSOnSuccess: validUpdateValue,
+          },
+          companyChanged: true,
+          typeNotification: validNotification,
+          deleteOpinion: false,
+        });
 
-                const emailContent = `${validTextCommuniting} dojazd dnia: ${
-                  resultSavetCommuniting.day < 10
-                    ? `0${resultSavetCommuniting.day}`
-                    : resultSavetCommuniting.day
-                }-${
-                  resultSavetCommuniting.month < 10
-                    ? `0${resultSavetCommuniting.month}`
-                    : resultSavetCommuniting.month
-                }-${resultSavetCommuniting.year}, miasto: ${
-                  resultSavetCommuniting.city
-                }, ulica: ${
-                  resultSavetCommuniting.street
-                } przewidywany koszt: ${
-                  !!resultSavetCommuniting.cost
-                    ? resultSavetCommuniting.cost
-                    : "nieznany"
-                }, numer dojazdu: ${resultSavetCommuniting._id}`;
-
-                const payload = {
-                  title: `${validTextCommuniting} dojazd dnia: ${
-                    resultSavetCommuniting.day < 10
-                      ? `0${resultSavetCommuniting.day}`
-                      : resultSavetCommuniting.day
-                  }-${
-                    resultSavetCommuniting.month < 10
-                      ? `0${resultSavetCommuniting.month}`
-                      : resultSavetCommuniting.month
-                  }-${resultSavetCommuniting.year}, miasto: ${
-                    resultSavetCommuniting.city
-                  }, ulica: ${
-                    resultSavetCommuniting.street
-                  } przewidywany koszt: ${
-                    !!resultSavetCommuniting.cost
-                      ? resultSavetCommuniting.cost
-                      : "nieznany"
-                  }, numer dojazdu: ${resultSavetCommuniting._id}`,
-                  body: "this is the body",
-                  icon: "images/someImageInPath.png",
-                };
-
-                const emailSubject = `${validTextCommuniting} dojazd`;
-                const message = `${validTextCommuniting} dojazd dnia: ${
-                  resultSavetCommuniting.day < 10
-                    ? `0${resultSavetCommuniting.day}`
-                    : resultSavetCommuniting.day
-                }-${
-                  resultSavetCommuniting.month < 10
-                    ? `0${resultSavetCommuniting.month}`
-                    : resultSavetCommuniting.month
-                }-${resultSavetCommuniting.year}, miasto: ${
-                  resultSavetCommuniting.city
-                }, ulica: ${
-                  resultSavetCommuniting.street
-                } przewidywany koszt: ${
-                  !!resultSavetCommuniting.cost
-                    ? resultSavetCommuniting.cost
-                    : "nieznany"
-                }, numer dojazdu: ${resultSavetCommuniting._id}`;
-                let customPhone = !!resultSavetCommuniting.phone
-                  ? resultSavetCommuniting.phone
-                  : null;
-                if (!!customPhone) {
-                  customPhone = Buffer.from(customPhone, "base64").toString(
-                    "utf-8"
-                  );
-                }
-
-                const { resultSMS } = await notifications.sendAll({
-                  usersId: [
-                    resultSavetCommuniting.userId._id,
-                    resultSavetCommuniting.workerUserId._id,
-                  ],
-                  clientId: resultSavetCommuniting.userId._id,
-                  emailContent: {
-                    customEmail: null,
-                    emailTitle: emailSubject,
-                    emailMessage: emailContent,
-                  },
-                  notificationContent: {
-                    typeAlert: "communitingId",
-                    dateAlert: resultSavetCommuniting,
-                    typeNotification:
-                      resultSavetCommuniting.statusValue == 4
-                        ? "commuting_canceled"
-                        : "commuting_changed",
-                    payload: payload,
-                    companyChanged: true,
-                  },
-                  smsContent: {
-                    companyId: companyId,
-                    customPhone: customPhone,
-                    companySendSMSValidField:
-                      resultSavetCommuniting.statusValue == 4
-                        ? "smsCommunitingCanceledAvaible"
-                        : "smsCommunitingChangedAvaible",
-                    titleCompanySendSMS:
-                      resultSavetCommuniting.statusValue == 4
-                        ? "sms_canceld_communiting"
-                        : "sms_changed_communiting",
-                    message: message,
-                  },
-                });
-                const validUpdateValue =
-                  resultSavetCommuniting.statusValue == 4
-                    ? { canceledSMS: true }
-                    : { changedSMS: true };
-                if (!!resultSMS) {
-                  Communiting.updateOne(
-                    {
-                      _id: resultSavetCommuniting._id,
-                    },
-                    {
-                      $set: validUpdateValue,
-                    }
-                  ).then(() => {});
-                }
-                res.status(200).json({
-                  message: "Zaktualizowano dojazd",
-                });
-              }
-            });
+        res.status(200).json({
+          message: "Zaktualizowano dojazd",
         });
       } else {
         const error = new Error("Brak firmy");

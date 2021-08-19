@@ -182,10 +182,10 @@ const sendMultiAlert = ({
 
             const bodyPayload = `${!!title ? title : ""} ${
               !!day ? `${dayText}: ${day}` : ""
-            } ${!!hours ? `${hoursText}: ${hours}` : ""} ${
-              !!reserwation ? `${reserwationText}: ${reserwation}` : ""
-            } ${!!service ? `${serviceText}: ${service}` : ""} ${
-              !!communiting ? `${communitingText}: ${communiting}` : ""
+            } ${!!hours ? `, ${hoursText}: ${hours}` : ""} ${
+              !!reserwation ? `, ${reserwationText}: ${reserwation}` : ""
+            } ${!!service ? `, ${serviceText}: ${service}` : ""} ${
+              !!communiting ? `, ${communitingText}: ${communiting}` : ""
             } ${!!defaultText ? defaultText : ""}`;
 
             const titlePayload = !!payload.extraTitle
@@ -224,10 +224,16 @@ const sendMultiAlert = ({
             }
           }
         }
+
         if (!!typeAlert) {
           if (!!workerUserField) {
-            if (!!userItem[workerUserField]._id) {
-              userItem[workerUserField] = userItem[workerUserField]._id;
+            if (!!userItem[workerUserField]) {
+              if (!!userItem[workerUserField].vapidEndpoint) {
+                userItem[workerUserField].vapidEndpoint = null;
+              }
+              if (!!userItem[workerUserField].language) {
+                userItem[workerUserField].language = null;
+              }
             }
           }
           if (!!userItem.fromUser) {
@@ -252,32 +258,36 @@ const sendMultiAlert = ({
               },
             });
           }
-          if (!!userItem.toWorkerUserId) {
-            if (!!avaibleSendAlertToWorker && !!workerUserField) {
-              const newAlertDataWorker = {
-                [typeAlert]: userItem._id,
-                active: true,
-                type: typeNotification,
-                creationTime: new Date(),
-                companyChanged: companyChanged,
-                toUserId: userItem[workerUserField],
-              };
-              io.getIO().emit(`user${userItem[workerUserField]}`, {
-                action: "update-alerts",
-                alertData: {
-                  [typeAlert]: userItem,
+
+          if (!!avaibleSendAlertToWorker && !!workerUserField) {
+            if (!!userItem[workerUserField]) {
+              if (!!userItem[workerUserField]._id) {
+                const newAlertDataWorker = {
+                  [typeAlert]: userItem._id,
                   active: true,
                   type: typeNotification,
                   creationTime: new Date(),
                   companyChanged: companyChanged,
-                },
-              });
-              newInserItems.push(newAlertDataWorker);
+                  toUserId: userItem[workerUserField]._id,
+                };
+                io.getIO().emit(`user${userItem[workerUserField]._id}`, {
+                  action: "update-alerts",
+                  alertData: {
+                    [typeAlert]: userItem,
+                    active: true,
+                    type: typeNotification,
+                    creationTime: new Date(),
+                    companyChanged: companyChanged,
+                  },
+                });
+                newInserItems.push(newAlertDataWorker);
+              }
             }
           }
         }
       }
     }
+
     if (newInserItems.length > 0) {
       Alert.insertMany(newInserItems)
         .then(() => {})
@@ -727,6 +737,7 @@ const updateAllCollection = async ({
   companyId = null,
   companyField = "",
   filtersCollection = null,
+  extraPopulate = ["", ""],
   collection = "",
   collectionItems = "",
   extraCollectionPhoneField = "",
@@ -746,7 +757,10 @@ const updateAllCollection = async ({
   },
   companyChanged = false,
   typeNotification = "",
+  deleteOpinion = false,
 }) => {
+  const fieldOpinionId = "opinionId";
+
   const selectedCollection =
     collection === "Communiting"
       ? Communiting
@@ -765,21 +779,28 @@ const updateAllCollection = async ({
     !!companyId &&
     !!updateCollectionItemObject &&
     !!companyField &&
-    !!typeNotification
+    !!typeNotification &&
+    extraPopulate.length === 2
   ) {
     return selectedCollection
       .find(filtersCollection)
       .select(
-        `${collectionItems} ${extraCollectionPhoneField} ${extraCollectionEmailField} ${extraCollectionNameField}`
+        `${collectionItems} ${extraCollectionPhoneField} ${extraCollectionEmailField} ${extraCollectionNameField} ${
+          deleteOpinion ? fieldOpinionId : ""
+        }`
       )
       .populate(userField, "_id name surname")
-      .populate(workerField, "_id vapidEndpoint language")
+      .populate(workerField, "_id vapidEndpoint language name surname")
       .populate(companyField, "_id name linkPath owner")
+      .populate(fieldOpinionId, "")
+      .populate(extraPopulate[0], extraPopulate[1])
       .then(async (allCommunitings) => {
         const allUsers = [];
         const allUsersWithItems = [];
         const otherUsersWithoutAccount = [];
         const bulkArrayToUpdate = [];
+        const allUpdatedItems = [];
+        const allOpinionIdsToDelete = [];
         let avaibleSendSMS = false;
 
         //check is avaible count sms to send to users
@@ -814,6 +835,14 @@ const updateAllCollection = async ({
               },
             },
           });
+          if (deleteOpinion) {
+            if (!!communitingItem.fieldOpinionId) {
+              if (!!communitingItem.fieldOpinionId._id) {
+                allOpinionIdsToDelete.push(communitingItem.fieldOpinionId._id);
+                communitingItem.fieldOpinionId = null;
+              }
+            }
+          }
           if (!!communitingItem[userField]) {
             if (!!communitingItem[userField]._id) {
               const newItemCollectionWithActualization = communitingItem;
@@ -828,7 +857,7 @@ const updateAllCollection = async ({
                   itemUpdateCollectionItemObject
                 ] = updateCollectionItemObject[itemUpdateCollectionItemObject];
               }
-
+              allUpdatedItems.push(newItemCollectionWithActualization);
               if (isUserInAllUsers < 0) {
                 allUsers.push(communitingItem[userField]._id.toString());
                 const newItemUserWithItem = {
@@ -896,19 +925,19 @@ const updateAllCollection = async ({
                     : ""
                 } ${
                   !!propsGenerator.hours
-                    ? `${propsGenerator.hoursText}: ${propsGenerator.hours}`
+                    ? `, ${propsGenerator.hoursText}: ${propsGenerator.hours}`
                     : ""
                 } ${
                   !!propsGenerator.reserwation
-                    ? `${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
+                    ? `, ${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
                     : ""
                 } ${
                   !!propsGenerator.service
-                    ? `${propsGenerator.serviceText}: ${propsGenerator.service}`
+                    ? `, ${propsGenerator.serviceText}: ${propsGenerator.service}`
                     : ""
                 } ${
                   !!propsGenerator.communiting
-                    ? `${propsGenerator.communitingText}: ${propsGenerator.communiting}`
+                    ? `, ${propsGenerator.communitingText}: ${propsGenerator.communiting}`
                     : ""
                 } ${
                   !!propsGenerator.defaultText ? propsGenerator.defaultText : ""
@@ -1110,7 +1139,6 @@ const updateAllCollection = async ({
                 }
               }
             }
-
             //send to client and worker alert
             if (!!notificationContent) {
               if (!!notificationContent.typeAlert && !!typeNotification) {
@@ -1133,7 +1161,15 @@ const updateAllCollection = async ({
             return selectedCollection
               .bulkWrite(bulkArrayToUpdate)
               .then(() => {
-                return true;
+                if (allOpinionIdsToDelete.length > 0) {
+                  selectedCollection.deleteMany(
+                    allOpinionIdsToDelete,
+                    (err, obj) => {
+                      if (err) throw err;
+                    }
+                  );
+                }
+                return allUpdatedItems;
               })
               .catch((err) => {
                 if (!err.statusCode) {

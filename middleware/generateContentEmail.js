@@ -10,7 +10,7 @@ exports.generateContentEmail = ({
   let alertColor = "default";
   let isCompanyChanged = !!companyChanged ? companyChanged : false;
   let alertDate = "00-00-0000";
-  let timeStartEnd = "0:00 - 0:00";
+  let timeStartEnd = null;
   let companyName = "Brak firmy";
   let companyLink = null;
   let title = null;
@@ -47,45 +47,46 @@ exports.generateContentEmail = ({
     }
   } else if (collection === "Communiting") {
     //communiting
-    if (!!alertDate.city) {
-      communiting = alertDate.city;
+    if (!!itemAlert.city) {
+      communiting = itemAlert.city;
     }
-    if (!!alertDate.timeStart && !!alertDate.timeEnd) {
-      timeStartEnd = `${alertDate.timeStart}-${alertDate.timeEnd}`;
+    if (!!itemAlert.timeStart && !!itemAlert.timeEnd) {
+      timeStartEnd = `${itemAlert.timeStart}-${itemAlert.timeEnd}`;
     }
-    if (!!alertDate.companyId) {
-      if (!!alertDate.companyId.name && !!alertDate.companyId.linkPath) {
-        companyName = itemAlert.company.name.toUpperCase();
-        companyLink = itemAlert.company.linkPath;
+    if (!!itemAlert.companyId) {
+      if (!!itemAlert.companyId.name && !!itemAlert.companyId.linkPath) {
+        companyName = itemAlert.companyId.name.toUpperCase();
+        companyLink = itemAlert.companyId.linkPath;
       }
     }
-    if (!!alertDate.day && !!alertDate.month && !!alertDate.year) {
+    if (!!itemAlert.day && !!itemAlert.month && !!itemAlert.year) {
       alertDate = `${
-        alertDate.day < 10 ? `0${alertDate.day}` : alertDate.day
-      }-${alertDate.month < 10 ? `0${alertDate.month}` : alertDate.month}-${
-        alertDate.year
+        itemAlert.day < 10 ? `0${itemAlert.day}` : itemAlert.day
+      }-${itemAlert.month < 10 ? `0${itemAlert.month}` : itemAlert.month}-${
+        itemAlert.year
       }`;
     }
   } else if (collection === "Service") {
     //service
-    if (!!alertDate.companyId) {
-      if (!!alertDate.companyId.name && !!alertDate.companyId.linkPath) {
-        companyName = itemAlert.company.name.toUpperCase();
-        companyLink = itemAlert.company.linkPath;
+    if (!!itemAlert.companyId) {
+      if (!!itemAlert.companyId.name && !!itemAlert.companyId.linkPath) {
+        companyName = itemAlert.companyId.name.toUpperCase();
+        companyLink = itemAlert.companyId.linkPath;
       }
     }
-    if (!!alertDate.serviceName) {
-      service = alertDate.serviceName;
+    if (!!itemAlert.objectName) {
+      service = itemAlert.objectName;
     }
-    if (!!alertDate.day && !!alertDate.month && !!alertDate.year) {
+
+    if (!!itemAlert.day && !!itemAlert.month && !!itemAlert.year) {
       alertDate = `${
-        alertDate.day < 10 ? `0${alertDate.day}` : alertDate.day
-      }-${alertDate.month < 10 ? `0${alertDate.month}` : alertDate.month}-${
-        alertDate.year
+        itemAlert.day < 10 ? `0${itemAlert.day}` : itemAlert.day
+      }-${itemAlert.month < 10 ? `0${itemAlert.month}` : itemAlert.month}-${
+        itemAlert.year
       }`;
     }
   } else {
-    if (!!alertDate.name && !!alertDate.linkPath) {
+    if (!!itemAlert.name && !!itemAlert.linkPath) {
       companyName = itemAlert.name.toUpperCase();
       companyLink = itemAlert.linkPath;
     }

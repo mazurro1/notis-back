@@ -93,7 +93,7 @@ const communitingSchema = new Schema(
     reserwationId: {
       type: Schema.Types.ObjectId,
       ref: "Reserwations",
-      required: true,
+      required: false,
     },
     opinionId: {
       type: Schema.Types.ObjectId,
