@@ -10,7 +10,6 @@ const Service = require("../models/service");
 const Communiting = require("../models/Communiting");
 const mongoose = require("mongoose");
 const User = require("../models/user");
-const Alert = require("../models/alert");
 const { validationResult } = require("express-validator");
 const AWS = require("aws-sdk");
 const getImgBuffer = require("../getImgBuffer");
@@ -1351,7 +1350,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
     })
     .then(async (userDoc) => {
       await notifications.updateAllCollection({
-        companyId: companyId,
         companyField: "company",
         collection: "Reserwation",
         collectionItems:
@@ -1378,6 +1376,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         sendEmailValid: true,
         notificationContent: {
           typeAlert: "reserwationId",
+          avaibleSendAlertToWorker: true,
         },
         smsContent: {
           companySendSMSValidField: "smsCanceledAvaible",
@@ -1394,7 +1393,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
     })
     .then(async (userDoc) => {
       await notifications.updateAllCollection({
-        companyId: companyId,
         companyField: "companyId",
         collection: "Service",
         collectionItems:
@@ -1414,6 +1412,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         sendEmailValid: true,
         notificationContent: {
           typeAlert: "serviceId",
+          avaibleSendAlertToWorker: true,
         },
         smsContent: {
           companySendSMSValidField: "smsServiceDeletedAvaible",
@@ -1430,7 +1429,6 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
     })
     .then(async (userDoc) => {
       const resultUpdated = await notifications.updateAllCollection({
-        companyId: companyId,
         companyField: "companyId",
         collection: "Communiting",
         collectionItems:
@@ -1453,6 +1451,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         sendEmailValid: true,
         notificationContent: {
           typeAlert: "communitingId",
+          avaibleSendAlertToWorker: true,
         },
         smsContent: {
           companySendSMSValidField: "smsCommunitingCanceledAvaible",
@@ -6617,7 +6616,6 @@ exports.companyAddService = (req, res, next) => {
     })
     .then(async (resultSaveService) => {
       const updatedAndPopulatedItem = await notifications.updateAllCollection({
-        companyId: companyId,
         companyField: "companyId",
         collection: "Service",
         collectionItems:
@@ -6634,6 +6632,7 @@ exports.companyAddService = (req, res, next) => {
         sendEmailValid: true,
         notificationContent: {
           typeAlert: "serviceId",
+          avaibleSendAlertToWorker: true,
         },
         smsContent: {
           companySendSMSValidField: "smsServiceCreatedAvaible",
@@ -6789,7 +6788,6 @@ exports.companyDeleteServices = (req, res, next) => {
     })
     .then(async (savedServiceDoc) => {
       await notifications.updateAllCollection({
-        companyId: companyId,
         companyField: "companyId",
         collection: "Service",
         collectionItems:
@@ -6807,6 +6805,7 @@ exports.companyDeleteServices = (req, res, next) => {
         sendEmailValid: true,
         notificationContent: {
           typeAlert: "serviceId",
+          avaibleSendAlertToWorker: true,
         },
         smsContent: {
           companySendSMSValidField: "smsServiceCanceledAvaible",
@@ -6877,7 +6876,6 @@ exports.companyUpdateServices = (req, res, next) => {
           statusValue == 3 ? { dateEnd: new Date() } : {};
 
         await notifications.updateAllCollection({
-          companyId: companyId,
           companyField: "companyId",
           collection: "Service",
           collectionItems:
@@ -6904,6 +6902,7 @@ exports.companyUpdateServices = (req, res, next) => {
           sendEmailValid: true,
           notificationContent: {
             typeAlert: "serviceId",
+            avaibleSendAlertToWorker: true,
           },
           smsContent: {
             companySendSMSValidField:
@@ -7480,7 +7479,6 @@ exports.companyAddCommuniting = (req, res, next) => {
     })
     .then(async (resultSaveCommuniting) => {
       const resultUpdated = await notifications.updateAllCollection({
-        companyId: companyId,
         companyField: "companyId",
         collection: "Communiting",
         collectionItems:
@@ -7498,6 +7496,7 @@ exports.companyAddCommuniting = (req, res, next) => {
         sendEmailValid: true,
         notificationContent: {
           typeAlert: "communitingId",
+          avaibleSendAlertToWorker: true,
         },
         smsContent: {
           companySendSMSValidField: "smsCommunitingCreatedAvaible",
@@ -7510,6 +7509,7 @@ exports.companyAddCommuniting = (req, res, next) => {
         typeNotification: "commuting_created",
         deleteOpinion: false,
       });
+
       res.status(200).json({
         newCommuniting: resultUpdated[0],
       });
@@ -7557,7 +7557,6 @@ exports.companyDeleteCommuniting = (req, res, next) => {
           }
 
           await notifications.updateAllCollection({
-            companyId: companyId,
             companyField: "companyId",
             collection: "Communiting",
             collectionItems:
@@ -7577,6 +7576,7 @@ exports.companyDeleteCommuniting = (req, res, next) => {
             sendEmailValid: true,
             notificationContent: {
               typeAlert: "communitingId",
+              avaibleSendAlertToWorker: true,
             },
             smsContent: {
               companySendSMSValidField: "smsCommunitingDeletedAvaible",
@@ -7715,7 +7715,6 @@ exports.companyUpdateCommuniting = (req, res, next) => {
             : {};
 
         await notifications.updateAllCollection({
-          companyId: companyId,
           companyField: "companyId",
           collection: "Communiting",
           collectionItems:
@@ -7748,6 +7747,7 @@ exports.companyUpdateCommuniting = (req, res, next) => {
           sendEmailValid: true,
           notificationContent: {
             typeAlert: "communitingId",
+            avaibleSendAlertToWorker: true,
           },
           smsContent: {
             companySendSMSValidField: validSmsValidCompany,

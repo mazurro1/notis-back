@@ -821,7 +821,6 @@ exports.addReserwation = (req, res, next) => {
                                       );
 
                                     await notifications.updateAllCollection({
-                                      companyId: companyId,
                                       companyField: "company",
                                       collection: "Reserwation",
                                       collectionItems:
@@ -868,6 +867,7 @@ exports.addReserwation = (req, res, next) => {
                                       sendEmailValid: true,
                                       notificationContent: {
                                         typeAlert: "reserwationId",
+                                        avaibleSendAlertToWorker: true,
                                       },
                                       smsContent: {
                                         companySendSMSValidField:
@@ -2300,7 +2300,6 @@ exports.updateReserwation = (req, res, next) => {
         if (isGoodDate) {
           if (canceled !== null) {
             await notifications.updateAllCollection({
-              companyId: reserwationsDoc.company._id,
               companyField: "company",
               collection: "Reserwation",
               collectionItems:
@@ -2323,6 +2322,7 @@ exports.updateReserwation = (req, res, next) => {
               sendEmailValid: true,
               notificationContent: {
                 typeAlert: "reserwationId",
+                avaibleSendAlertToWorker: true,
               },
               smsContent: {
                 companySendSMSValidField: "smsReserwationChangedUserAvaible",
@@ -2498,7 +2498,6 @@ exports.updateWorkerReserwation = (req, res, next) => {
               : "reserwation_finished";
 
             await notifications.updateAllCollection({
-              companyId: reserwationsDoc.company._id,
               companyField: "company",
               collection: "Reserwation",
               collectionItems:
@@ -2526,6 +2525,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
               sendEmailValid: true,
               notificationContent: {
                 typeAlert: "reserwationId",
+                avaibleSendAlertToWorker: true,
               },
               smsContent: {
                 companySendSMSValidField: reserwationValidCompanySMS,
@@ -3571,7 +3571,6 @@ exports.changeReserwation = (req, res, next) => {
                                       );
 
                                     await notifications.updateAllCollection({
-                                      companyId: companyId,
                                       companyField: "company",
                                       collection: "Reserwation",
                                       collectionItems:
@@ -3619,6 +3618,7 @@ exports.changeReserwation = (req, res, next) => {
                                       sendEmailValid: true,
                                       notificationContent: {
                                         typeAlert: "reserwationId",
+                                        avaibleSendAlertToWorker: true,
                                       },
                                       smsContent: {
                                         companySendSMSValidField:
@@ -4385,7 +4385,6 @@ exports.addWorkerClientReserwation = (req, res, next) => {
           },
           async (err, resultReserwationPopulate) => {
             await notifications.updateAllCollection({
-              companyId: result.company,
               companyField: "company",
               collection: "Reserwation",
               collectionItems:
@@ -4402,6 +4401,7 @@ exports.addWorkerClientReserwation = (req, res, next) => {
               sendEmailValid: true,
               notificationContent: {
                 typeAlert: "reserwationId",
+                avaibleSendAlertToWorker: true,
               },
               smsContent: {
                 companySendSMSValidField: "smsReserwationAvaible",

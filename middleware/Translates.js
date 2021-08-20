@@ -226,6 +226,11 @@ exports.Translates = {
           title: ["Użytkownik:", "anulował dojazd"],
         },
       },
+      commuting_notifaction: {
+        companyChangedUser: {
+          title: ["Firma:", "przypomina o wizycie"],
+        },
+      },
       //
       service_created: {
         companyChangedUser: {
@@ -474,6 +479,11 @@ exports.Translates = {
         },
         noCompanyChangedNoUser: {
           title: ["User:", "canceled the driveway"],
+        },
+      },
+      commuting_notifaction: {
+        companyChangedUser: {
+          title: ["Company:", "reminds you of your visit"],
         },
       },
       service_created: {

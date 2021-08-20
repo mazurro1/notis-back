@@ -9,7 +9,7 @@ exports.generateContentEmail = ({
 }) => {
   let alertColor = "default";
   let isCompanyChanged = !!companyChanged ? companyChanged : false;
-  let alertDate = "00-00-0000";
+  let alertDate = null;
   let timeStartEnd = null;
   let companyName = "Brak firmy";
   let companyLink = null;
@@ -213,6 +213,13 @@ exports.generateContentEmail = ({
         title = `${texts[alertType].companyChangedUser.title[0]} ${companyName} ${texts[alertType].companyChangedUser.title[1]}`;
       } else {
         title = `${texts[alertType].noCompanyChangedUser.title[0]} ${companyName}`;
+      }
+      break;
+    }
+    case "commuting_notifaction": {
+      alertColor = "blue";
+      if (isCompanyChanged) {
+        title = `${texts[alertType].companyChangedUser.title[0]} ${companyName} ${texts[alertType].companyChangedUser.title[1]}`;
       }
       break;
     }

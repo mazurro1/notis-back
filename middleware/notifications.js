@@ -204,22 +204,24 @@ const sendMultiAlert = ({
               .then(() => {})
               .catch(() => {});
 
-            if (!!userItem.toWorkerUserId) {
-              if (!!userItem.toWorkerUserId.vapidEndpoint) {
-                webpush
-                  .sendNotification(
-                    userItem.toWorkerUserId.vapidEndpoint,
-                    JSON.stringify({
-                      title: titlePayload,
-                      body:
-                        userItem.toWorkerUserId.language == "PL"
-                          ? "Nowe powiadomienie"
-                          : "New notification",
-                      icon: "",
-                    })
-                  )
-                  .then(() => {})
-                  .catch(() => {});
+            if (!!avaibleSendAlertToWorker && !!workerUserField) {
+              if (!!userItem[workerUserField]) {
+                if (!!userItem[workerUserField].vapidEndpoint) {
+                  webpush
+                    .sendNotification(
+                      userItem[workerUserField].vapidEndpoint,
+                      JSON.stringify({
+                        title: titlePayload,
+                        body:
+                          userItem[workerUserField].language == "PL"
+                            ? "Nowe powiadomienie"
+                            : "New notification",
+                        icon: "",
+                      })
+                    )
+                    .then(() => {})
+                    .catch(() => {});
+                }
               }
             }
           }
@@ -236,7 +238,8 @@ const sendMultiAlert = ({
               }
             }
           }
-          if (!!userItem.fromUser) {
+
+          if (!!userItem[userField]) {
             const newAlertDataUser = {
               [typeAlert]: userItem._id,
               active: true,
@@ -322,8 +325,8 @@ const sendEmail = async ({
 }) => {
   if (
     !!email &&
-    !!title &&
-    (!!defaultText ||
+    (!!title ||
+      !!defaultText ||
       !!reserwation ||
       !!service ||
       !!communiting ||
@@ -591,8 +594,8 @@ const sendAll = async ({
     ) {
       sendEmail({
         email: emailContent.customEmail,
-        emailTitle: emailContent.emailTitle,
-        emailMessage: emailContent.emailMessage,
+        title: emailContent.emailTitle,
+        defaultText: emailContent.emailMessage,
       });
     }
   }
@@ -734,7 +737,6 @@ const updateCompanyFunction = async ({
 };
 
 const updateAllCollection = async ({
-  companyId = null,
   companyField = "",
   filtersCollection = null,
   extraPopulate = ["", ""],
@@ -749,6 +751,7 @@ const updateAllCollection = async ({
   sendEmailValid = true,
   notificationContent = {
     typeAlert: "",
+    avaibleSendAlertToWorker: true,
   },
   smsContent = {
     companySendSMSValidField: null,
@@ -776,7 +779,6 @@ const updateAllCollection = async ({
     !!userField &&
     !!collectionItems &&
     !!filtersCollection &&
-    !!companyId &&
     !!updateCollectionItemObject &&
     !!companyField &&
     !!typeNotification &&
@@ -801,26 +803,7 @@ const updateAllCollection = async ({
         const bulkArrayToUpdate = [];
         const allUpdatedItems = [];
         const allOpinionIdsToDelete = [];
-        let avaibleSendSMS = false;
-
-        //check is avaible count sms to send to users
-        if (!!smsContent) {
-          if (
-            !!smsContent.companySendSMSValidField &&
-            !!smsContent.titleCompanySMSAlert &&
-            !!companyId
-          ) {
-            const resultFunctionUpdate = await updateCompanyFunction({
-              companyId: companyId,
-              countItems: allCommunitings.length,
-              titleCompanySendSMSAlert: smsContent.titleCompanySMSAlert,
-              smsCompanyFieldValid: smsContent.companySendSMSValidField,
-            });
-            if (resultFunctionUpdate) {
-              avaibleSendSMS = true;
-            }
-          }
-        }
+        const companysItemsAndAvaibleSendSMSStatus = [];
 
         //filters items collections to user or not user items
         for (const communitingItem of allCommunitings) {
@@ -843,21 +826,50 @@ const updateAllCollection = async ({
               }
             }
           }
+
+          //update item in collection to show ACTUAL alerts details after update
+          const newItemCollectionWithActualization = communitingItem;
+          for (const itemUpdateCollectionItemObject in updateCollectionItemObject) {
+            newItemCollectionWithActualization[itemUpdateCollectionItemObject] =
+              updateCollectionItemObject[itemUpdateCollectionItemObject];
+          }
+          allUpdatedItems.push(newItemCollectionWithActualization);
+
+          //find company and count sms to send
+          if (!!communitingItem[companyField]) {
+            if (!!communitingItem[companyField]._id) {
+              const findIndexCompanyInArray =
+                companysItemsAndAvaibleSendSMSStatus.findIndex(
+                  (itemCompany) =>
+                    itemCompany.companyId.toString() ==
+                    communitingItem[companyField]._id.toString()
+                );
+
+              if (findIndexCompanyInArray >= 0) {
+                companysItemsAndAvaibleSendSMSStatus[
+                  findIndexCompanyInArray
+                ].countSendSMS =
+                  companysItemsAndAvaibleSendSMSStatus[findIndexCompanyInArray]
+                    .countSendSMS + 1;
+              } else {
+                const newItemCompany = {
+                  companyId: communitingItem[companyField]._id.toString(),
+                  avaibleSendSMS: false,
+                  countSendSMS: 1,
+                };
+                companysItemsAndAvaibleSendSMSStatus.push(newItemCompany);
+              }
+            }
+          }
+
+          //filter items to users
           if (!!communitingItem[userField]) {
             if (!!communitingItem[userField]._id) {
-              const newItemCollectionWithActualization = communitingItem;
               const isUserInAllUsers = allUsers.findIndex(
                 (itemUser) =>
                   itemUser == communitingItem[userField]._id.toString()
               );
 
-              //update item in collection to show ACTUAL alerts details after update
-              for (const itemUpdateCollectionItemObject in updateCollectionItemObject) {
-                newItemCollectionWithActualization[
-                  itemUpdateCollectionItemObject
-                ] = updateCollectionItemObject[itemUpdateCollectionItemObject];
-              }
-              allUpdatedItems.push(newItemCollectionWithActualization);
               if (isUserInAllUsers < 0) {
                 allUsers.push(communitingItem[userField]._id.toString());
                 const newItemUserWithItem = {
@@ -878,7 +890,7 @@ const updateAllCollection = async ({
                     itemNoUser.customPhone ==
                     communitingItem[extraCollectionPhoneField]
                 );
-                if (findIndexItemNoUser > 0) {
+                if (findIndexItemNoUser >= 0) {
                   otherUsersWithoutAccount[findIndexItemNoUser].items.push(
                     communitingItem
                   );
@@ -892,6 +904,33 @@ const updateAllCollection = async ({
                   };
                   otherUsersWithoutAccount.push(newItemNoUser);
                 }
+              }
+            }
+          }
+        }
+
+        //check is avaible count sms to send to users
+        if (!!smsContent) {
+          if (
+            !!smsContent.companySendSMSValidField &&
+            !!smsContent.titleCompanySMSAlert
+          ) {
+            for (const [
+              indexCompanysItems,
+              itemCompanysItemsAndAvaibleSendSMSStatus,
+            ] of companysItemsAndAvaibleSendSMSStatus.entries()) {
+              const resultFunctionUpdate = await updateCompanyFunction({
+                companyId: itemCompanysItemsAndAvaibleSendSMSStatus.companyId,
+                countItems:
+                  itemCompanysItemsAndAvaibleSendSMSStatus.countSendSMS,
+                titleCompanySendSMSAlert: smsContent.titleCompanySMSAlert,
+                smsCompanyFieldValid: smsContent.companySendSMSValidField,
+              });
+
+              if (resultFunctionUpdate) {
+                companysItemsAndAvaibleSendSMSStatus[
+                  indexCompanysItems
+                ].avaibleSendSMS = true;
               }
             }
           }
@@ -911,56 +950,71 @@ const updateAllCollection = async ({
               });
 
               //generate phone email message
-              if (avaibleSendSMS && !!companyChanged) {
-                const userPhone = Buffer.from(
-                  noUser.customPhone,
-                  "base64"
-                ).toString("utf-8");
+              let findCompanyToSendSMS = null;
+              if (!!itemNoUser[companyField]) {
+                if (!!itemNoUser[companyField]._id) {
+                  findCompanyToSendSMS =
+                    companysItemsAndAvaibleSendSMSStatus.find(
+                      (itemCompany) =>
+                        itemCompany.companyId == itemNoUser[companyField]._id
+                    );
+                }
+              }
 
-                const bodySMS = `${
-                  !!propsGenerator.title ? propsGenerator.title : ""
-                } ${
-                  !!propsGenerator.day
-                    ? `${propsGenerator.dayText}: ${propsGenerator.day}`
-                    : ""
-                } ${
-                  !!propsGenerator.hours
-                    ? `, ${propsGenerator.hoursText}: ${propsGenerator.hours}`
-                    : ""
-                } ${
-                  !!propsGenerator.reserwation
-                    ? `, ${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
-                    : ""
-                } ${
-                  !!propsGenerator.service
-                    ? `, ${propsGenerator.serviceText}: ${propsGenerator.service}`
-                    : ""
-                } ${
-                  !!propsGenerator.communiting
-                    ? `, ${propsGenerator.communitingText}: ${propsGenerator.communiting}`
-                    : ""
-                } ${
-                  !!propsGenerator.defaultText ? propsGenerator.defaultText : ""
-                }`;
+              if (!!findCompanyToSendSMS) {
+                if (findCompanyToSendSMS.avaibleSendSMS && !!companyChanged) {
+                  const userPhone = Buffer.from(
+                    noUser.customPhone,
+                    "base64"
+                  ).toString("utf-8");
 
-                //send sms to user
-                const resultSMS = await sendVerifySMS({
-                  phoneNumber: userPhone,
-                  message: bodySMS,
-                });
+                  const bodySMS = `${
+                    !!propsGenerator.title ? propsGenerator.title : ""
+                  } ${
+                    !!propsGenerator.day
+                      ? `${propsGenerator.dayText}: ${propsGenerator.day}`
+                      : ""
+                  } ${
+                    !!propsGenerator.hours
+                      ? `, ${propsGenerator.hoursText}: ${propsGenerator.hours}`
+                      : ""
+                  } ${
+                    !!propsGenerator.reserwation
+                      ? `, ${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
+                      : ""
+                  } ${
+                    !!propsGenerator.service
+                      ? `, ${propsGenerator.serviceText}: ${propsGenerator.service}`
+                      : ""
+                  } ${
+                    !!propsGenerator.communiting
+                      ? `, ${propsGenerator.communitingText}: ${propsGenerator.communiting}`
+                      : ""
+                  } ${
+                    !!propsGenerator.defaultText
+                      ? propsGenerator.defaultText
+                      : ""
+                  }`;
 
-                //update item collection when send sms success
-                if (!!resultSMS) {
-                  bulkArrayToUpdate.push({
-                    updateOne: {
-                      filter: {
-                        _id: itemNoUser._id,
-                      },
-                      update: {
-                        $set: smsContent.collectionFieldSMSOnSuccess,
-                      },
-                    },
+                  //send sms to user
+                  const resultSMS = await sendVerifySMS({
+                    phoneNumber: userPhone,
+                    message: bodySMS,
                   });
+
+                  //update item collection when send sms success
+                  if (!!resultSMS) {
+                    bulkArrayToUpdate.push({
+                      updateOne: {
+                        filter: {
+                          _id: itemNoUser._id,
+                        },
+                        update: {
+                          $set: smsContent.collectionFieldSMSOnSuccess,
+                        },
+                      },
+                    });
+                  }
                 }
               }
 
@@ -981,13 +1035,18 @@ const updateAllCollection = async ({
 
         //send alert to worker
         if (!!notificationContent) {
-          if (!!notificationContent.typeAlert && !!typeNotification) {
+          if (
+            !!notificationContent.typeAlert &&
+            !!typeNotification &&
+            !!notificationContent.avaibleSendAlertToWorker
+          ) {
             sendMultiAlert({
               typeAlert: notificationContent.typeAlert,
               typeNotification: typeNotification,
               workerUserField: workerField,
               usersResultWithItems: otherUsersWithoutAccount,
-              avaibleSendAlertToWorker: true,
+              avaibleSendAlertToWorker:
+                notificationContent.avaibleSendAlertToWorker,
               payload: {
                 collection: collection,
               },
@@ -1051,71 +1110,83 @@ const updateAllCollection = async ({
                   let selectedEmail = null;
 
                   //generate user phone and email
-                  if (avaibleSendSMS) {
-                    if (!!userResult.phoneVerified) {
-                      selectedPhoneNumber = userResult.phone;
-                    } else {
-                      if (!!userResult.whiteListVerifiedPhones) {
-                        if (userResult.whiteListVerifiedPhones.length > 0) {
-                          selectedPhoneNumber =
-                            userResult.whiteListVerifiedPhones[
-                              userResult.whiteListVerifiedPhones.length - 1
-                            ];
+                  let findCompanyToSendSMS = null;
+                  if (!!itemUser[companyField]) {
+                    if (!!itemUser[companyField]._id) {
+                      findCompanyToSendSMS =
+                        companysItemsAndAvaibleSendSMSStatus.find(
+                          (itemCompany) =>
+                            itemCompany.companyId == itemUser[companyField]._id
+                        );
+                    }
+                  }
+                  if (!!findCompanyToSendSMS) {
+                    if (findCompanyToSendSMS.avaibleSendSMS) {
+                      if (!!userResult.phoneVerified) {
+                        selectedPhoneNumber = userResult.phone;
+                      } else {
+                        if (!!userResult.whiteListVerifiedPhones) {
+                          if (userResult.whiteListVerifiedPhones.length > 0) {
+                            selectedPhoneNumber =
+                              userResult.whiteListVerifiedPhones[
+                                userResult.whiteListVerifiedPhones.length - 1
+                              ];
+                          }
                         }
                       }
-                    }
-                    if (!!selectedPhoneNumber) {
-                      const userPhone = Buffer.from(
-                        selectedPhoneNumber,
-                        "base64"
-                      ).toString("utf-8");
+                      if (!!selectedPhoneNumber) {
+                        const userPhone = Buffer.from(
+                          selectedPhoneNumber,
+                          "base64"
+                        ).toString("utf-8");
 
-                      const bodySMS = `${
-                        !!propsGenerator.title ? propsGenerator.title : ""
-                      } ${
-                        !!propsGenerator.day
-                          ? `${propsGenerator.dayText}: ${propsGenerator.day}`
-                          : ""
-                      } ${
-                        !!propsGenerator.hours
-                          ? `${propsGenerator.hoursText}: ${propsGenerator.hours}`
-                          : ""
-                      } ${
-                        !!propsGenerator.reserwation
-                          ? `${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
-                          : ""
-                      } ${
-                        !!propsGenerator.service
-                          ? `${propsGenerator.serviceText}: ${propsGenerator.service}`
-                          : ""
-                      } ${
-                        !!propsGenerator.communiting
-                          ? `${propsGenerator.communitingText}: ${propsGenerator.communiting}`
-                          : ""
-                      } ${
-                        !!propsGenerator.defaultText
-                          ? propsGenerator.defaultText
-                          : ""
-                      }`;
+                        const bodySMS = `${
+                          !!propsGenerator.title ? propsGenerator.title : ""
+                        } ${
+                          !!propsGenerator.day
+                            ? `${propsGenerator.dayText}: ${propsGenerator.day}`
+                            : ""
+                        } ${
+                          !!propsGenerator.hours
+                            ? `${propsGenerator.hoursText}: ${propsGenerator.hours}`
+                            : ""
+                        } ${
+                          !!propsGenerator.reserwation
+                            ? `${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
+                            : ""
+                        } ${
+                          !!propsGenerator.service
+                            ? `${propsGenerator.serviceText}: ${propsGenerator.service}`
+                            : ""
+                        } ${
+                          !!propsGenerator.communiting
+                            ? `${propsGenerator.communitingText}: ${propsGenerator.communiting}`
+                            : ""
+                        } ${
+                          !!propsGenerator.defaultText
+                            ? propsGenerator.defaultText
+                            : ""
+                        }`;
 
-                      //send to user sms
-                      const resultSMS = await sendVerifySMS({
-                        phoneNumber: userPhone,
-                        message: bodySMS,
-                      });
-
-                      //if sms success update item collection
-                      if (!!resultSMS) {
-                        bulkArrayToUpdate.push({
-                          updateOne: {
-                            filter: {
-                              _id: itemUser._id,
-                            },
-                            update: {
-                              $set: smsContent.collectionFieldSMSOnSuccess,
-                            },
-                          },
+                        //send to user sms
+                        const resultSMS = await sendVerifySMS({
+                          phoneNumber: userPhone,
+                          message: bodySMS,
                         });
+
+                        //if sms success update item collection
+                        if (!!resultSMS) {
+                          bulkArrayToUpdate.push({
+                            updateOne: {
+                              filter: {
+                                _id: itemUser._id,
+                              },
+                              update: {
+                                $set: smsContent.collectionFieldSMSOnSuccess,
+                              },
+                            },
+                          });
+                        }
                       }
                     }
                   }
@@ -1147,7 +1218,8 @@ const updateAllCollection = async ({
                   typeNotification: typeNotification,
                   workerUserField: workerField,
                   usersResultWithItems: allUsersWithItemsWithVapid,
-                  avaibleSendAlertToWorker: true,
+                  avaibleSendAlertToWorker:
+                    notificationContent.notificationContent,
                   payload: {
                     collection: collection,
                   },
@@ -1187,7 +1259,6 @@ const updateAllCollection = async ({
       !!userField,
       !!collectionItems,
       !!filtersCollection,
-      !!companyId,
       !!updateCollectionItemObject,
       !!companyField,
       !!typeNotification
@@ -1202,3 +1273,4 @@ exports.sendSMS = sendSMS;
 exports.sendEmail = sendEmail;
 exports.sendAlert = sendAlert;
 exports.sendAll = sendAll;
+exports.sendMultiAlert = sendMultiAlert;
