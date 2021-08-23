@@ -1,15 +1,11 @@
 const schedule = require("node-schedule");
-const Reserwation = require("../models/reserwation");
 const Company = require("../models/company");
-const User = require("../models/user");
-const nodemailer = require("nodemailer");
-const io = require("../socket");
 const AWS = require("aws-sdk");
 const Invoice = require("../models/invoice");
 const { createInvoice } = require("../generateInvoice");
-const Communiting = require("../models/Communiting");
 const notifications = require("../middleware/notifications");
 const generateEmail = require("./generateContentEmail");
+const Alert = require("../models/alert");
 
 require("dotenv").config();
 const {
@@ -17,21 +13,7 @@ const {
   AWS_SECRET_ACCESS_KEY_APP,
   AWS_REGION_APP,
   AWS_BUCKET,
-  MAIL_HOST,
-  MAIL_PORT,
-  MAIL_INFO,
-  MAIL_PASSWORD,
 } = process.env;
-
-const transporter = nodemailer.createTransport({
-  host: MAIL_HOST,
-  port: Number(MAIL_PORT),
-  secure: true,
-  auth: {
-    user: MAIL_INFO,
-    pass: MAIL_PASSWORD,
-  },
-});
 
 AWS.config.update({
   accessKeyId: AWS_ACCESS_KEY_ID_APP,
@@ -44,43 +26,6 @@ const s3Bucket = new AWS.S3({
     Bucket: AWS_BUCKET,
   },
 });
-
-const updateCompanyFunction = async (
-  itemCompany,
-  title = "sms_notifaction_reserwation"
-) => {
-  try {
-    const result = await Company.updateOne(
-      {
-        _id: itemCompany.companyId,
-        sms: { $gte: itemCompany.allReserwations.length },
-      },
-      {
-        $inc: {
-          sms: -itemCompany.allReserwations.length,
-        },
-        $addToSet: {
-          raportSMS: {
-            year: new Date().getFullYear(),
-            month: new Date().getMonth() + 1,
-            count: itemCompany.allReserwations.length,
-            isAdd: false,
-            title: title,
-          },
-        },
-      },
-      { upsert: true, safe: true },
-      null
-    );
-    if (!!result) {
-      return true;
-    } else {
-      return false;
-    }
-  } catch {
-    return false;
-  }
-};
 
 //reserwation
 for (let i = 0; i < 24; i++) {
@@ -233,6 +178,7 @@ schedule.scheduleJob(`10 8 * * *`, () => {
     .then(async (companysSMSNotifaction) => {
       if (!!companysSMSNotifaction) {
         const bulkArrayToUpdateCompany = [];
+        let alertsToUpdate = [];
         for (const itemCompany of companysSMSNotifaction) {
           bulkArrayToUpdateCompany.push({
             updateOne: {
@@ -258,7 +204,7 @@ schedule.scheduleJob(`10 8 * * *`, () => {
               collection: "Company",
             });
 
-            notifications.sendMultiAlert({
+            alertsToUpdate = notifications.sendMultiAlert({
               typeAlert: "alertDefaultCompanyId",
               typeNotification: "alert_notifaction_sms",
               workerUserField: "owner",
@@ -276,6 +222,7 @@ schedule.scheduleJob(`10 8 * * *`, () => {
               },
               companyChanged: true,
               userField: "owner",
+              returnItemsToUpdate: true,
             });
 
             let selectedPhoneNumber = null;
@@ -339,7 +286,15 @@ schedule.scheduleJob(`10 8 * * *`, () => {
         }
 
         Company.bulkWrite(bulkArrayToUpdateCompany)
-          .then(() => {})
+          .then(() => {
+            Alert.insertMany(alertsToUpdate)
+              .then(() => {})
+              .catch((err) => {
+                const error = new Error(err);
+                error.statusCode = 422;
+                throw error;
+              });
+          })
           .catch(() => {
             const error = new Error("Błąd podczas aktualizacji firmy.");
             error.statusCode = 502;
@@ -354,7 +309,8 @@ schedule.scheduleJob(`10 8 * * *`, () => {
     });
 });
 
-schedule.scheduleJob(`20 8 * * *`, () => {
+// schedule.scheduleJob(`20 8 * * *`, () => {
+schedule.scheduleJob(`26 10 * * *`, () => {
   const validDateToCheckPremium = new Date(
     new Date().setDate(new Date().getDate() + 3)
   );
@@ -366,11 +322,15 @@ schedule.scheduleJob(`20 8 * * *`, () => {
     },
   })
     .select("_id name owner email notifactionNoPremium premium linkPath")
-    .then((companysSMSNotifaction) => {
+    .populate(
+      "owner",
+      "_id vapidEndpoint language name surname phoneVerified whiteListVerifiedPhones phone"
+    )
+    .then(async (companysSMSNotifaction) => {
       if (!!companysSMSNotifaction) {
         const bulkArrayToUpdateCompany = [];
-        const bulkArrayToUpdateUsers = [];
-        companysSMSNotifaction.forEach((itemCompany) => {
+        let alertsToUpdate = [];
+        for (const itemCompany of companysSMSNotifaction) {
           bulkArrayToUpdateCompany.push({
             updateOne: {
               filter: {
@@ -383,65 +343,106 @@ schedule.scheduleJob(`20 8 * * *`, () => {
               },
             },
           });
-          const itemAlert = {
-            alertDefaultCompanyId: {
-              _id: companysSMSNotifaction._id,
-              name: companysSMSNotifaction.name,
-              linkPath: companysSMSNotifaction.linkPath,
-            },
-            active: true,
-            type: "alert_notifaction_premium",
-            creationTime: new Date(),
-            companyChanged: true,
-          };
 
-          const itemAlertPush = {
-            alertDefaultCompanyId: companysSMSNotifaction._id,
-            active: true,
-            type: "alert_notifaction_premium",
-            creationTime: new Date(),
-            companyChanged: true,
-          };
+          if (!!itemCompany.owner) {
+            const propsGenerator = generateEmail.generateContentEmail({
+              alertType: "alert_notifaction_premium",
+              companyChanged: true,
+              language: !!itemCompany.owner.language
+                ? itemCompany.owner.language
+                : "PL",
+              itemAlert: itemCompany,
+              collection: "Company",
+            });
 
-          io.getIO().emit(`user${itemCompany.owner}`, {
-            action: "update-alerts",
-            alertData: itemAlert,
-          });
-
-          bulkArrayToUpdateUsers.push({
-            updateOne: {
-              filter: {
-                _id: itemCompany.owner,
-              },
-              update: {
-                $inc: { alertActiveCount: 1 },
-                $push: {
-                  alerts: {
-                    $each: [itemAlertPush],
-                    $position: 0,
-                  },
+            alertsToUpdate = notifications.sendMultiAlert({
+              typeAlert: "alertDefaultCompanyId",
+              typeNotification: "alert_notifaction_premium",
+              workerUserField: "owner",
+              usersResultWithItems: [
+                {
+                  language: itemCompany.owner.language,
+                  vapidEndpoint: itemCompany.owner.vapidEndpoint,
+                  items: [itemCompany],
+                  owner: itemCompany.owner._id,
                 },
+              ],
+              avaibleSendAlertToWorker: false,
+              payload: {
+                collection: "Company",
               },
-            },
-          });
+              companyChanged: true,
+              userField: "owner",
+              returnItemsToUpdate: true,
+            });
 
-          transporter.sendMail({
-            to: itemCompany.email,
-            from: MAIL_INFO,
-            subject: `Twoje konto premium niedługo wygaśnie`,
-            html: `Pozostało mniej niz 3 dni konta premium. Doładuj konto aby móc korzystać dłużej z meetsy`,
-          });
-        });
+            let selectedPhoneNumber = null;
+            if (!!itemCompany.owner.phoneVerified) {
+              selectedPhoneNumber = itemCompany.owner.phone;
+            } else {
+              if (!!itemCompany.owner.whiteListVerifiedPhones) {
+                if (itemCompany.owner.whiteListVerifiedPhones.length > 0) {
+                  selectedPhoneNumber =
+                    itemCompany.owner.whiteListVerifiedPhones[
+                      itemCompany.owner.whiteListVerifiedPhones.length - 1
+                    ];
+                }
+              }
+            }
+
+            if (!!selectedPhoneNumber) {
+              const userPhone = Buffer.from(
+                selectedPhoneNumber,
+                "base64"
+              ).toString("utf-8");
+
+              const bodySMS = `${
+                !!propsGenerator.title ? propsGenerator.title : ""
+              } ${
+                !!propsGenerator.day
+                  ? `${propsGenerator.dayText}: ${propsGenerator.day}`
+                  : ""
+              } ${
+                !!propsGenerator.hours
+                  ? `${propsGenerator.hoursText}: ${propsGenerator.hours}`
+                  : ""
+              } ${
+                !!propsGenerator.reserwation
+                  ? `${propsGenerator.reserwationText}: ${propsGenerator.reserwation}`
+                  : ""
+              } ${
+                !!propsGenerator.service
+                  ? `${propsGenerator.serviceText}: ${propsGenerator.service}`
+                  : ""
+              } ${
+                !!propsGenerator.communiting
+                  ? `${propsGenerator.communitingText}: ${propsGenerator.communiting}`
+                  : ""
+              } ${
+                !!propsGenerator.defaultText ? propsGenerator.defaultText : ""
+              }`;
+
+              //send to user sms
+              await notifications.sendVerifySMS({
+                phoneNumber: userPhone,
+                message: bodySMS,
+              });
+            }
+
+            notifications.sendEmail({
+              email: itemCompany.email,
+              ...propsGenerator,
+            });
+          }
+        }
 
         Company.bulkWrite(bulkArrayToUpdateCompany)
           .then(() => {
-            User.bulkWrite(bulkArrayToUpdateUsers)
+            Alert.insertMany(alertsToUpdate)
               .then(() => {})
-              .catch(() => {
-                const error = new Error(
-                  "Błąd podczas dodawania alertów użytkownikom."
-                );
-                error.statusCode = 502;
+              .catch((err) => {
+                const error = new Error(err);
+                error.statusCode = 422;
                 throw error;
               });
           })
@@ -613,13 +614,17 @@ schedule.scheduleJob(`5 8 * * *`, async () => {
         };
         await s3Bucket.getObject(options, (err, data) => {
           if (!err) {
-            transporter.sendMail({
-              to: resultInvoice.companyId.email,
-              from: MAIL_INFO,
-              subject: "Faktura vat za dokonany zakup",
-              html: `<h1>Witamy</h1>
-                    Przesyłamy w załączniku fakture vat za dokonane zakupy!
-            `,
+            const propsGenerator = generateEmail.generateContentEmail({
+              alertType: "alert_invoice",
+              companyChanged: true,
+              language: "PL",
+              itemAlert: null,
+              collection: "Default",
+            });
+
+            notifications.sendEmail({
+              email: resultInvoice.companyId.email,
+              ...propsGenerator,
               attachments: [
                 {
                   content: data.Body,

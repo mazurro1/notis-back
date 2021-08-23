@@ -36,6 +36,10 @@ exports.Translates = {
           service_finished: "Twój serwis został zakończony",
           alert_notifaction_sms: "Mała ilość SMS",
           alert_notifaction_premium: "Konto premium kończy się",
+          alert_payment_status: "Dziękujemy za zakup!",
+          alert_payment_send_invoice: "Faktura vat za dokonany zakup",
+          alert_invoice:
+            "Przesyłamy w załączniku fakture vat za dokonane zakupy!",
         },
         changeNoCompany: {
           reserwation_created: "Dodano nową rezerwację",
@@ -59,6 +63,10 @@ exports.Translates = {
           service_finished: "Twój serwis został zakończony",
           alert_notifaction_sms: "Mała ilość SMS",
           alert_notifaction_premium: "Konto premium kończy się",
+          alert_payment_status: "Dziękujemy za zakup!",
+          alert_payment_send_invoice: "Faktura vat za dokonany zakup",
+          alert_invoice:
+            "Przesyłamy w załączniku fakture vat za dokonane zakupy!",
         },
       },
       general: {
@@ -298,6 +306,23 @@ exports.Translates = {
             "Twoje konto premium niedługo wygaśnie w firmie:",
             "Przedłuż konto premium aby dalej korzystać z funkcjonalności strony.",
           ],
+        },
+      },
+      alert_payment_send_invoice: {
+        companyChangedUser: {
+          title: ["Przesyłamy w załączniku fakture vat za dokonane zakupy!"],
+        },
+      },
+      alert_payment_status: {
+        companyChangedUser: {
+          title: [
+            "Dziękujemy za zakup! Faktura vat zostanie wysłana w ciagu 1 dnia roboczego.",
+          ],
+        },
+      },
+      alert_invoice: {
+        companyChangedUser: {
+          title: ["Przesyłamy w załączniku fakture vat za dokonane zakupy!"],
         },
       },
     },
@@ -551,6 +576,27 @@ exports.Translates = {
           title: [
             "Your premium account will expire soon in company:",
             "Extend your premium account to continue using the website's functionality.",
+          ],
+        },
+      },
+      alert_payment_send_invoice: {
+        companyChangedUser: {
+          title: [
+            "We send the VAT invoice for the purchases in the attachment!",
+          ],
+        },
+      },
+      alert_payment_status: {
+        companyChangedUser: {
+          title: [
+            "Thank you for your purchase! The VAT invoice will be sent within 1 business day.",
+          ],
+        },
+      },
+      alert_invoice: {
+        companyChangedUser: {
+          title: [
+            "We send the VAT invoice for the purchases in the attachment!",
           ],
         },
       },

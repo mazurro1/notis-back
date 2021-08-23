@@ -14,6 +14,8 @@ const AWS = require("aws-sdk");
 const stripeLoader = require("stripe");
 const stripe = new stripeLoader(STRIPE_SECRET_KEY);
 const mongoose = require("mongoose");
+const generateEmail = require("../middleware/generateContentEmail");
+const notifications = require("../middleware/notifications");
 
 AWS.config.update({
   accessKeyId: AWS_ACCESS_KEY_ID_APP,
@@ -265,6 +267,7 @@ exports.updateOrderProcess = async (req, res, next) => {
                     },
                   });
                 }
+
                 if (!!allCountPremium) {
                   const oneWeek =
                     Number(allCountPremium) * 30 * 24 * 60 * 60 * 1000;
@@ -372,10 +375,17 @@ exports.updateOrderProcess = async (req, res, next) => {
                 $set: { "payments.$.invoiceId": activeInvoice._id },
               }
             ).then(() => {
+              const propsGenerator = generateEmail.generateContentEmail({
+                alertType: "alert_payment_status",
+                companyChanged: true,
+                language: "PL",
+                itemAlert: null,
+                collection: "Default",
+              });
+
               notifications.sendEmail({
                 email: resultCompanyDoc.email,
-                title: `Dziękujemy za zakup!`,
-                defaultText: `Dziękujemy za zakup! Faktura vat zostanie wysłana w ciagu 1 dnia roboczego.`,
+                ...propsGenerator,
               });
               return true;
             });
@@ -430,10 +440,16 @@ exports.sendInvoiceToCompany = async (req, res, next) => {
               };
               s3Bucket.getObject(options, (err, data) => {
                 if (!err) {
+                  const propsGenerator = generateEmail.generateContentEmail({
+                    alertType: "alert_payment_send_invoice",
+                    companyChanged: true,
+                    language: "PL",
+                    itemAlert: null,
+                    collection: "Default",
+                  });
                   notifications.sendEmail({
                     email: resultInvoice.companyId.email,
-                    title: "Faktura vat za dokonany zakup",
-                    defaultText: `Przesyłamy w załączniku fakture vat za dokonane zakupy!`,
+                    ...propsGenerator,
                     attachments: [
                       {
                         content: data.Body,

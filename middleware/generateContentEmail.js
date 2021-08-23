@@ -85,6 +85,7 @@ exports.generateContentEmail = ({
         itemAlert.year
       }`;
     }
+  } else if (collection === "Default") {
   } else {
     if (!!itemAlert.name && !!itemAlert.linkPath) {
       companyName = itemAlert.name.toUpperCase();
@@ -273,6 +274,30 @@ exports.generateContentEmail = ({
       alertColor = "red";
       if (isCompanyChanged) {
         title = `${texts[alertType].companyChangedUser.title[0]} ${companyName} ${texts[alertType].companyChangedUser.title[1]}`;
+      }
+      break;
+    }
+
+    case "alert_payment_status": {
+      alertColor = "orange";
+      if (isCompanyChanged) {
+        title = `${texts[alertType].companyChangedUser.title[0]}`;
+      }
+      break;
+    }
+
+    case "alert_payment_send_invoice": {
+      alertColor = "orange";
+      if (isCompanyChanged) {
+        title = `${texts[alertType].companyChangedUser.title[0]}`;
+      }
+      break;
+    }
+
+    case "alert_invoice": {
+      alertColor = "green";
+      if (isCompanyChanged) {
+        title = `${texts[alertType].companyChangedUser.title[0]}`;
       }
       break;
     }

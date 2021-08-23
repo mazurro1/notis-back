@@ -152,6 +152,7 @@ const sendMultiAlert = ({
   },
   companyChanged = true,
   userField = "",
+  returnItemsToUpdate = false,
 }) => {
   if (!!typeNotification) {
     const newInserItems = [];
@@ -291,7 +292,7 @@ const sendMultiAlert = ({
       }
     }
 
-    if (newInserItems.length > 0) {
+    if (newInserItems.length > 0 && !returnItemsToUpdate) {
       Alert.insertMany(newInserItems)
         .then(() => {})
         .catch((err) => {
@@ -299,6 +300,8 @@ const sendMultiAlert = ({
           error.statusCode = 422;
           throw error;
         });
+    } else if (returnItemsToUpdate) {
+      return newInserItems;
     }
   }
 };
@@ -355,13 +358,13 @@ const sendEmail = async ({
       },
       (err, data) => {
         if (!err) {
-          const validAttachments = !!attachments ? attachments : {};
+          const validAttachments = !!attachments ? attachments : [];
           transporter.sendMail({
             to: email,
             from: MAIL_INFO,
             subject: title,
             html: data,
-            ...validAttachments,
+            attachments: validAttachments,
           });
         } else {
           throw new Error(err);
