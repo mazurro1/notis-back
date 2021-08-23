@@ -3,7 +3,6 @@ const User = require("../models/user");
 const Company = require("../models/company");
 const CompanyUsersInformations = require("../models/companyUsersInformations");
 const { validationResult } = require("express-validator");
-const io = require("../socket");
 const mongoose = require("mongoose");
 const notifications = require("../middleware/notifications");
 
@@ -1254,16 +1253,6 @@ exports.addReserwationWorker = (req, res, next) => {
       }
     })
     .then(() => {
-      // return Reserwation.find({
-      //   company: companyId,
-      //   toWorkerUserId: workerUserId,
-      //   dateDay: Number(arrayDateFull[0]),
-      //   dateMonth: Number(arrayDateFull[1]),
-      //   dateYear: Number(arrayDateFull[2]),
-      //   visitCanceled: false,
-      //   isDeleted: { $in: [false, null] },
-      // })
-      //   .then(() => {
       const newReserwationWorker = new Reserwation({
         fromUser: userId,
         toWorkerUserId: workerUserId,
@@ -1288,56 +1277,36 @@ exports.addReserwationWorker = (req, res, next) => {
       });
       return newReserwationWorker.save();
     })
-    .then((result) => {
-      result
-        .populate(
-          "company",
-          "linkPath name services._id services.serviceColor _id"
-        )
-        .populate(
-          {
-            path: "fromUser",
-            select: "name surname _id",
+    .then(async (result) => {
+      const updatedWorkerReserrwation = await notifications.updateAllCollection(
+        {
+          companyField: "company",
+          collection: "Reserwation",
+          collectionItems:
+            "_id serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: result._id,
           },
-          function (err, resultReserwationPopulate) {
-            io.getIO().emit(`user${resultReserwationPopulate.toWorkerUserId}`, {
-              action: "update-alerts",
-              alertData: {
-                reserwationId: resultReserwationPopulate,
-                active: true,
-                type: "reserwation_worker_created",
-                creationTime: new Date(),
-                companyChanged: true,
-              },
-            });
-            const newUserAlert = {
-              reserwationId: resultReserwationPopulate._id,
-              active: true,
-              type: "reserwation_worker_created",
-              creationTime: new Date(),
-              companyChanged: true,
-            };
+          userField: "fromUser",
+          workerField: "toWorkerUserId",
+          sendEmailValid: false,
+          notificationContent: {
+            typeAlert: "reserwationId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: true,
+          typeNotification: "reserwation_worker_created",
+        }
+      );
 
-            User.updateOne(
-              {
-                _id: resultReserwationPopulate.toWorkerUserId,
-              },
-              {
-                $inc: { alertActiveCount: 1 },
-                $push: {
-                  alerts: {
-                    $each: [newUserAlert],
-                    $position: 0,
-                  },
-                },
-              }
-            ).then(() => {
-              res.status(201).json({
-                reserwation: resultReserwationPopulate,
-              });
-            });
-          }
-        );
+      res.status(201).json({
+        reserwation: updatedWorkerReserrwation[0],
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -1346,14 +1315,6 @@ exports.addReserwationWorker = (req, res, next) => {
       }
       next(err);
     });
-  // })
-  // .catch((err) => {
-  //   if (!err.statusCode) {
-  //     err.statusCode = 501;
-  //     err.message = "Błąd podczas składania rezerwacji czasu.";
-  //   }
-  //   next(err);
-  // });
 };
 
 exports.getWorkerDisabledHours = (req, res, next) => {
@@ -2497,6 +2458,18 @@ exports.updateWorkerReserwation = (req, res, next) => {
               ? "reserwation_changed"
               : "reserwation_finished";
 
+            const valisSendEmails = reserwationsDoc.visitNotFinished
+              ? true
+              : reserwationsDoc.workerReserwation
+              ? !!reserwationsDoc.visitCanceled
+                ? false
+                : false
+              : reserwationsDoc.visitCanceled
+              ? true
+              : visitChangedValid
+              ? true
+              : true;
+
             await notifications.updateAllCollection({
               companyField: "company",
               collection: "Reserwation",
@@ -2522,7 +2495,7 @@ exports.updateWorkerReserwation = (req, res, next) => {
               filtersCollection: { _id: reserwationsDoc._id },
               userField: "fromUser",
               workerField: "toWorkerUserId",
-              sendEmailValid: true,
+              sendEmailValid: valisSendEmails,
               notificationContent: {
                 typeAlert: "reserwationId",
                 avaibleSendAlertToWorker: true,

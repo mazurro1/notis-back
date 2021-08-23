@@ -302,6 +302,14 @@ exports.generateContentEmail = ({
       break;
     }
 
+    case "alert_delete_company": {
+      alertColor = "red";
+      if (isCompanyChanged) {
+        title = `${texts[alertType].companyChangedUser.title[0]}`;
+      }
+      break;
+    }
+
     default: {
       alertColor = "red";
       title = texts.general.alertNotFound;

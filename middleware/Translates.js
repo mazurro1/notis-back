@@ -40,6 +40,7 @@ exports.Translates = {
           alert_payment_send_invoice: "Faktura vat za dokonany zakup",
           alert_invoice:
             "Przesyłamy w załączniku fakture vat za dokonane zakupy!",
+          alert_delete_company: "Usunięto działalność!",
         },
         changeNoCompany: {
           reserwation_created: "Dodano nową rezerwację",
@@ -67,6 +68,7 @@ exports.Translates = {
           alert_payment_send_invoice: "Faktura vat za dokonany zakup",
           alert_invoice:
             "Przesyłamy w załączniku fakture vat za dokonane zakupy!",
+          alert_delete_company: "Usunięto działalność!",
         },
       },
       general: {
@@ -318,6 +320,11 @@ exports.Translates = {
           title: [
             "Dziękujemy za zakup! Faktura vat zostanie wysłana w ciagu 1 dnia roboczego.",
           ],
+        },
+      },
+      alert_delete_company: {
+        companyChangedUser: {
+          title: ["Działalność została usunięta"],
         },
       },
       alert_invoice: {
@@ -591,6 +598,11 @@ exports.Translates = {
           title: [
             "Thank you for your purchase! The VAT invoice will be sent within 1 business day.",
           ],
+        },
+      },
+      alert_delete_company: {
+        companyChangedUser: {
+          title: ["Company has been deleted"],
         },
       },
       alert_invoice: {

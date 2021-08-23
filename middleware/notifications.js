@@ -1222,7 +1222,7 @@ const updateAllCollection = async ({
                   workerUserField: workerField,
                   usersResultWithItems: allUsersWithItemsWithVapid,
                   avaibleSendAlertToWorker:
-                    notificationContent.notificationContent,
+                    notificationContent.avaibleSendAlertToWorker,
                   payload: {
                     collection: collection,
                   },

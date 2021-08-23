@@ -6,6 +6,7 @@ const Reserwation = require("../models/reserwation");
 const { validationResult } = require("express-validator");
 const User = require("../models/user");
 const io = require("../socket");
+const notifications = require("../middleware/notifications");
 
 exports.addOpinion = (req, res, next) => {
   const userId = req.userId;
@@ -159,22 +160,36 @@ exports.addOpinion = (req, res, next) => {
             opinionsValue: Number(opinionData.opinionStars),
           },
         }
-      ).then((xd) => {
+      ).then(() => {
         return resultSave;
       });
     })
-    .then((resultSave) => {
-      let validQueruPopulateResultSave = {};
+    .then(async (resultSave) => {
       if (!!opinionData.reserwationId) {
-        validQueruPopulateResultSave = {
-          path: "reserwationId",
-          select:
-            "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName",
-          populate: {
-            path: "toWorkerUserId company fromUser",
-            select: "name surname linkPath",
+        const savedOpinion = await notifications.updateAllCollection({
+          companyField: "company",
+          collection: "Reserwation",
+          collectionItems:
+            "_id visitCanceled visitChanged visitNotFinished serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: opinionData.reserwationId,
           },
-        };
+          userField: "fromUser",
+          workerField: "toWorkerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "reserwationId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: false,
+          typeNotification: "opinion_client",
+        });
+        return savedOpinion[0];
       } else if (!!opinionData.serviceId) {
         validQueruPopulateResultSave = {
           path: "serviceId",
@@ -196,229 +211,234 @@ exports.addOpinion = (req, res, next) => {
           },
         };
       }
-      resultSave
-        .populate("user", "name")
-        .populate(validQueruPopulateResultSave)
-        .execPopulate()
-        .then((resultPopulatedSave) => {
-          const bulkArrayToUpdate = [];
-          if (!!resultPopulatedSave.user) {
-            if (!!resultPopulatedSave.user._id) {
-              let validAlertItem = {};
-              if (!!opinionData.reserwationId) {
-                validAlertItem = {
-                  reserwationId: resultPopulatedSave.reserwationId._id,
-                };
-              } else if (!!opinionData.serviceId) {
-                validAlertItem = {
-                  serviceId: resultPopulatedSave.serviceId._id,
-                };
-              } else if (!!opinionData.communitingId) {
-                validAlertItem = {
-                  communitingId: resultPopulatedSave.communitingId._id,
-                };
-              }
+      // resultSave
+      //   .populate("user", "name")
+      //   .populate(validQueruPopulateResultSave)
+      //   .execPopulate()
+      //   .then((resultPopulatedSave) => {
+      //     const bulkArrayToUpdate = [];
+      //     if (!!resultPopulatedSave.user) {
+      //       if (!!resultPopulatedSave.user._id) {
+      //         let validAlertItem = {};
+      //         if (!!opinionData.reserwationId) {
+      //           validAlertItem = {
+      //             reserwationId: resultPopulatedSave.reserwationId._id,
+      //           };
+      //         } else if (!!opinionData.serviceId) {
+      //           validAlertItem = {
+      //             serviceId: resultPopulatedSave.serviceId._id,
+      //           };
+      //         } else if (!!opinionData.communitingId) {
+      //           validAlertItem = {
+      //             communitingId: resultPopulatedSave.communitingId._id,
+      //           };
+      //         }
 
-              let validAlertItemContent = {};
-              if (!!opinionData.reserwationId) {
-                validAlertItemContent = {
-                  reserwationId: resultPopulatedSave.reserwationId,
-                };
-              } else if (!!opinionData.serviceId) {
-                validAlertItemContent = {
-                  serviceId: resultPopulatedSave.serviceId,
-                };
-              } else if (!!opinionData.communitingId) {
-                validAlertItemContent = {
-                  communitingId: resultPopulatedSave.communitingId,
-                };
-              }
+      //         let validAlertItemContent = {};
+      //         if (!!opinionData.reserwationId) {
+      //           validAlertItemContent = {
+      //             reserwationId: resultPopulatedSave.reserwationId,
+      //           };
+      //         } else if (!!opinionData.serviceId) {
+      //           validAlertItemContent = {
+      //             serviceId: resultPopulatedSave.serviceId,
+      //           };
+      //         } else if (!!opinionData.communitingId) {
+      //           validAlertItemContent = {
+      //             communitingId: resultPopulatedSave.communitingId,
+      //           };
+      //         }
 
-              const userAlertToSave = {
-                ...validAlertItem,
-                active: true,
-                type: "opinion_client",
-                creationTime: new Date(),
-                companyChanged: false,
-              };
+      //         const userAlertToSave = {
+      //           ...validAlertItem,
+      //           active: true,
+      //           type: "opinion_client",
+      //           creationTime: new Date(),
+      //           companyChanged: false,
+      //         };
 
-              io.getIO().emit(`user${resultPopulatedSave.user._id}`, {
-                action: "update-alerts",
-                alertData: {
-                  ...validAlertItemContent,
-                  active: true,
-                  type: "opinion_client",
-                  creationTime: new Date(),
-                  companyChanged: false,
-                },
-              });
-              bulkArrayToUpdate.push({
-                updateOne: {
-                  filter: { _id: resultPopulatedSave.user._id },
-                  update: {
-                    $inc: { alertActiveCount: 1 },
-                    $push: {
-                      alerts: {
-                        $each: [userAlertToSave],
-                        $position: 0,
-                      },
-                    },
-                  },
-                },
-              });
-            }
-          }
-          if (!!resultPopulatedSave.reserwationId) {
-            if (!!resultPopulatedSave.reserwationId.toWorkerUserId) {
-              if (!!resultPopulatedSave.reserwationId.toWorkerUserId._id) {
-                const userAlertToSave = {
-                  reserwationId: resultPopulatedSave.reserwationId._id,
-                  active: true,
-                  type: "opinion_client",
-                  creationTime: new Date(),
-                  companyChanged: false,
-                };
+      //         io.getIO().emit(`user${resultPopulatedSave.user._id}`, {
+      //           action: "update-alerts",
+      //           alertData: {
+      //             ...validAlertItemContent,
+      //             active: true,
+      //             type: "opinion_client",
+      //             creationTime: new Date(),
+      //             companyChanged: false,
+      //           },
+      //         });
+      //         bulkArrayToUpdate.push({
+      //           updateOne: {
+      //             filter: { _id: resultPopulatedSave.user._id },
+      //             update: {
+      //               $inc: { alertActiveCount: 1 },
+      //               $push: {
+      //                 alerts: {
+      //                   $each: [userAlertToSave],
+      //                   $position: 0,
+      //                 },
+      //               },
+      //             },
+      //           },
+      //         });
+      //       }
+      //     }
+      //     if (!!resultPopulatedSave.reserwationId) {
+      //       if (!!resultPopulatedSave.reserwationId.toWorkerUserId) {
+      //         if (!!resultPopulatedSave.reserwationId.toWorkerUserId._id) {
+      //           const userAlertToSave = {
+      //             reserwationId: resultPopulatedSave.reserwationId._id,
+      //             active: true,
+      //             type: "opinion_client",
+      //             creationTime: new Date(),
+      //             companyChanged: false,
+      //           };
 
-                io.getIO().emit(
-                  `user${resultPopulatedSave.reserwationId.toWorkerUserId._id}`,
-                  {
-                    action: "update-alerts",
-                    alertData: {
-                      reserwationId: resultPopulatedSave.reserwationId,
-                      active: true,
-                      type: "opinion_client",
-                      creationTime: new Date(),
-                      companyChanged: false,
-                    },
-                  }
-                );
+      //           io.getIO().emit(
+      //             `user${resultPopulatedSave.reserwationId.toWorkerUserId._id}`,
+      //             {
+      //               action: "update-alerts",
+      //               alertData: {
+      //                 reserwationId: resultPopulatedSave.reserwationId,
+      //                 active: true,
+      //                 type: "opinion_client",
+      //                 creationTime: new Date(),
+      //                 companyChanged: false,
+      //               },
+      //             }
+      //           );
 
-                bulkArrayToUpdate.push({
-                  updateOne: {
-                    filter: {
-                      _id: resultPopulatedSave.reserwationId.toWorkerUserId._id,
-                    },
-                    update: {
-                      $inc: { alertActiveCount: 1 },
-                      $push: {
-                        alerts: {
-                          $each: [userAlertToSave],
-                          $position: 0,
-                        },
-                      },
-                    },
-                  },
-                });
-              }
-            }
-          } else if (!!resultPopulatedSave.serviceId) {
-            if (!!resultPopulatedSave.serviceId.workerUserId) {
-              if (!!resultPopulatedSave.serviceId.workerUserId._id) {
-                const userAlertToSave = {
-                  serviceId: resultPopulatedSave.serviceId._id,
-                  active: true,
-                  type: "opinion_client",
-                  creationTime: new Date(),
-                  companyChanged: false,
-                };
+      //           bulkArrayToUpdate.push({
+      //             updateOne: {
+      //               filter: {
+      //                 _id: resultPopulatedSave.reserwationId.toWorkerUserId._id,
+      //               },
+      //               update: {
+      //                 $inc: { alertActiveCount: 1 },
+      //                 $push: {
+      //                   alerts: {
+      //                     $each: [userAlertToSave],
+      //                     $position: 0,
+      //                   },
+      //                 },
+      //               },
+      //             },
+      //           });
+      //         }
+      //       }
+      //     } else if (!!resultPopulatedSave.serviceId) {
+      //       if (!!resultPopulatedSave.serviceId.workerUserId) {
+      //         if (!!resultPopulatedSave.serviceId.workerUserId._id) {
+      //           const userAlertToSave = {
+      //             serviceId: resultPopulatedSave.serviceId._id,
+      //             active: true,
+      //             type: "opinion_client",
+      //             creationTime: new Date(),
+      //             companyChanged: false,
+      //           };
 
-                io.getIO().emit(
-                  `user${resultPopulatedSave.serviceId.workerUserId._id}`,
-                  {
-                    action: "update-alerts",
-                    alertData: {
-                      serviceId: resultPopulatedSave.serviceId,
-                      active: true,
-                      type: "opinion_client",
-                      creationTime: new Date(),
-                      companyChanged: false,
-                    },
-                  }
-                );
+      //           io.getIO().emit(
+      //             `user${resultPopulatedSave.serviceId.workerUserId._id}`,
+      //             {
+      //               action: "update-alerts",
+      //               alertData: {
+      //                 serviceId: resultPopulatedSave.serviceId,
+      //                 active: true,
+      //                 type: "opinion_client",
+      //                 creationTime: new Date(),
+      //                 companyChanged: false,
+      //               },
+      //             }
+      //           );
 
-                bulkArrayToUpdate.push({
-                  updateOne: {
-                    filter: {
-                      _id: resultPopulatedSave.serviceId.workerUserId._id,
-                    },
-                    update: {
-                      $inc: { alertActiveCount: 1 },
-                      $push: {
-                        alerts: {
-                          $each: [userAlertToSave],
-                          $position: 0,
-                        },
-                      },
-                    },
-                  },
-                });
-              }
-            }
-          } else if (!!resultPopulatedSave.communitingId) {
-            if (!!resultPopulatedSave.communitingId.workerUserId) {
-              if (!!resultPopulatedSave.communitingId.workerUserId._id) {
-                const userAlertToSave = {
-                  communitingId: resultPopulatedSave.communitingId._id,
-                  active: true,
-                  type: "opinion_client",
-                  creationTime: new Date(),
-                  companyChanged: false,
-                };
+      //           bulkArrayToUpdate.push({
+      //             updateOne: {
+      //               filter: {
+      //                 _id: resultPopulatedSave.serviceId.workerUserId._id,
+      //               },
+      //               update: {
+      //                 $inc: { alertActiveCount: 1 },
+      //                 $push: {
+      //                   alerts: {
+      //                     $each: [userAlertToSave],
+      //                     $position: 0,
+      //                   },
+      //                 },
+      //               },
+      //             },
+      //           });
+      //         }
+      //       }
+      //     } else if (!!resultPopulatedSave.communitingId) {
+      //       if (!!resultPopulatedSave.communitingId.workerUserId) {
+      //         if (!!resultPopulatedSave.communitingId.workerUserId._id) {
+      //           const userAlertToSave = {
+      //             communitingId: resultPopulatedSave.communitingId._id,
+      //             active: true,
+      //             type: "opinion_client",
+      //             creationTime: new Date(),
+      //             companyChanged: false,
+      //           };
 
-                io.getIO().emit(
-                  `user${resultPopulatedSave.communitingId.workerUserId._id}`,
-                  {
-                    action: "update-alerts",
-                    alertData: {
-                      communitingId: resultPopulatedSave.communitingId,
-                      active: true,
-                      type: "opinion_client",
-                      creationTime: new Date(),
-                      companyChanged: false,
-                    },
-                  }
-                );
+      //           io.getIO().emit(
+      //             `user${resultPopulatedSave.communitingId.workerUserId._id}`,
+      //             {
+      //               action: "update-alerts",
+      //               alertData: {
+      //                 communitingId: resultPopulatedSave.communitingId,
+      //                 active: true,
+      //                 type: "opinion_client",
+      //                 creationTime: new Date(),
+      //                 companyChanged: false,
+      //               },
+      //             }
+      //           );
 
-                bulkArrayToUpdate.push({
-                  updateOne: {
-                    filter: {
-                      _id: resultPopulatedSave.communitingId.workerUserId._id,
-                    },
-                    update: {
-                      $inc: { alertActiveCount: 1 },
-                      $push: {
-                        alerts: {
-                          $each: [userAlertToSave],
-                          $position: 0,
-                        },
-                      },
-                    },
-                  },
-                });
-              }
-            }
-          }
-          User.bulkWrite(bulkArrayToUpdate)
-            .then(() => {
-              res.status(201).json({
-                opinion: resultPopulatedSave,
-              });
-            })
-            .catch((err) => {
-              if (!err.statusCode) {
-                err.statusCode = 501;
-                err.message = "Błąd podczas pobierania danych.";
-              }
-              next(err);
-            });
-        })
-        .catch((err) => {
-          if (!err.statusCode) {
-            err.statusCode = 501;
-            err.message = "Błąd podczas pobierania danych.";
-          }
-          next(err);
-        });
+      //           bulkArrayToUpdate.push({
+      //             updateOne: {
+      //               filter: {
+      //                 _id: resultPopulatedSave.communitingId.workerUserId._id,
+      //               },
+      //               update: {
+      //                 $inc: { alertActiveCount: 1 },
+      //                 $push: {
+      //                   alerts: {
+      //                     $each: [userAlertToSave],
+      //                     $position: 0,
+      //                   },
+      //                 },
+      //               },
+      //             },
+      //           });
+      //         }
+      //       }
+      //     }
+      //     User.bulkWrite(bulkArrayToUpdate)
+      //       .then(() => {
+      //         res.status(201).json({
+      //           opinion: resultPopulatedSave,
+      //         });
+      //       })
+      //       .catch((err) => {
+      //         if (!err.statusCode) {
+      //           err.statusCode = 501;
+      //           err.message = "Błąd podczas pobierania danych.";
+      //         }
+      //         next(err);
+      //       });
+      // })
+      // .catch((err) => {
+      //   if (!err.statusCode) {
+      //     err.statusCode = 501;
+      //     err.message = "Błąd podczas pobierania danych.";
+      //   }
+      //   next(err);
+      // });
+    })
+    .then((resultSaved) => {
+      res.status(201).json({
+        opinion: resultSaved,
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {

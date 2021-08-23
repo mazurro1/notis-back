@@ -9,7 +9,6 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const { validationResult } = require("express-validator");
 const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const io = require("../socket");
 const getImgBuffer = require("../getImgBuffer");
