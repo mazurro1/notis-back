@@ -497,12 +497,10 @@ exports.registrationCompany = (req, res, next) => {
                             smsServiceChangedAvaible: false,
                             smsServiceFinishedAvaible: false,
                             smsServiceCanceledAvaible: false,
-                            smsServiceDeletedAvaible: false,
                             smsCommunitingNotificationAvaible: false,
                             smsCommunitingCreatedAvaible: false,
                             smsCommunitingChangedAvaible: false,
                             smsCommunitingCanceledAvaible: false,
-                            smsCommunitingDeletedAvaible: false,
                             sms: 0,
                             raportSMS: [],
                             maps: {
@@ -947,9 +945,6 @@ exports.getCompanyData = (req, res, next) => {
                   !!dataCompany.smsServiceCanceledAvaible
                     ? dataCompany.smsServiceCanceledAvaible
                     : false,
-                smsServiceDeletedAvaible: !!dataCompany.smsServiceDeletedAvaible
-                  ? dataCompany.smsServiceDeletedAvaible
-                  : false,
                 smsCommunitingNotificationAvaible:
                   !!dataCompany.smsCommunitingNotificationAvaible
                     ? dataCompany.smsCommunitingNotificationAvaible
@@ -965,10 +960,6 @@ exports.getCompanyData = (req, res, next) => {
                 smsCommunitingCanceledAvaible:
                   !!dataCompany.smsCommunitingCanceledAvaible
                     ? dataCompany.smsCommunitingCanceledAvaible
-                    : false,
-                smsCommunitingDeletedAvaible:
-                  !!dataCompany.smsCommunitingDeletedAvaible
-                    ? dataCompany.smsCommunitingDeletedAvaible
                     : false,
                 ...dataGUS,
                 nip: !!dataCompany.nip ? dataCompany.nip : null,
@@ -1480,7 +1471,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
           avaibleSendAlertToWorker: true,
         },
         smsContent: {
-          companySendSMSValidField: "smsServiceDeletedAvaible",
+          companySendSMSValidField: "smsServiceCanceledAvaible",
           titleCompanySMSAlert: "sms_canceled_service",
           collectionFieldSMSOnSuccess: {
             canceledSMS: true,
@@ -5277,7 +5268,7 @@ exports.companyDeleteCompany = (req, res, next) => {
           avaibleSendAlertToWorker: true,
         },
         smsContent: {
-          companySendSMSValidField: "smsServiceDeletedAvaible",
+          companySendSMSValidField: "smsServiceCanceledAvaible",
           titleCompanySMSAlert: "sms_canceled_service",
           collectionFieldSMSOnSuccess: {
             canceledSMS: true,
@@ -5548,13 +5539,11 @@ exports.companySMSUpdate = (req, res, next) => {
   const smsServiceChangedAvaible = req.body.smsServiceChangedAvaible;
   const smsServiceFinishedAvaible = req.body.smsServiceFinishedAvaible;
   const smsServiceCanceledAvaible = req.body.smsServiceCanceledAvaible;
-  const smsServiceDeletedAvaible = req.body.smsServiceDeletedAvaible;
   const smsCommunitingNotificationAvaible =
     req.body.smsCommunitingNotificationAvaible;
   const smsCommunitingCreatedAvaible = req.body.smsCommunitingCreatedAvaible;
   const smsCommunitingChangedAvaible = req.body.smsCommunitingChangedAvaible;
   const smsCommunitingCanceledAvaible = req.body.smsCommunitingCanceledAvaible;
-  const smsCommunitingDeletedAvaible = req.body.smsCommunitingDeletedAvaible;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -5566,7 +5555,7 @@ exports.companySMSUpdate = (req, res, next) => {
     _id: companyId,
   })
     .select(
-      "_id owner smsReserwationChangedUserAvaible smsReserwationAvaible smsNotifactionAvaible smsCanceledAvaible smsChangedAvaible smsServiceCreatedAvaible smsServiceFinishedAvaible smsServiceChangedAvaible smsServiceDeletedAvaible smsServiceCanceledAvaible smsCommunitingNotificationAvaible smsCommunitingCreatedAvaible smsCommunitingChangedAvaible smsCommunitingDeletedAvaible smsCommunitingCanceledAvaible"
+      "_id owner smsReserwationChangedUserAvaible smsReserwationAvaible smsNotifactionAvaible smsCanceledAvaible smsChangedAvaible smsServiceCreatedAvaible smsServiceFinishedAvaible smsServiceChangedAvaible smsServiceCanceledAvaible smsCommunitingNotificationAvaible smsCommunitingCreatedAvaible smsCommunitingChangedAvaible smsCommunitingCanceledAvaible"
     )
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
@@ -5595,13 +5584,11 @@ exports.companySMSUpdate = (req, res, next) => {
       companyDoc.smsServiceChangedAvaible = smsServiceChangedAvaible;
       companyDoc.smsServiceFinishedAvaible = smsServiceFinishedAvaible;
       companyDoc.smsServiceCanceledAvaible = smsServiceCanceledAvaible;
-      companyDoc.smsServiceDeletedAvaible = smsServiceDeletedAvaible;
       companyDoc.smsCommunitingNotificationAvaible =
         smsCommunitingNotificationAvaible;
       companyDoc.smsCommunitingCreatedAvaible = smsCommunitingCreatedAvaible;
       companyDoc.smsCommunitingChangedAvaible = smsCommunitingChangedAvaible;
       companyDoc.smsCommunitingCanceledAvaible = smsCommunitingCanceledAvaible;
-      companyDoc.smsCommunitingDeletedAvaible = smsCommunitingDeletedAvaible;
       return companyDoc.save();
     })
 
@@ -7374,7 +7361,7 @@ exports.companyDeleteCommuniting = (req, res, next) => {
               avaibleSendAlertToWorker: true,
             },
             smsContent: {
-              companySendSMSValidField: "smsCommunitingDeletedAvaible",
+              companySendSMSValidField: "smsCommunitingCanceledAvaible",
               titleCompanySMSAlert: "sms_deleted_communiting",
               collectionFieldSMSOnSuccess: {
                 deletedSMS: true,

@@ -394,12 +394,10 @@ router.patch(
   [body("smsServiceChangedAvaible")],
   [body("smsServiceFinishedAvaible")],
   [body("smsServiceCanceledAvaible")],
-  [body("smsServiceDeletedAvaible")],
   [body("smsCommunitingNotificationAvaible")],
   [body("smsCommunitingCreatedAvaible")],
   [body("smsCommunitingChangedAvaible")],
   [body("smsCommunitingCanceledAvaible")],
-  [body("smsCommunitingDeletedAvaible")],
 
   company.companySMSUpdate
 );

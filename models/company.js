@@ -166,11 +166,6 @@ const companySchema = new Schema(
       type: Boolean,
       required: false,
     },
-    smsServiceDeletedAvaible: {
-      // powiadomienia podczas anulowania serwisu
-      type: Boolean,
-      required: false,
-    },
     smsCommunitingNotificationAvaible: {
       // powiadomienia 1 dzień przed dojazdem
       type: Boolean,
@@ -187,11 +182,6 @@ const companySchema = new Schema(
       required: false,
     },
     smsCommunitingCanceledAvaible: {
-      // powiadomienia podczas anulowania dojazdu
-      type: Boolean,
-      required: false,
-    },
-    smsCommunitingDeletedAvaible: {
       // powiadomienia podczas anulowania dojazdu
       type: Boolean,
       required: false,

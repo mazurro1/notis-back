@@ -2016,7 +2016,7 @@ exports.deleteUserAccount = (req, res, next) => {
           avaibleSendAlertToWorker: true,
         },
         smsContent: {
-          companySendSMSValidField: "smsServiceDeletedAvaible",
+          companySendSMSValidField: "smsServiceCanceledAvaible",
           titleCompanySMSAlert: "sms_canceled_service",
           collectionFieldSMSOnSuccess: {
             canceledSMS: true,
