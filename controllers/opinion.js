@@ -4,8 +4,6 @@ const Service = require("../models/service");
 const Communiting = require("../models/Communiting");
 const Reserwation = require("../models/reserwation");
 const { validationResult } = require("express-validator");
-const User = require("../models/user");
-const io = require("../socket");
 const notifications = require("../middleware/notifications");
 
 exports.addOpinion = (req, res, next) => {
@@ -57,7 +55,7 @@ exports.addOpinion = (req, res, next) => {
             $lte: dateEndMonth.toISOString(),
           },
         }).then((countOpinionMonth) => {
-          if (countOpinionMonth < 10) {
+          if (countOpinionMonth < 20) {
             if (!!opinionData.reserwationId) {
               return Reserwation.findOne({
                 _id: opinionData.reserwationId,
@@ -164,7 +162,7 @@ exports.addOpinion = (req, res, next) => {
         return resultSave;
       });
     })
-    .then(async (resultSave) => {
+    .then(async () => {
       if (!!opinionData.reserwationId) {
         const savedOpinion = await notifications.updateAllCollection({
           companyField: "company",
@@ -191,249 +189,56 @@ exports.addOpinion = (req, res, next) => {
         });
         return savedOpinion[0];
       } else if (!!opinionData.serviceId) {
-        validQueruPopulateResultSave = {
-          path: "serviceId",
-          select:
-            "workerUserId companyId userId createdAt objectName description day month year dateStart dateEnd",
-          populate: {
-            path: "workerUserId companyId userId",
-            select: "name surname linkPath",
+        const savedOpinion = await notifications.updateAllCollection({
+          companyField: "companyId",
+          collection: "Service",
+          collectionItems:
+            "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: opinionData.serviceId,
           },
-        };
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "serviceId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: false,
+          typeNotification: "opinion_client",
+        });
+        return savedOpinion[0];
       } else if (!!opinionData.communitingId) {
-        validQueruPopulateResultSave = {
-          path: "communitingId",
-          select:
-            "workerUserId companyId userId createdAt description city timeStart timeEnd day month year",
-          populate: {
-            path: "workerUserId companyId userId",
-            select: "name surname linkPath",
+        const savedOpinion = await notifications.updateAllCollection({
+          companyField: "companyId",
+          collection: "Communiting",
+          collectionItems:
+            "_id cost city description userId opinionId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd fullDate statusValue city street dateStartValid dateCommunitingValid isDeleted reserwationId",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: opinionData.communitingId,
           },
-        };
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "communitingId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: false,
+          typeNotification: "opinion_client",
+        });
+        return savedOpinion[0];
       }
-      // resultSave
-      //   .populate("user", "name")
-      //   .populate(validQueruPopulateResultSave)
-      //   .execPopulate()
-      //   .then((resultPopulatedSave) => {
-      //     const bulkArrayToUpdate = [];
-      //     if (!!resultPopulatedSave.user) {
-      //       if (!!resultPopulatedSave.user._id) {
-      //         let validAlertItem = {};
-      //         if (!!opinionData.reserwationId) {
-      //           validAlertItem = {
-      //             reserwationId: resultPopulatedSave.reserwationId._id,
-      //           };
-      //         } else if (!!opinionData.serviceId) {
-      //           validAlertItem = {
-      //             serviceId: resultPopulatedSave.serviceId._id,
-      //           };
-      //         } else if (!!opinionData.communitingId) {
-      //           validAlertItem = {
-      //             communitingId: resultPopulatedSave.communitingId._id,
-      //           };
-      //         }
-
-      //         let validAlertItemContent = {};
-      //         if (!!opinionData.reserwationId) {
-      //           validAlertItemContent = {
-      //             reserwationId: resultPopulatedSave.reserwationId,
-      //           };
-      //         } else if (!!opinionData.serviceId) {
-      //           validAlertItemContent = {
-      //             serviceId: resultPopulatedSave.serviceId,
-      //           };
-      //         } else if (!!opinionData.communitingId) {
-      //           validAlertItemContent = {
-      //             communitingId: resultPopulatedSave.communitingId,
-      //           };
-      //         }
-
-      //         const userAlertToSave = {
-      //           ...validAlertItem,
-      //           active: true,
-      //           type: "opinion_client",
-      //           creationTime: new Date(),
-      //           companyChanged: false,
-      //         };
-
-      //         io.getIO().emit(`user${resultPopulatedSave.user._id}`, {
-      //           action: "update-alerts",
-      //           alertData: {
-      //             ...validAlertItemContent,
-      //             active: true,
-      //             type: "opinion_client",
-      //             creationTime: new Date(),
-      //             companyChanged: false,
-      //           },
-      //         });
-      //         bulkArrayToUpdate.push({
-      //           updateOne: {
-      //             filter: { _id: resultPopulatedSave.user._id },
-      //             update: {
-      //               $inc: { alertActiveCount: 1 },
-      //               $push: {
-      //                 alerts: {
-      //                   $each: [userAlertToSave],
-      //                   $position: 0,
-      //                 },
-      //               },
-      //             },
-      //           },
-      //         });
-      //       }
-      //     }
-      //     if (!!resultPopulatedSave.reserwationId) {
-      //       if (!!resultPopulatedSave.reserwationId.toWorkerUserId) {
-      //         if (!!resultPopulatedSave.reserwationId.toWorkerUserId._id) {
-      //           const userAlertToSave = {
-      //             reserwationId: resultPopulatedSave.reserwationId._id,
-      //             active: true,
-      //             type: "opinion_client",
-      //             creationTime: new Date(),
-      //             companyChanged: false,
-      //           };
-
-      //           io.getIO().emit(
-      //             `user${resultPopulatedSave.reserwationId.toWorkerUserId._id}`,
-      //             {
-      //               action: "update-alerts",
-      //               alertData: {
-      //                 reserwationId: resultPopulatedSave.reserwationId,
-      //                 active: true,
-      //                 type: "opinion_client",
-      //                 creationTime: new Date(),
-      //                 companyChanged: false,
-      //               },
-      //             }
-      //           );
-
-      //           bulkArrayToUpdate.push({
-      //             updateOne: {
-      //               filter: {
-      //                 _id: resultPopulatedSave.reserwationId.toWorkerUserId._id,
-      //               },
-      //               update: {
-      //                 $inc: { alertActiveCount: 1 },
-      //                 $push: {
-      //                   alerts: {
-      //                     $each: [userAlertToSave],
-      //                     $position: 0,
-      //                   },
-      //                 },
-      //               },
-      //             },
-      //           });
-      //         }
-      //       }
-      //     } else if (!!resultPopulatedSave.serviceId) {
-      //       if (!!resultPopulatedSave.serviceId.workerUserId) {
-      //         if (!!resultPopulatedSave.serviceId.workerUserId._id) {
-      //           const userAlertToSave = {
-      //             serviceId: resultPopulatedSave.serviceId._id,
-      //             active: true,
-      //             type: "opinion_client",
-      //             creationTime: new Date(),
-      //             companyChanged: false,
-      //           };
-
-      //           io.getIO().emit(
-      //             `user${resultPopulatedSave.serviceId.workerUserId._id}`,
-      //             {
-      //               action: "update-alerts",
-      //               alertData: {
-      //                 serviceId: resultPopulatedSave.serviceId,
-      //                 active: true,
-      //                 type: "opinion_client",
-      //                 creationTime: new Date(),
-      //                 companyChanged: false,
-      //               },
-      //             }
-      //           );
-
-      //           bulkArrayToUpdate.push({
-      //             updateOne: {
-      //               filter: {
-      //                 _id: resultPopulatedSave.serviceId.workerUserId._id,
-      //               },
-      //               update: {
-      //                 $inc: { alertActiveCount: 1 },
-      //                 $push: {
-      //                   alerts: {
-      //                     $each: [userAlertToSave],
-      //                     $position: 0,
-      //                   },
-      //                 },
-      //               },
-      //             },
-      //           });
-      //         }
-      //       }
-      //     } else if (!!resultPopulatedSave.communitingId) {
-      //       if (!!resultPopulatedSave.communitingId.workerUserId) {
-      //         if (!!resultPopulatedSave.communitingId.workerUserId._id) {
-      //           const userAlertToSave = {
-      //             communitingId: resultPopulatedSave.communitingId._id,
-      //             active: true,
-      //             type: "opinion_client",
-      //             creationTime: new Date(),
-      //             companyChanged: false,
-      //           };
-
-      //           io.getIO().emit(
-      //             `user${resultPopulatedSave.communitingId.workerUserId._id}`,
-      //             {
-      //               action: "update-alerts",
-      //               alertData: {
-      //                 communitingId: resultPopulatedSave.communitingId,
-      //                 active: true,
-      //                 type: "opinion_client",
-      //                 creationTime: new Date(),
-      //                 companyChanged: false,
-      //               },
-      //             }
-      //           );
-
-      //           bulkArrayToUpdate.push({
-      //             updateOne: {
-      //               filter: {
-      //                 _id: resultPopulatedSave.communitingId.workerUserId._id,
-      //               },
-      //               update: {
-      //                 $inc: { alertActiveCount: 1 },
-      //                 $push: {
-      //                   alerts: {
-      //                     $each: [userAlertToSave],
-      //                     $position: 0,
-      //                   },
-      //                 },
-      //               },
-      //             },
-      //           });
-      //         }
-      //       }
-      //     }
-      //     User.bulkWrite(bulkArrayToUpdate)
-      //       .then(() => {
-      //         res.status(201).json({
-      //           opinion: resultPopulatedSave,
-      //         });
-      //       })
-      //       .catch((err) => {
-      //         if (!err.statusCode) {
-      //           err.statusCode = 501;
-      //           err.message = "Błąd podczas pobierania danych.";
-      //         }
-      //         next(err);
-      //       });
-      // })
-      // .catch((err) => {
-      //   if (!err.statusCode) {
-      //     err.statusCode = 501;
-      //     err.message = "Błąd podczas pobierania danych.";
-      //   }
-      //   next(err);
-      // });
     })
     .then((resultSaved) => {
       res.status(201).json({
@@ -450,7 +255,6 @@ exports.addOpinion = (req, res, next) => {
 };
 
 exports.updateEditedOpinion = (req, res, next) => {
-  const userId = req.userId;
   const opinionData = req.body.opinionData;
 
   const errors = validationResult(req);
@@ -464,176 +268,14 @@ exports.updateEditedOpinion = (req, res, next) => {
     company: opinionData.company,
     _id: opinionData.opinionId,
   })
-    .populate("user", "name")
-    .populate({
-      path: "reserwationId",
-      select:
-        "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName",
-      populate: {
-        path: "toWorkerUserId company fromUser",
-        select: "name surname linkPath",
-      },
-    })
-    .populate({
-      path: "serviceId",
-      select:
-        "workerUserId companyId userId createdAt objectName description day month year dateStart dateEnd",
-      populate: {
-        path: "workerUserId companyId userId",
-        select: "name surname linkPath",
-      },
-    })
-    .populate({
-      path: "communitingId",
-      select:
-        "workerUserId companyId userId createdAt description city timeStart timeEnd day month year",
-      populate: {
-        path: "workerUserId companyId userId",
-        select: "name surname linkPath",
-      },
-    })
+    .select(
+      "_id company editedOpinionMessage reserwationId serviceId communitingId"
+    )
     .then((opinionDoc) => {
       if (!!opinionDoc) {
-        const bulkArrayToUpdate = [];
-
-        let validAlertItem = {};
-        if (!!opinionDoc.reserwationId) {
-          validAlertItem = {
-            reserwationId: opinionDoc.reserwationId._id,
-          };
-        } else if (!!opinionDoc.serviceId) {
-          validAlertItem = {
-            serviceId: opinionDoc.serviceId._id,
-          };
-        } else if (!!opinionDoc.communitingId) {
-          validAlertItem = {
-            communitingId: opinionDoc.communitingId._id,
-          };
-        }
-
-        let validAlertItemContent = {};
-        if (!!opinionDoc.reserwationId) {
-          validAlertItemContent = {
-            reserwationId: opinionDoc.reserwationId,
-          };
-        } else if (!!opinionDoc.serviceId) {
-          validAlertItemContent = {
-            serviceId: opinionDoc.serviceId,
-          };
-        } else if (!!opinionDoc.communitingId) {
-          validAlertItemContent = {
-            communitingId: opinionDoc.communitingId,
-          };
-        }
-
-        if (!!opinionDoc.user) {
-          if (!!opinionDoc.user._id) {
-            if (!!validAlertItem && !!validAlertItemContent) {
-              const userAlertToSave = {
-                ...validAlertItem,
-                active: true,
-                type: "opinion_client_edit",
-                creationTime: new Date(),
-                companyChanged: false,
-              };
-
-              io.getIO().emit(`user${opinionDoc.user._id}`, {
-                action: "update-alerts",
-                alertData: {
-                  ...validAlertItemContent,
-                  active: true,
-                  type: "opinion_client_edit",
-                  creationTime: new Date(),
-                  companyChanged: false,
-                },
-              });
-
-              bulkArrayToUpdate.push({
-                updateOne: {
-                  filter: {
-                    _id: opinionDoc.user._id,
-                  },
-                  update: {
-                    $inc: { alertActiveCount: 1 },
-                    $push: {
-                      alerts: {
-                        $each: [userAlertToSave],
-                        $position: 0,
-                      },
-                    },
-                  },
-                },
-              });
-            }
-          }
-        }
-
-        let validWorkerId = null;
-        if (!!opinionDoc.reserwationId) {
-          if (!!opinionDoc.reserwationId.toWorkerUserId) {
-            validWorkerId = opinionDoc.reserwationId.toWorkerUserId._id;
-          }
-        } else if (!!opinionDoc.serviceId) {
-          if (!!opinionDoc.serviceId.workerUserId) {
-            validWorkerId = opinionDoc.serviceId.workerUserId._id;
-          }
-        } else if (!!opinionDoc.communitingId) {
-          if (!!opinionDoc.communitingId.workerUserId) {
-            validWorkerId = opinionDoc.communitingId.workerUserId._id;
-          }
-        }
-
-        if (!!validWorkerId) {
-          const userAlertToSave = {
-            ...validAlertItem,
-            active: true,
-            type: "opinion_client_edit",
-            creationTime: new Date(),
-            companyChanged: false,
-          };
-
-          io.getIO().emit(`user${validWorkerId}`, {
-            action: "update-alerts",
-            alertData: {
-              ...validAlertItemContent,
-              active: true,
-              type: "opinion_client_edit",
-              creationTime: new Date(),
-              companyChanged: false,
-            },
-          });
-
-          bulkArrayToUpdate.push({
-            updateOne: {
-              filter: {
-                _id: validWorkerId,
-              },
-              update: {
-                $inc: { alertActiveCount: 1 },
-                $push: {
-                  alerts: {
-                    $each: [userAlertToSave],
-                    $position: 0,
-                  },
-                },
-              },
-            },
-          });
-        }
         if (!!!opinionDoc.editedOpinionMessage) {
-          return User.bulkWrite(bulkArrayToUpdate)
-            .then(() => {
-              opinionDoc.editedOpinionMessage =
-                opinionData.opinionEditedMessage;
-              return opinionDoc.save();
-            })
-            .catch((err) => {
-              if (!err.statusCode) {
-                err.statusCode = 501;
-                err.message = "Błąd podczas pobierania danych.";
-              }
-              next(err);
-            });
+          opinionDoc.editedOpinionMessage = opinionData.opinionEditedMessage;
+          return opinionDoc.save();
         } else {
           const error = new Error("Edytowana opinia została już dodana.");
           error.statusCode = 412;
@@ -643,6 +285,84 @@ exports.updateEditedOpinion = (req, res, next) => {
         const error = new Error("Brak opinii.");
         error.statusCode = 412;
         throw error;
+      }
+    })
+    .then(async (resultSaved) => {
+      if (!!resultSaved.reserwationId) {
+        await notifications.updateAllCollection({
+          companyField: "company",
+          collection: "Reserwation",
+          collectionItems:
+            "_id visitCanceled visitChanged visitNotFinished serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: opinionData.reserwationId,
+          },
+          userField: "fromUser",
+          workerField: "toWorkerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "reserwationId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: false,
+          typeNotification: "opinion_client_edit",
+        });
+        return true;
+      } else if (!!resultSaved.serviceId) {
+        await notifications.updateAllCollection({
+          companyField: "companyId",
+          collection: "Service",
+          collectionItems:
+            "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: opinionData.serviceId,
+          },
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "serviceId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: false,
+          typeNotification: "opinion_client_edit",
+        });
+        return true;
+      } else if (!!resultSaved.communitingId) {
+        await notifications.updateAllCollection({
+          companyField: "companyId",
+          collection: "Communiting",
+          collectionItems:
+            "_id cost city description userId opinionId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd fullDate statusValue city street dateStartValid dateCommunitingValid isDeleted reserwationId",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: opinionData.communitingId,
+          },
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "communitingId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: false,
+          typeNotification: "opinion_client_edit",
+        });
+        return true;
       }
     })
     .then(() => {
@@ -753,178 +473,97 @@ exports.addReplayOpinion = (req, res, next) => {
       return Opinion.findOne({
         _id: opinionId,
       })
-        .populate("user", "name")
-        .populate({
-          path: "reserwationId",
-          select:
-            "toWorkerUserId company dateYear dateMonth dateDay dateEnd dateStart visitNotFinished visitCanceled fromUser serviceName",
-          populate: {
-            path: "toWorkerUserId company fromUser",
-            select: "name surname linkPath",
-          },
-        })
-        .populate({
-          path: "serviceId",
-          select:
-            "workerUserId companyId userId createdAt objectName description day month year dateStart dateEnd",
-          populate: {
-            path: "workerUserId companyId userId",
-            select: "name surname linkPath",
-          },
-        })
-        .populate({
-          path: "communitingId",
-          select:
-            "workerUserId companyId userId createdAt description city timeStart timeEnd day month year",
-          populate: {
-            path: "workerUserId companyId userId",
-            select: "name surname linkPath",
-          },
-        })
+        .select(
+          "_id company editedOpinionMessage reserwationId serviceId communitingId"
+        )
         .then((resultOpinion) => {
           if (!!resultOpinion) {
-            const bulkArrayToUpdate = [];
-
-            let validAlertItem = {};
-            if (!!resultOpinion.reserwationId) {
-              validAlertItem = {
-                reserwationId: resultOpinion.reserwationId._id,
-              };
-            } else if (!!resultOpinion.serviceId) {
-              validAlertItem = {
-                serviceId: resultOpinion.serviceId._id,
-              };
-            } else if (!!resultOpinion.communitingId) {
-              validAlertItem = {
-                communitingId: resultOpinion.communitingId._id,
-              };
-            }
-
-            let validAlertItemContent = {};
-            if (!!resultOpinion.reserwationId) {
-              validAlertItemContent = {
-                reserwationId: resultOpinion.reserwationId,
-              };
-            } else if (!!resultOpinion.serviceId) {
-              validAlertItemContent = {
-                serviceId: resultOpinion.serviceId,
-              };
-            } else if (!!resultOpinion.communitingId) {
-              validAlertItemContent = {
-                communitingId: resultOpinion.communitingId,
-              };
-            }
-
-            if (!!resultOpinion.user) {
-              if (!!resultOpinion.user._id) {
-                const userAlertToSave = {
-                  ...validAlertItem,
-                  active: true,
-                  type: "opinion_from_company",
-                  creationTime: new Date(),
-                  companyChanged: true,
-                };
-
-                io.getIO().emit(`user${resultOpinion.user._id}`, {
-                  action: "update-alerts",
-                  alertData: {
-                    ...validAlertItemContent,
-                    active: true,
-                    type: "opinion_from_company",
-                    creationTime: new Date(),
-                    companyChanged: true,
-                  },
-                });
-                bulkArrayToUpdate.push({
-                  updateOne: {
-                    filter: {
-                      _id: resultOpinion.user._id,
-                    },
-                    update: {
-                      $inc: { alertActiveCount: 1 },
-                      $push: {
-                        alerts: {
-                          $each: [userAlertToSave],
-                          $position: 0,
-                        },
-                      },
-                    },
-                  },
-                });
-              }
-            }
-
-            let validWorkerId = null;
-            if (!!resultOpinion.reserwationId) {
-              if (!!resultOpinion.reserwationId.toWorkerUserId) {
-                validWorkerId = resultOpinion.reserwationId.toWorkerUserId._id;
-              }
-            } else if (!!resultOpinion.serviceId) {
-              if (!!resultOpinion.serviceId.workerUserId) {
-                validWorkerId = resultOpinion.serviceId.workerUserId._id;
-              }
-            } else if (!!resultOpinion.communitingId) {
-              if (!!resultOpinion.communitingId.workerUserId) {
-                validWorkerId = resultOpinion.communitingId.workerUserId._id;
-              }
-            }
-
-            if (!!validWorkerId) {
-              const userAlertToSave = {
-                ...validAlertItem,
-                active: true,
-                type: "opinion_from_company",
-                creationTime: new Date(),
-                companyChanged: true,
-              };
-
-              io.getIO().emit(`user${validWorkerId}`, {
-                action: "update-alerts",
-                alertData: {
-                  ...validAlertItemContent,
-                  active: true,
-                  type: "opinion_from_company",
-                  creationTime: new Date(),
-                  companyChanged: true,
-                },
-              });
-
-              bulkArrayToUpdate.push({
-                updateOne: {
-                  filter: {
-                    _id: validWorkerId,
-                  },
-                  update: {
-                    $inc: { alertActiveCount: 1 },
-                    $push: {
-                      alerts: {
-                        $each: [userAlertToSave],
-                        $position: 0,
-                      },
-                    },
-                  },
-                },
-              });
-            }
-
-            return User.bulkWrite(bulkArrayToUpdate)
-              .then(() => {
-                resultOpinion.replayOpinionMessage = replay;
-                return resultOpinion.save();
-              })
-              .catch((err) => {
-                if (!err.statusCode) {
-                  err.statusCode = 501;
-                  err.message = "Błąd podczas pobierania danych.";
-                }
-                next(err);
-              });
+            resultOpinion.replayOpinionMessage = replay;
+            return resultOpinion.save();
           } else {
             const error = new Error("Nie znaleziono opinii.");
             error.statusCode = 403;
             throw error;
           }
         });
+    })
+    .then(async (resultSaved) => {
+      if (!!resultSaved.reserwationId) {
+        await notifications.updateAllCollection({
+          companyField: "company",
+          collection: "Reserwation",
+          collectionItems:
+            "_id visitCanceled visitChanged visitNotFinished serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: resultSaved.reserwationId,
+          },
+          userField: "fromUser",
+          workerField: "toWorkerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "reserwationId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: true,
+          typeNotification: "opinion_from_company",
+        });
+        return true;
+      } else if (!!resultSaved.serviceId) {
+        await notifications.updateAllCollection({
+          companyField: "companyId",
+          collection: "Service",
+          collectionItems:
+            "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: resultSaved.serviceId,
+          },
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "serviceId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: true,
+          typeNotification: "opinion_from_company",
+        });
+        return true;
+      } else if (!!resultSaved.communitingId) {
+        await notifications.updateAllCollection({
+          companyField: "companyId",
+          collection: "Communiting",
+          collectionItems:
+            "_id cost city description userId opinionId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd fullDate statusValue city street dateStartValid dateCommunitingValid isDeleted reserwationId",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: {},
+          filtersCollection: {
+            _id: resultSaved.communitingId,
+          },
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "communitingId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: null,
+          companyChanged: true,
+          typeNotification: "opinion_from_company",
+        });
+        return true;
+      }
     })
     .then(() => {
       res.status(201).json({

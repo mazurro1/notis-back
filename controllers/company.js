@@ -580,10 +580,18 @@ exports.registrationCompany = (req, res, next) => {
               "base64"
             ).toString("utf-8");
 
+            const propsGenerator = generateEmail.generateContentEmail({
+              alertType: "alert_create_company",
+              companyChanged: true,
+              language: "PL",
+              itemAlert: null,
+              collection: "Default",
+            });
+
             notifications.sendEmail({
               email: result.email,
-              title: "Tworzenie konta firmowego zakończone powodzeniem",
-              defaultText: `Utworzono nowe konto firmowe ${unhashedCodeToVerified}`,
+              title: propsGenerator.title,
+              defaultText: `${propsGenerator.title} ${unhashedCodeToVerified}`,
             });
 
             res.status(200).json({
@@ -627,10 +635,18 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
         "base64"
       ).toString("utf-8");
 
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_create_company",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
       notifications.sendEmail({
         email: companyData.email,
-        title: "Tworzenie konta firmowego zakończone powodzeniem",
-        defaultText: `Utworzono nowe konto firmowe ${unhashedCodeToVerified}`,
+        title: propsGenerator.title,
+        defaultText: `${propsGenerator.title} ${unhashedCodeToVerified}`,
       });
 
       res.status(201).json({
@@ -1052,10 +1068,19 @@ exports.sentEmailToActiveCompanyWorker = (req, res, next) => {
                 "base64"
               );
 
+              const propsGenerator = generateEmail.generateContentEmail({
+                alertType: "alert_add_worker_company",
+                companyChanged: true,
+                language: "PL",
+                itemAlert: null,
+                collection: "Default",
+              });
+
               notifications.sendEmail({
                 email: emailWorker,
-                title: `Potwierdzenie dodania do listy pracowników w firmie ${result.name}`,
-                defaultText: `Kliknij link aby potwierdzić <a href="${SITE_FRONT}/confirm-added-worker-to-company?${result._id}&${hashedEmail}&${hashedRandomValue}">kliknij tutaj</a>`,
+                title: `${propsGenerator.title} ${result.name}`,
+                link: `${SITE_FRONT}/confirm-added-worker-to-company?${result._id}&${hashedEmail}&${hashedRandomValue}`,
+                linkName: propsGenerator.linkName,
               });
 
               res.status(201).json({
@@ -1116,10 +1141,19 @@ exports.sentAgainEmailToActiveCompanyWorker = (req, res, next) => {
             "base64"
           );
 
+          const propsGenerator = generateEmail.generateContentEmail({
+            alertType: "alert_add_worker_company",
+            companyChanged: true,
+            language: "PL",
+            itemAlert: null,
+            collection: "Default",
+          });
+
           notifications.sendEmail({
             email: emailWorker,
-            title: `Potwierdzenie dodania do listy pracowników w firmie ${companyData.name}`,
-            defaultText: `Kliknij link aby potwierdzić <a href="${SITE_FRONT}/confirm-added-worker-to-company?${companyData._id}&${hashedEmail}&${thisWorker.codeToActive}">kliknij tutaj</a>`,
+            title: `${propsGenerator.title} ${companyData.name}`,
+            link: `${SITE_FRONT}/confirm-added-worker-to-company?${companyData._id}&${hashedEmail}&${thisWorker.codeToActive}`,
+            linkName: propsGenerator.linkName,
           });
 
           res.status(201).json({
@@ -1167,6 +1201,8 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
     throw error;
   }
 
+  let companyName = null;
+
   Company.findOne({
     _id: companyId,
   })
@@ -1201,6 +1237,9 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
               }
             )
               .then(() => {
+                if (!!companyDoc.name) {
+                  companyName = companyDoc.name;
+                }
                 return companyDoc;
               })
               .catch(() => {
@@ -1231,7 +1270,6 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
         .select("email allCompanys")
         .then((userDocUpdate) => {
           if (userDocUpdate) {
-            // userDocUpdate.company = result._id;
             userDocUpdate.allCompanys = [
               ...userDocUpdate.allCompanys,
               result._id,
@@ -1247,10 +1285,19 @@ exports.emailActiveCompanyWorker = (req, res, next) => {
         });
     })
     .then((userDoc) => {
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_confirm_worker_company",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
       notifications.sendEmail({
         email: userDoc.email,
-        title: `Potwierdzenie dodania do pracy`,
-        defaultText: `Dodano do pracy!`,
+        title: `${propsGenerator.title} ${
+          !!companyName ? companyName : "None"
+        }`,
       });
       res.status(201).json({
         message: "Użytkownik został dodany do firmy",
@@ -1308,10 +1355,18 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
                           userWorkerDoc.company = null;
                           userWorkerDoc.allCompanys = filterUserCompanys;
 
+                          const propsGenerator =
+                            generateEmail.generateContentEmail({
+                              alertType: "alert_delete_worker_company",
+                              companyChanged: true,
+                              language: "PL",
+                              itemAlert: null,
+                              collection: "Default",
+                            });
+
                           notifications.sendEmail({
                             email: userWorkerDoc.email,
-                            title: `Usunięto z firmy ${companyDoc.name}`,
-                            defaultText: `Konto zostało usunięte z firmy`,
+                            title: `${propsGenerator.title} ${companyDoc.name}`,
                           });
                           return Company.updateOne(
                             {
@@ -1397,7 +1452,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         companyChanged: true,
         typeNotification: "reserwation_canceled",
-        deleteOpinion: true,
+        deleteOpinion: false,
       });
       return userDoc;
     })
@@ -1406,7 +1461,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         companyField: "companyId",
         collection: "Service",
         collectionItems:
-          "_id objectName description userId companyId month year day createdAt workerUserId",
+          "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
         extraCollectionPhoneField: "phone",
         extraCollectionEmailField: "email",
         extraCollectionNameField: "name surname",
@@ -1433,7 +1488,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         companyChanged: true,
         typeNotification: "service_deleted",
-        deleteOpinion: true,
+        deleteOpinion: false,
       });
       return userDoc;
     })
@@ -1472,7 +1527,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
         },
         companyChanged: true,
         typeNotification: "commuting_canceled",
-        deleteOpinion: true,
+        deleteOpinion: false,
       });
 
       return true;
@@ -5032,11 +5087,30 @@ exports.companySentCodeDeleteCompany = (req, res, next) => {
         "base64"
       ).toString("utf-8");
 
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_delete_company",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      const propsGeneratorCode = generateEmail.generateContentEmail({
+        alertType: "alert_delete_company_code",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
       notifications.sendEmail({
         email: companyData.email,
-        title: `Potwierdzenie usunięcia działalności ${companyData.name}`,
-        defaultText: `Kod do usunięcia działalności: ${codeToDelete.toUpperCase()}`,
+        title: `${propsGenerator.title} ${companyData.name}`,
+        defaultText: `${
+          propsGeneratorCode.title
+        } ${codeToDelete.toUpperCase()}`,
       });
+
       res.status(201).json({
         message: "Wysłano kod do usunięcia działalności",
       });
@@ -5185,7 +5259,7 @@ exports.companyDeleteCompany = (req, res, next) => {
         companyField: "companyId",
         collection: "Service",
         collectionItems:
-          "_id objectName description userId companyId month year day createdAt workerUserId",
+          "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
         extraCollectionPhoneField: "phone",
         extraCollectionEmailField: "email",
         extraCollectionNameField: "name surname",
@@ -5379,13 +5453,20 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
     })
     .then(() => {
       return Company.findOne({ _id: companyId })
-        .select("email _id")
+        .select("email _id name")
         .then((companyData) => {
           if (!!companyData) {
+            const propsGenerator = generateEmail.generateContentEmail({
+              alertType: "alert_delete_company_confirmed",
+              companyChanged: true,
+              language: "PL",
+              itemAlert: null,
+              collection: "Default",
+            });
+
             notifications.sendEmail({
               email: companyData.email,
-              title: `Usunięto działalność!`,
-              defaultText: `Działalność została usunięta`,
+              title: `${propsGenerator.title} ${companyData.name}`,
             });
             return true;
           } else {
@@ -5660,8 +5741,8 @@ exports.companySMSSendClients = (req, res, next) => {
         { upsert: true, safe: true },
         null
       )
-        .then(() => {
-          companyDoc.usersInformationUsersInfo.forEach((userInfo) => {
+        .then(async () => {
+          for (const userInfo of companyDoc.usersInformationUsersInfo) {
             let selectedPhoneNumber = null;
             if (!!userInfo.phoneVerified) {
               selectedPhoneNumber = userInfo.phone;
@@ -5685,26 +5766,16 @@ exports.companySMSSendClients = (req, res, next) => {
                 companyDoc.name.length > 32
                   ? companyDoc.name.slice(0, 32)
                   : companyDoc.name;
-              const params = {
-                Message: `${textMessage} - ${validComapnyName.toUpperCase()}`,
-                MessageStructure: "string",
-                PhoneNumber: `+48${userPhone}`,
-                MessageAttributes: {
-                  "AWS.SNS.SMS.SenderID": {
-                    DataType: "String",
-                    StringValue: "Meetsy",
-                  },
-                },
-              };
-              // sns.publish(params, function (err, data) {
-              //   if (err) console.log(err, err.stack);
-              // });
+
+              await notifications.sendVerifySMS({
+                phoneNumber: userPhone,
+                message: `${textMessage} - ${validComapnyName.toUpperCase()}`,
+              });
             }
-          });
+          }
           return lengthCompanyClients;
         })
         .catch((err) => {
-          console.log(err);
           const error = new Error("Brak odpowiedniej ilosci sms.");
           error.statusCode = 441;
           throw error;
@@ -6485,7 +6556,6 @@ exports.companyDeleteServices = (req, res, next) => {
               if (!!serviceDoc) {
                 if (!!serviceDoc.statusValue !== 3) {
                   serviceDoc.isDeleted = true;
-
                   return serviceDoc.save();
                 } else {
                   const error = new Error(

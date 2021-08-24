@@ -473,7 +473,7 @@
                               >
                                 <div>
                                   <div>
-                                    <% if (!!title) { %>
+                                    <% if (!!title && !!!defaultText) { %>
                                     <div class="titleStyle"><%= title %></div>
                                     <% } %> <% if (!!day) { %>
                                     <div class="styleInline">
@@ -513,6 +513,10 @@
                                     <% } %> <% if (!!defaultText) { %>
                                     <div class="styleInlineBold">
                                       <%= defaultText %>,
+                                    </div>
+                                    <% } %> <% if (!!link && !!linkName) { %>
+                                    <div class="styleInlineBold">
+                                      <a href="<%= link %>"><%= linkName %></a>
                                     </div>
                                     <% } %>
                                   </div>

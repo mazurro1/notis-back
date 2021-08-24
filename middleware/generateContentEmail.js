@@ -294,19 +294,142 @@ exports.generateContentEmail = ({
       break;
     }
 
+    case "alert_create_account": {
+      alertColor = "blue";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_confirm_account": {
+      alertColor = "blue";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
     case "alert_invoice": {
       alertColor = "green";
-      if (isCompanyChanged) {
-        title = `${texts[alertType].companyChangedUser.title[0]}`;
-      }
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
       break;
     }
 
     case "alert_delete_company": {
       alertColor = "red";
-      if (isCompanyChanged) {
-        title = `${texts[alertType].companyChangedUser.title[0]}`;
-      }
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_create_company": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_created_account_social": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_delete_account": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_created_account_fb": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+    case "alert_created_account_google": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+    case "alert_reset_account_success": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+    case "alert_reset_account_date": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_reset_account": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+    case "alert_confirm_account_edit": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+    case "alert_confirm_account_phone": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+    case "alert_veryfied_phone_account": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+    case "alert_deleted_account_success": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+    case "alert_delete_company_confirmed": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_delete_company": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_delete_worker_company": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_confirm_worker_company": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_add_worker_company": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
       break;
     }
 
@@ -322,6 +445,7 @@ exports.generateContentEmail = ({
   const reserwationText = texts.general.reserwationText;
   const serviceText = texts.general.serviceText;
   const communitingText = texts.general.communitingText;
+  const linkName = texts.general.linkName;
 
   return {
     alertColor: alertColor,
@@ -339,5 +463,6 @@ exports.generateContentEmail = ({
     reserwationText: reserwationText,
     serviceText: serviceText,
     communitingText: communitingText,
+    linkName: linkName,
   };
 };

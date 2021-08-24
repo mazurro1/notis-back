@@ -13,64 +13,6 @@ exports.Translates = {
       all: "Wszystko",
     },
     alerts: {
-      collections: {
-        changeCompany: {
-          reserwation_created: "Dodano nową rezerwację",
-          reserwation_changed: "Twoja rezerwacja uległa zmianie",
-          reserwation_canceled: "Twoja rezerwacje została anulowana",
-          reserwation_finished:
-            "Twoja rezerwacja została oznaczona jako dobyta",
-          reserwation_not_finished:
-            "Twoja rezerwacja została oznaczona jako niedobyta",
-          opinion_client: "Dodano opinię",
-          opinion_client_edit: "Opinia została edytowana",
-          opinion_from_company: "Odpowiedziano na Twoją opinię",
-          commuting_created: "Dodano nowy dojazd",
-          commuting_changed: "Twój dojazd uległ zmianie",
-          commuting_deleted: "Twój dojazd został anulowany",
-          commuting_canceled: "Twój dojazd został anulowany",
-          service_created: "Dodano nowy serwis",
-          service_changed: "Twój serwis uległ zmianie",
-          service_deleted: "Twój serwis został anulowany",
-          service_canceled: "Twój serwis został anulowany",
-          service_finished: "Twój serwis został zakończony",
-          alert_notifaction_sms: "Mała ilość SMS",
-          alert_notifaction_premium: "Konto premium kończy się",
-          alert_payment_status: "Dziękujemy za zakup!",
-          alert_payment_send_invoice: "Faktura vat za dokonany zakup",
-          alert_invoice:
-            "Przesyłamy w załączniku fakture vat za dokonane zakupy!",
-          alert_delete_company: "Usunięto działalność!",
-        },
-        changeNoCompany: {
-          reserwation_created: "Dodano nową rezerwację",
-          reserwation_changed: "Twoja rezerwacja uległa zmianie",
-          reserwation_canceled: "Twoja rezerwacje została anulowana",
-          reserwation_finished:
-            "Twoja rezerwacja została oznaczona jako dobyta",
-          reserwation_not_finished:
-            "Twoja rezerwacja została oznaczona jako niedobyta",
-          opinion_client: "Dodano opinię",
-          opinion_client_edit: "Opinia została edytowana",
-          opinion_from_company: "Odpowiedziano na Twoją opinię",
-          commuting_created: "Dodano nowy dojazd",
-          commuting_changed: "Twój dojazd uległ zmianie",
-          commuting_deleted: "Twój dojazd został anulowany",
-          commuting_canceled: "Twój dojazd został anulowany",
-          service_created: "Dodano nowy serwis",
-          service_changed: "Twój serwis uległ zmianie",
-          service_deleted: "Twój serwis został anulowany",
-          service_canceled: "Twój serwis został anulowany",
-          service_finished: "Twój serwis został zakończony",
-          alert_notifaction_sms: "Mała ilość SMS",
-          alert_notifaction_premium: "Konto premium kończy się",
-          alert_payment_status: "Dziękujemy za zakup!",
-          alert_payment_send_invoice: "Faktura vat za dokonany zakup",
-          alert_invoice:
-            "Przesyłamy w załączniku fakture vat za dokonane zakupy!",
-          alert_delete_company: "Usunięto działalność!",
-        },
-      },
       general: {
         dayText: "dnia",
         hoursText: "w godzinach",
@@ -79,6 +21,7 @@ exports.Translates = {
         communitingText: "miasto",
         companyNotFound: "Nie znaleziono firmy",
         alertNotFound: "Nieprawidłowy alert",
+        linkName: "Kliknij link aby potwierdzić",
       },
 
       reserwation_created: {
@@ -315,6 +258,16 @@ exports.Translates = {
           title: ["Przesyłamy w załączniku fakture vat za dokonane zakupy!"],
         },
       },
+      alert_create_account: {
+        noCompanyChangedUser: {
+          title: ["Utworzono nowe konto, kod do weryfikacji konta:"],
+        },
+      },
+      alert_confirm_account: {
+        noCompanyChangedUser: {
+          title: ["Adres e-mail został zweryfikowany"],
+        },
+      },
       alert_payment_status: {
         companyChangedUser: {
           title: [
@@ -325,6 +278,108 @@ exports.Translates = {
       alert_delete_company: {
         companyChangedUser: {
           title: ["Działalność została usunięta"],
+        },
+      },
+      alert_create_company: {
+        companyChangedUser: {
+          title: ["Potwierdzenie dodania do listy pracowników w firmie:"],
+        },
+      },
+      alert_created_account_fb: {
+        companyChangedUser: {
+          title: [
+            "Utworzono nowe konto za pomocą facebook-a. Twoje nowe wygenerowane hasło to:",
+          ],
+        },
+      },
+      alert_created_account_google: {
+        companyChangedUser: {
+          title: [
+            "Utworzono nowe konto za pomocą google. Twoje nowe wygenerowane hasło to:",
+          ],
+        },
+      },
+
+      alert_created_account_social: {
+        companyChangedUser: {
+          title: ["Tworzenie konta zakończone powodzeniem"],
+        },
+      },
+
+      alert_delete_account: {
+        companyChangedUser: {
+          title: ["Kod do usunięcia konta"],
+        },
+      },
+
+      alert_reset_account_success: {
+        companyChangedUser: {
+          title: ["Resetowanie hasła zakończone powodzeniem"],
+        },
+      },
+
+      alert_reset_account: {
+        companyChangedUser: {
+          title: ["Kod resetujący hasło"],
+        },
+      },
+      alert_reset_account_date: {
+        companyChangedUser: {
+          title: ["Data wygaśnięcia kodu:"],
+        },
+      },
+
+      alert_confirm_account_edit: {
+        companyChangedUser: {
+          title: ["Edycja konta zakończone powodzeniem"],
+        },
+      },
+
+      alert_confirm_account_phone: {
+        companyChangedUser: {
+          title: ["Kod potwierdzający numer telefonu:"],
+        },
+      },
+      alert_veryfied_phone_account: {
+        companyChangedUser: {
+          title: ["Numer telefonu został zweryfikowany."],
+        },
+      },
+      alert_deleted_account_success: {
+        companyChangedUser: {
+          title: ["Konto została usunięte"],
+        },
+      },
+      alert_delete_company_confirmed: {
+        companyChangedUser: {
+          title: ["Potwierdzenie usunięcia firmy:"],
+        },
+      },
+      alert_delete_company: {
+        companyChangedUser: {
+          title: ["Potwierdzenie usunięcia firmy:"],
+        },
+      },
+      alert_delete_company_code: {
+        companyChangedUser: {
+          title: ["Kod do usunięcia działalności:"],
+        },
+      },
+      alert_delete_worker_company: {
+        companyChangedUser: {
+          title: ["Konto zostało usunięte z firmy:"],
+        },
+      },
+      alert_confirm_worker_company: {
+        companyChangedUser: {
+          title: ["Potwierdzenie dodania do pracy w firmie:"],
+        },
+      },
+      alert_add_worker_company: {
+        companyChangedUser: {
+          title: [
+            "Utworzono nowe konto firmowe, kod do weryfikacji działalności:",
+          ],
         },
       },
       alert_invoice: {
@@ -357,6 +412,7 @@ exports.Translates = {
         communitingText: "city",
         companyNotFound: "Company not found",
         alertNotFound: "Invalid alert",
+        linkName: "Click on the link to confirm",
       },
       reserwation_created: {
         companyChangedUser: {
@@ -603,6 +659,105 @@ exports.Translates = {
       alert_delete_company: {
         companyChangedUser: {
           title: ["Company has been deleted"],
+        },
+      },
+      alert_create_company: {
+        companyChangedUser: {
+          title: [
+            "A new company account has been created, code to verify the activity:",
+          ],
+        },
+      },
+      alert_created_account_fb: {
+        companyChangedUser: {
+          title: [
+            "A new account has been created using facebook. Your new generated password is:",
+          ],
+        },
+      },
+      alert_created_account_google: {
+        companyChangedUser: {
+          title: [
+            "Created a new account using google. Your new generated password is:",
+          ],
+        },
+      },
+
+      alert_created_account_social: {
+        companyChangedUser: {
+          title: ["Account creation completed successfully"],
+        },
+      },
+      alert_reset_account: {
+        companyChangedUser: {
+          title: ["Password reset code"],
+        },
+      },
+      alert_confirm_account_edit: {
+        companyChangedUser: {
+          title: ["Successfully edited account"],
+        },
+      },
+      alert_confirm_account_phone: {
+        companyChangedUser: {
+          title: ["Code confirming the phone number:"],
+        },
+      },
+      alert_deleted_account_success: {
+        companyChangedUser: {
+          title: ["The account has been deleted"],
+        },
+      },
+      alert_reset_account_success: {
+        companyChangedUser: {
+          title: ["Password reset successful"],
+        },
+      },
+      alert_delete_company_confirmed: {
+        companyChangedUser: {
+          title: ["Confirmation of the removal of the company"],
+        },
+      },
+      alert_reset_account_date: {
+        companyChangedUser: {
+          title: ["Code expiration date:"],
+        },
+      },
+      alert_delete_company: {
+        companyChangedUser: {
+          title: ["Confirmation of company deletion:"],
+        },
+      },
+      alert_delete_company_code: {
+        companyChangedUser: {
+          title: ["Code to delete an activity:"],
+        },
+      },
+      alert_delete_worker_company: {
+        companyChangedUser: {
+          title: ["The account has been removed from the company:"],
+        },
+      },
+      alert_confirm_worker_company: {
+        companyChangedUser: {
+          title: ["Confirmation of being added to work in the company:"],
+        },
+      },
+      alert_add_worker_company: {
+        companyChangedUser: {
+          title: [
+            "Confirmation of adding to the list of employees in the company:",
+          ],
+        },
+      },
+      alert_delete_account: {
+        companyChangedUser: {
+          title: ["Code to delete the account"],
+        },
+      },
+      alert_veryfied_phone_account: {
+        companyChangedUser: {
+          title: ["The phone number has been verified."],
         },
       },
       alert_invoice: {

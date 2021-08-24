@@ -325,6 +325,8 @@ const sendEmail = async ({
   serviceText,
   communitingText,
   defaultText = null,
+  link = null,
+  linkName = null,
 }) => {
   if (
     !!email &&
@@ -355,6 +357,8 @@ const sendEmail = async ({
         serviceText: serviceText,
         communitingText: communitingText,
         defaultText: defaultText,
+        link: link,
+        linkName: linkName,
       },
       (err, data) => {
         if (!err) {

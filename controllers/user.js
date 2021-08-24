@@ -13,6 +13,7 @@ const AWS = require("aws-sdk");
 const io = require("../socket");
 const getImgBuffer = require("../getImgBuffer");
 const notifications = require("../middleware/notifications");
+const generateEmail = require("../middleware/generateContentEmail");
 
 require("dotenv").config();
 const {
@@ -132,8 +133,7 @@ exports.registration = (req, res, next) => {
                       allCompanys: [],
                       phoneVerified: false,
                       stamps: [],
-                      alerts: [],
-                      language: "pl",
+                      language: "PL",
                       darkMode: false,
                       blindMode: false,
                     });
@@ -174,10 +174,18 @@ exports.registration = (req, res, next) => {
         "base64"
       ).toString("utf-8");
 
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_create_account",
+        companyChanged: false,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
       notifications.sendEmail({
         email: result.email,
-        title: "Tworzenie konta zakończone powodzeniem",
-        defaultText: `Utworzono nowe konto ${unhashedCodeToVerified}`,
+        title: propsGenerator.title,
+        defaultText: `${propsGenerator.title} ${unhashedCodeToVerified}`,
       });
 
       res.status(200).json({
@@ -213,9 +221,8 @@ exports.login = (req, res, next) => {
     email: email,
   })
     .select(
-      "darkMode blindMode language email blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname alerts favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified alertActiveCount imageOther"
+      "darkMode blindMode language email blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified alertActiveCount imageOther"
     )
-    .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "allCompanys",
@@ -229,37 +236,6 @@ exports.login = (req, res, next) => {
       "stamps.reserwations",
       "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company visitCanceled fullDate oldReserwationId"
     )
-    .populate({
-      path: "alerts.alertDefaultCompanyId",
-      select: "_id name linkPath",
-    })
-    .populate({
-      path: "alerts.reserwationId",
-      select:
-        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company name surname",
-      populate: {
-        path: "company fromUser",
-        select: "name surname linkPath",
-      },
-    })
-    .populate({
-      path: "alerts.serviceId",
-      select:
-        "_id objectName description userId companyId month year day createdAt",
-      populate: {
-        path: "companyId userId",
-        select: "name surname linkPath",
-      },
-    })
-    .populate({
-      path: "alerts.communitingId",
-      select:
-        "_id city description userId companyId month year day timeStart timeEnd",
-      populate: {
-        path: "companyId userId",
-        select: "name surname linkPath",
-      },
-    })
     .then((user) => {
       if (!!user) {
         bcrypt
@@ -286,81 +262,133 @@ exports.login = (req, res, next) => {
             }
           })
           .then((userWithToken) => {
-            const userName = Buffer.from(userWithToken.name, "base64").toString(
-              "utf-8"
-            );
-            const userSurname = Buffer.from(
-              userWithToken.surname,
-              "base64"
-            ).toString("utf-8");
+            return Alert.find({
+              toUserId: user._id,
+            })
+              .sort({ createdAt: -1 })
+              .limit(10)
+              .populate("alertDefaultCompanyId", "_id name linkPath")
+              .populate({
+                path: "reserwationId",
+                select:
+                  "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId name surname",
+                populate: {
+                  path: "company fromUser",
+                  select: "name surname linkPath",
+                },
+              })
+              .populate({
+                path: "serviceId",
+                select:
+                  "_id objectName description userId companyId month year day createdAt",
+                populate: {
+                  path: "companyId userId",
+                  select: "name surname linkPath",
+                },
+              })
+              .populate({
+                path: "communitingId",
+                select:
+                  "_id city description userId companyId month year day timeStart timeEnd",
+                populate: {
+                  path: "companyId userId",
+                  select: "name surname linkPath",
+                },
+              })
+              .then((userAlerts) => {
+                return Alert.countDocuments({
+                  toUserId: user._id,
+                  active: true,
+                }).then((activeUserAllerts) => {
+                  let validUserActiveCount = 0;
+                  if (!!activeUserAllerts) {
+                    if (activeUserAllerts > 0) {
+                      validUserActiveCount = activeUserAllerts;
+                    }
+                  }
 
-            const isNotCompanyStamps = userWithToken.stamps.some(
-              (stamp) => stamp.companyId === null
-            );
-            const isNotCompanyFavourites =
-              userWithToken.favouritesCompanys.some((fav) => fav === null);
-            if (isNotCompanyStamps || isNotCompanyFavourites) {
-              if (isNotCompanyStamps) {
-                const filterStampsUser = userWithToken.stamps.filter(
-                  (stamp) => stamp.companyId !== null
-                );
-                userWithToken.stamps = filterStampsUser;
-              }
-              if (isNotCompanyFavourites) {
-                const filterFavUser = userWithToken.favouritesCompanys.filter(
-                  (fav) => fav !== null
-                );
-                userWithToken.favouritesCompanys = filterFavUser;
-              }
-              userWithToken.save();
-            }
+                  const userName = Buffer.from(
+                    userWithToken.name,
+                    "base64"
+                  ).toString("utf-8");
+                  const userSurname = Buffer.from(
+                    userWithToken.surname,
+                    "base64"
+                  ).toString("utf-8");
 
-            let findCompanyInAllCompanys = null;
-            if (!!userWithToken.company) {
-              findCompanyInAllCompanys = userWithToken.allCompanys.find(
-                (itemCompany) => {
-                  return (
-                    itemCompany._id.toString() ==
-                    userWithToken.company.toString()
+                  const isNotCompanyStamps = userWithToken.stamps.some(
+                    (stamp) => stamp.companyId === null
                   );
-                }
-              );
-            }
+                  const isNotCompanyFavourites =
+                    userWithToken.favouritesCompanys.some(
+                      (fav) => fav === null
+                    );
+                  if (isNotCompanyStamps || isNotCompanyFavourites) {
+                    if (isNotCompanyStamps) {
+                      const filterStampsUser = userWithToken.stamps.filter(
+                        (stamp) => stamp.companyId !== null
+                      );
+                      userWithToken.stamps = filterStampsUser;
+                    }
+                    if (isNotCompanyFavourites) {
+                      const filterFavUser =
+                        userWithToken.favouritesCompanys.filter(
+                          (fav) => fav !== null
+                        );
+                      userWithToken.favouritesCompanys = filterFavUser;
+                    }
+                    userWithToken.save();
+                  }
 
-            res.status(201).json({
-              userId: userWithToken._id.toString(),
-              email: userWithToken.email,
-              userName: userName,
-              userSurname: userSurname,
-              token: userWithToken.loginToken,
-              accountVerified: userWithToken.accountVerified,
-              company: !!findCompanyInAllCompanys
-                ? findCompanyInAllCompanys
-                : userWithToken.allCompanys.length > 0
-                ? userWithToken.allCompanys[0]
-                : null,
-              defaultCompany: !!userWithToken.company
-                ? userWithToken.company
-                : userWithToken.allCompanys.length > 0
-                ? userWithToken.allCompanys[0]._id
-                : null,
-              allCompanys: userWithToken.allCompanys,
-              alerts: userWithToken.alerts,
-              alertActiveCount: !!userWithToken.alertActiveCount
-                ? userWithToken.alertActiveCount
-                : 0,
-              imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
-              hasPhone: user.hasPhone,
-              stamps: user.stamps,
-              favouritesCompanys: user.favouritesCompanys,
-              phoneVerified: user.phoneVerified,
-              blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
-              blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
-              vapidPublic: PUBLIC_KEY_VAPID,
-              language: !!user.language ? user.language : "pl",
-              darkMode: !!user.darkMode ? user.darkMode : false,
-              blindMode: !!user.blindMode ? user.blindMode : false,
-            });
+                  let findCompanyInAllCompanys = null;
+                  if (!!userWithToken.company) {
+                    findCompanyInAllCompanys = userWithToken.allCompanys.find(
+                      (itemCompany) => {
+                        return (
+                          itemCompany._id.toString() ==
+                          userWithToken.company.toString()
+                        );
+                      }
+                    );
+                  }
+
+                  res.status(201).json({
+                    userId: userWithToken._id.toString(),
+                    email: userWithToken.email,
+                    userName: userName,
+                    userSurname: userSurname,
+                    token: userWithToken.loginToken,
+                    accountVerified: userWithToken.accountVerified,
+                    company: !!findCompanyInAllCompanys
+                      ? findCompanyInAllCompanys
+                      : userWithToken.allCompanys.length > 0
+                      ? userWithToken.allCompanys[0]
+                      : null,
+                    defaultCompany: !!userWithToken.company
+                      ? userWithToken.company
+                      : userWithToken.allCompanys.length > 0
+                      ? userWithToken.allCompanys[0]._id
+                      : null,
+                    allCompanys: userWithToken.allCompanys,
+                    alerts: !!userAlerts ? userAlerts : [],
+                    alertActiveCount: validUserActiveCount,
+                    imageUrl: !!user.imageOther
+                      ? user.imageOther
+                      : user.imageUrl,
+                    hasPhone: user.hasPhone,
+                    stamps: user.stamps,
+                    favouritesCompanys: user.favouritesCompanys,
+                    phoneVerified: user.phoneVerified,
+                    blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
+                    blockUserSendVerifiedPhoneSms:
+                      user.blockUserSendVerifiedPhoneSms,
+                    vapidPublic: PUBLIC_KEY_VAPID,
+                    language: !!user.language ? user.language : "pl",
+                    darkMode: !!user.darkMode ? user.darkMode : false,
+                    blindMode: !!user.blindMode ? user.blindMode : false,
+                  });
+                });
+              });
           })
           .catch((err) => {
             if (!err.statusCode) {
@@ -397,11 +425,21 @@ exports.sentAgainVerifiedEmail = (req, res, next) => {
           user.codeToVerified,
           "base64"
         ).toString("utf-8");
+
+        const propsGenerator = generateEmail.generateContentEmail({
+          alertType: "alert_create_account",
+          companyChanged: false,
+          language: "PL",
+          itemAlert: null,
+          collection: "Default",
+        });
+
         notifications.sendEmail({
           email: user.email,
-          title: "Tworzenie konta zakończone powodzeniem",
-          defaultText: `Utworzono nowe konto ${unhashedCodeToVerified.toUpperCase()}`,
+          title: propsGenerator.title,
+          defaultText: `${propsGenerator.title} ${unhashedCodeToVerified}`,
         });
+
         res.status(201).json({
           message: "Email został wysłany",
         });
@@ -580,10 +618,16 @@ exports.veryfiedEmail = (req, res, next) => {
       }
     })
     .then((result) => {
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_confirm_account",
+        companyChanged: false,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
       notifications.sendEmail({
         email: result.email,
-        title: "Tworzenie konta zakończone powodzeniem",
-        defaultText: `Adres e-mail został zweryfikowany`,
+        ...propsGenerator,
       });
       res.status(201).json({
         accountVerified: result.accountVerified,
@@ -609,44 +653,13 @@ exports.resetAllerts = (req, res, next) => {
     throw error;
   }
 
-  User.findOne({
-    _id: userId,
-  })
-    .select("alerts _id alertActiveCount")
-    .where({ "alerts.active": true })
-    .then((user) => {
-      if (!!user) {
-        const bulkArrayToUpdate = [];
-        user.alerts.forEach((alert, index) => {
-          bulkArrayToUpdate.push({
-            updateOne: {
-              filter: {
-                _id: user._id,
-                "alerts._id": alert._id,
-              },
-              update: {
-                $set: {
-                  "alerts.$.active": false,
-                  alertActiveCount: 0,
-                },
-              },
-            },
-          });
-        });
-        return User.bulkWrite(bulkArrayToUpdate)
-          .then(() => {
-            return true;
-          })
-          .catch((err) => {
-            console.log(err);
-            const error = new Error("Błąd podczas aktualizacji powiadomień.");
-            error.statusCode = 422;
-            throw error;
-          });
-      } else {
-        return true;
-      }
-    })
+  Alert.updateMany(
+    {
+      toUserId: userId,
+      active: true,
+    },
+    { $set: { active: false } }
+  )
     .then(() => {
       res.status(200).json({
         message: "Zaktualizowano alerty",
@@ -672,26 +685,24 @@ exports.getMoreAlerts = (req, res, next) => {
     throw error;
   }
 
-  User.findOne({
-    _id: userId,
+  Alert.find({
+    toUserId: userId,
   })
-    .select("alerts _id")
-    .slice("alerts", [10 * page, 10])
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * 10)
+    .limit(10)
+    .populate("alertDefaultCompanyId", "_id name linkPath")
     .populate({
-      path: "alerts.alertDefaultCompanyId",
-      select: "_id name linkPath",
-    })
-    .populate({
-      path: "alerts.reserwationId",
+      path: "reserwationId",
       select:
-        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company name surname",
+        "dateDay dateMonth dateYear dateStart dateEnd serviceName fromUser company oldReserwationId name surname",
       populate: {
         path: "company fromUser",
         select: "name surname linkPath",
       },
     })
     .populate({
-      path: "alerts.serviceId",
+      path: "serviceId",
       select:
         "_id objectName description userId companyId month year day createdAt",
       populate: {
@@ -700,7 +711,7 @@ exports.getMoreAlerts = (req, res, next) => {
       },
     })
     .populate({
-      path: "alerts.communitingId",
+      path: "communitingId",
       select:
         "_id city description userId companyId month year day timeStart timeEnd",
       populate: {
@@ -708,23 +719,10 @@ exports.getMoreAlerts = (req, res, next) => {
         select: "name surname linkPath",
       },
     })
-    .then((user) => {
-      if (!!user) {
-        res.status(200).json({
-          newAllerts: user.alerts,
-        });
-      } else {
-        res.status(422).json({
-          message: "Brak użytkownika",
-        });
-      }
-    })
-    .catch((err) => {
-      if (!err.statusCode) {
-        err.statusCode = 501;
-        err.message = "Błąd serwera.";
-      }
-      next(err);
+    .then((newAlerts) => {
+      res.status(200).json({
+        newAllerts: !!newAlerts ? newAlerts : [],
+      });
     });
 };
 
@@ -745,9 +743,8 @@ exports.autoLogin = (req, res, next) => {
     loginToken: token,
   })
     .select(
-      "_id darkMode blindMode language loginToken blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company alerts name surname alertActiveCount email accountVerified imageUrl hasPhone imageOther"
+      "_id darkMode blindMode language loginToken blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company name surname alertActiveCount email accountVerified imageUrl hasPhone imageOther"
     )
-    .slice("alerts", 10)
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "stamps.reserwations",
@@ -797,92 +794,104 @@ exports.autoLogin = (req, res, next) => {
             },
           })
           .then((userAlerts) => {
-            const userName = Buffer.from(user.name, "base64").toString("utf-8");
-            const userSurname = Buffer.from(user.surname, "base64").toString(
-              "utf-8"
-            );
-            let validUserActiveCount = 0;
-            if (!!user.alertActiveCount) {
-              if (user.alertActiveCount > 0) {
-                validUserActiveCount = user.alertActiveCount;
-              }
-            }
-            const isNotCompanyStamps = user.stamps.some((stamp) => {
-              const isInReserwationsStampsCanceled = stamp.reserwations.some(
-                (itemStamp) => itemStamp.visitCanceled
+            return Alert.countDocuments({
+              toUserId: user._id,
+              active: true,
+            }).then((activeUserAllerts) => {
+              const userName = Buffer.from(user.name, "base64").toString(
+                "utf-8"
               );
-              return stamp.companyId === null || isInReserwationsStampsCanceled;
-            });
-            const isNotCompanyFavourites = user.favouritesCompanys.some(
-              (fav) => fav === null
-            );
-            if (isNotCompanyStamps || isNotCompanyFavourites) {
-              if (isNotCompanyStamps) {
-                const newUserStamps = [];
-                user.stamps.forEach((stamp) => {
-                  if (stamp.companyId !== null) {
-                    const filterCompanyNoActiveStamps =
-                      stamp.reserwations.filter(
-                        (itemStamp) => !itemStamp.visitCanceled
-                      );
-                    stamp.reserwations = filterCompanyNoActiveStamps;
-                    newUserStamps.push({
-                      _id: stamp._id,
-                      reserwations: filterCompanyNoActiveStamps,
-                      companyId: stamp.companyId,
-                    });
-                  }
-                });
-                user.stamps = newUserStamps;
-              }
-              if (isNotCompanyFavourites) {
-                const filterFavUser = user.favouritesCompanys.filter(
-                  (fav) => fav !== null
-                );
-                user.favouritesCompanys = filterFavUser;
-              }
-              user.save();
-            }
-            let findCompanyInAllCompanys = null;
-            if (!!user.company) {
-              findCompanyInAllCompanys = user.allCompanys.find(
-                (itemCompany) => {
-                  return itemCompany._id.toString() == user.company.toString();
+              const userSurname = Buffer.from(user.surname, "base64").toString(
+                "utf-8"
+              );
+              let validUserActiveCount = 0;
+              if (!!activeUserAllerts) {
+                if (activeUserAllerts > 0) {
+                  validUserActiveCount = activeUserAllerts;
                 }
+              }
+              const isNotCompanyStamps = user.stamps.some((stamp) => {
+                const isInReserwationsStampsCanceled = stamp.reserwations.some(
+                  (itemStamp) => itemStamp.visitCanceled
+                );
+                return (
+                  stamp.companyId === null || isInReserwationsStampsCanceled
+                );
+              });
+              const isNotCompanyFavourites = user.favouritesCompanys.some(
+                (fav) => fav === null
               );
-            }
+              if (isNotCompanyStamps || isNotCompanyFavourites) {
+                if (isNotCompanyStamps) {
+                  const newUserStamps = [];
+                  user.stamps.forEach((stamp) => {
+                    if (stamp.companyId !== null) {
+                      const filterCompanyNoActiveStamps =
+                        stamp.reserwations.filter(
+                          (itemStamp) => !itemStamp.visitCanceled
+                        );
+                      stamp.reserwations = filterCompanyNoActiveStamps;
+                      newUserStamps.push({
+                        _id: stamp._id,
+                        reserwations: filterCompanyNoActiveStamps,
+                        companyId: stamp.companyId,
+                      });
+                    }
+                  });
+                  user.stamps = newUserStamps;
+                }
+                if (isNotCompanyFavourites) {
+                  const filterFavUser = user.favouritesCompanys.filter(
+                    (fav) => fav !== null
+                  );
+                  user.favouritesCompanys = filterFavUser;
+                }
+                user.save();
+              }
+              let findCompanyInAllCompanys = null;
+              if (!!user.company) {
+                findCompanyInAllCompanys = user.allCompanys.find(
+                  (itemCompany) => {
+                    return (
+                      itemCompany._id.toString() == user.company.toString()
+                    );
+                  }
+                );
+              }
 
-            res.status(200).json({
-              userId: user._id.toString(),
-              email: user.email,
-              token: user.loginToken,
-              accountVerified: user.accountVerified,
-              userName: userName,
-              userSurname: userSurname,
-              company: !!findCompanyInAllCompanys
-                ? findCompanyInAllCompanys
-                : user.allCompanys.length > 0
-                ? user.allCompanys[0]
-                : null,
-              defaultCompany: !!user.company
-                ? user.company
-                : user.allCompanys.length > 0
-                ? user.allCompanys[0]._id
-                : null,
-              allCompanys: user.allCompanys,
-              alerts: !!userAlerts ? userAlerts : [],
-              alertActiveCount: validUserActiveCount,
-              imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
-              hasPhone: user.hasPhone,
-              stamps: user.stamps,
-              favouritesCompanys: user.favouritesCompanys,
-              phoneVerified: user.phoneVerified,
-              blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
-              blockUserSendVerifiedPhoneSms: user.blockUserSendVerifiedPhoneSms,
-              vapidPublic: PUBLIC_KEY_VAPID,
-              language: !!user.language ? user.language : "pl",
-              darkMode: !!user.darkMode ? user.darkMode : false,
-              blindMode: !!user.blindMode ? user.blindMode : false,
+              res.status(200).json({
+                userId: user._id.toString(),
+                email: user.email,
+                token: user.loginToken,
+                accountVerified: user.accountVerified,
+                userName: userName,
+                userSurname: userSurname,
+                company: !!findCompanyInAllCompanys
+                  ? findCompanyInAllCompanys
+                  : user.allCompanys.length > 0
+                  ? user.allCompanys[0]
+                  : null,
+                defaultCompany: !!user.company
+                  ? user.company
+                  : user.allCompanys.length > 0
+                  ? user.allCompanys[0]._id
+                  : null,
+                allCompanys: user.allCompanys,
+                alerts: !!userAlerts ? userAlerts : [],
+                alertActiveCount: validUserActiveCount,
+                imageUrl: !!user.imageOther ? user.imageOther : user.imageUrl,
+                hasPhone: user.hasPhone,
+                stamps: user.stamps,
+                favouritesCompanys: user.favouritesCompanys,
+                phoneVerified: user.phoneVerified,
+                blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
+                blockUserSendVerifiedPhoneSms:
+                  user.blockUserSendVerifiedPhoneSms,
+                vapidPublic: PUBLIC_KEY_VAPID,
+                language: !!user.language ? user.language : "pl",
+                darkMode: !!user.darkMode ? user.darkMode : false,
+                blindMode: !!user.blindMode ? user.blindMode : false,
+              });
             });
           });
       } else {
@@ -917,7 +926,7 @@ exports.edit = (req, res, next) => {
     _id: userId,
   })
     .select(
-      "_id phoneVerified blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber password email loginToken phone name surname accountVerified company codeVerifiedPhoneDate codeVerifiedPhone whiteListVerifiedPhones"
+      "_id language phoneVerified blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber password email loginToken phone accountVerified company codeVerifiedPhoneDate codeVerifiedPhone whiteListVerifiedPhones"
     )
     .then((user) => {
       if (!!user) {
@@ -1022,30 +1031,28 @@ exports.edit = (req, res, next) => {
               throw error;
             }
           })
-          .then((userSavedData) => {
+          .then(async (userSavedData) => {
             if (!!!userSavedData.phoneVerified) {
-              const userName = Buffer.from(
-                userSavedData.name,
-                "base64"
-              ).toString("utf-8");
-              const userSurname = Buffer.from(
-                userSavedData.surname,
-                "base64"
-              ).toString("utf-8");
               const codeToDelete = Buffer.from(
                 userSavedData.codeVerifiedPhone,
                 "base64"
               ).toString("utf-8");
 
-              notifications.sendVerifySMS({
-                phoneNumber: newPhone,
-                message: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
+              const propsGenerator = generateEmail.generateContentEmail({
+                alertType: "alert_confirm_account_phone",
+                companyChanged: false,
+                language: !!userSavedData.language
+                  ? userSavedData.language
+                  : "PL",
+                itemAlert: null,
+                collection: "Default",
               });
 
-              notifications.sendEmail({
-                email: userSavedData.email,
-                title: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
-                defaultText: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
+              await notifications.sendVerifySMS({
+                phoneNumber: newPhone,
+                message: `${
+                  propsGenerator.title
+                } ${codeToDelete.toUpperCase()}`,
               });
             }
             return userSavedData;
@@ -1055,10 +1062,17 @@ exports.edit = (req, res, next) => {
               ? Buffer.from(result.phone, "base64").toString("utf-8")
               : null;
 
+            const propsGenerator = generateEmail.generateContentEmail({
+              alertType: "alert_confirm_account_edit",
+              companyChanged: false,
+              language: !!result.language ? result.language : "PL",
+              itemAlert: null,
+              collection: "Default",
+            });
+
             notifications.sendEmail({
               email: result.email,
-              title: "Edycja konta zakończone powodzeniem",
-              defaultText: `Edycja konta zakończona pomyślnie`,
+              ...propsGenerator,
             });
 
             res.status(201).json({
@@ -1148,15 +1162,31 @@ exports.sentEmailResetPassword = (req, res, next) => {
           : result.dateToResetPassword.getMinutes()
       }`;
 
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_reset_account",
+        companyChanged: false,
+        language: !!result.language ? result.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      const propsGeneratorDate = generateEmail.generateContentEmail({
+        alertType: "alert_reset_account_date",
+        companyChanged: false,
+        language: !!result.language ? result.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
       notifications.sendEmail({
         email: result.email,
-        title: "Kod z kodem resetującym hasło na Meetsy",
-        defaultText: `Kod resetujący hasło: ${codeToResetPassword}.
-        Data wygaśnięcia kodu: ${showDate}`,
+        title: propsGenerator.title,
+        defaultText: `${propsGenerator.title}: ${codeToResetPassword}.
+        ${propsGeneratorDate.title}: ${showDate}`,
       });
 
       res.status(200).json({
-        message: "Email sent",
+        message: "Email send",
       });
     })
     .catch((err) => {
@@ -1190,7 +1220,7 @@ exports.resetPassword = (req, res, next) => {
     codeToResetPassword: codeToResetPassword,
   })
     .select(
-      "email codeToResetPassword _id loginToken password dateToResetPassword"
+      "email codeToResetPassword _id loginToken password dateToResetPassword language"
     )
     .then((user) => {
       if (!!user) {
@@ -1229,10 +1259,17 @@ exports.resetPassword = (req, res, next) => {
       }
     })
     .then((result) => {
+      const propsGeneratorDate = generateEmail.generateContentEmail({
+        alertType: "alert_reset_account_success",
+        companyChanged: false,
+        language: !!result.language ? result.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
       notifications.sendEmail({
         email: result.email,
-        title: "Tworzenie konta zakończone powodzeniem",
-        defaultText: `Hasło zostało zmienione`,
+        ...propsGeneratorDate,
       });
 
       res.status(200).json({
@@ -1444,7 +1481,6 @@ exports.loginFacebookNew = (req, res, next) => {
                   allCompanys: [],
                   phoneVerified: false,
                   stamps: [],
-                  alerts: [],
                   language: "pl",
                   darkMode: false,
                   blindMode: false,
@@ -1462,11 +1498,28 @@ exports.loginFacebookNew = (req, res, next) => {
                 user.loginToken = token;
                 user.save((err, userSaved) => {
                   if (!!!err) {
+                    const propsGeneratorDate =
+                      generateEmail.generateContentEmail({
+                        alertType: "alert_created_account_fb",
+                        companyChanged: false,
+                        language: !!result.language ? result.language : "PL",
+                        itemAlert: null,
+                        collection: "Default",
+                      });
+
+                    const propsGeneratorDateSocial =
+                      generateEmail.generateContentEmail({
+                        alertType: "alert_created_account_social",
+                        companyChanged: false,
+                        language: !!result.language ? result.language : "PL",
+                        itemAlert: null,
+                        collection: "Default",
+                      });
+
                     notifications.sendEmail({
                       email: userSaved.email,
-                      title: "Tworzenie konta zakończone powodzeniem",
-                      defaultText: `Utworzono nowe konto za pomocą facebook-a
-                      Twoje nowe wygenerowane hasło to: ${randomPassword}. Możesz go zmienić w ustawieniach konta na stronie meetsy.pl`,
+                      title: propsGeneratorDateSocial.title,
+                      defaultText: `${propsGeneratorDate.title} ${randomPassword}`,
                     });
 
                     res.redirect(
@@ -1636,7 +1689,6 @@ exports.loginGoogle = (req, res, next) => {
                   allCompanys: [],
                   phoneVerified: false,
                   stamps: [],
-                  alerts: [],
                   language: "pl",
                   darkMode: false,
                   blindMode: false,
@@ -1654,12 +1706,30 @@ exports.loginGoogle = (req, res, next) => {
                 user.loginToken = token;
                 user.save((err, userSaved) => {
                   if (!!!err) {
+                    const propsGeneratorDate =
+                      generateEmail.generateContentEmail({
+                        alertType: "alert_created_account_google",
+                        companyChanged: false,
+                        language: !!result.language ? result.language : "PL",
+                        itemAlert: null,
+                        collection: "Default",
+                      });
+
+                    const propsGeneratorDateSocial =
+                      generateEmail.generateContentEmail({
+                        alertType: "alert_created_account_social",
+                        companyChanged: false,
+                        language: !!result.language ? result.language : "PL",
+                        itemAlert: null,
+                        collection: "Default",
+                      });
+
                     notifications.sendEmail({
                       email: userSaved.email,
-                      title: "Tworzenie konta zakończone powodzeniem",
-                      defaultText: `Utworzono nowe konto za pomocą googla>
-                      Twoje nowe wygenerowane hasło to: ${randomPassword}. Możesz go zmienić w ustawieniach konta na stronie meetsy.pl`,
+                      title: propsGeneratorDateSocial.title,
+                      defaultText: `${propsGeneratorDate.title} ${randomPassword}`,
                     });
+
                     res.redirect(
                       303,
                       `${SITE_FRONT}/login-google?${userSaved.loginToken}&${userSaved._id}&true`
@@ -1696,7 +1766,7 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
   User.findOne({
     _id: userId,
   })
-    .select("_id codeDeleteDate codeDelete name surname email allCompanys")
+    .select("_id codeDeleteDate codeDelete email allCompanys language")
     .then((resultUserDoc) => {
       if (!!resultUserDoc) {
         if (resultUserDoc.allCompanys.length === 0) {
@@ -1724,21 +1794,23 @@ exports.userSentCodeDeleteCompany = (req, res, next) => {
       }
     })
     .then((userSavedData) => {
-      const userName = Buffer.from(userSavedData.name, "base64").toString(
-        "utf-8"
-      );
-      const userSurname = Buffer.from(userSavedData.surname, "base64").toString(
-        "utf-8"
-      );
       const codeToDelete = Buffer.from(
         userSavedData.codeDelete,
         "base64"
       ).toString("utf-8");
 
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_delete_account",
+        companyChanged: false,
+        language: !!userSavedData.language ? userSavedData.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
       notifications.sendEmail({
         email: userSavedData.email,
-        title: `Potwierdzenie usunięcia konta ${userName} ${userSurname}`,
-        defaultText: `Kod do usunięcia konta: ${codeToDelete.toUpperCase()}`,
+        title: propsGenerator.title,
+        defaultText: `${propsGenerator.title}: ${codeToDelete.toUpperCase()}`,
       });
       res.status(201).json({
         message: "Wysłano kod do usunięcia konta",
@@ -1761,7 +1833,7 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
     _id: userId,
   })
     .select(
-      "_id blockUserSendVerifiedPhoneSms codeVerifiedPhoneDate codeVerifiedPhone name surname email phone"
+      "_id blockUserSendVerifiedPhoneSms codeVerifiedPhoneDate codeVerifiedPhone email phone language"
     )
     .then((resultUserDoc) => {
       if (!!resultUserDoc) {
@@ -1797,12 +1869,6 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
       }
     })
     .then((userSavedData) => {
-      const userName = Buffer.from(userSavedData.name, "base64").toString(
-        "utf-8"
-      );
-      const userSurname = Buffer.from(userSavedData.surname, "base64").toString(
-        "utf-8"
-      );
       const codeToDelete = Buffer.from(
         userSavedData.codeVerifiedPhone,
         "base64"
@@ -1812,16 +1878,19 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
         "utf-8"
       );
 
-      notifications.sendVerifySMS({
-        phoneNumber: phoneNumber,
-        message: `Kod potwierdzający numer telefonu: ${codeToDelete.toUpperCase()}`,
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_confirm_account_phone",
+        companyChanged: false,
+        language: !!userSavedData.language ? userSavedData.language : "PL",
+        itemAlert: null,
+        collection: "Default",
       });
 
-      notifications.sendEmail({
-        email: userSavedData.email,
-        title: `Potwierdzenie numeru telefonu ${userName} ${userSurname}`,
-        defaultText: `Kod potwierdzenia telefonu: ${codeToDelete.toUpperCase()}`,
+      notifications.sendVerifySMS({
+        phoneNumber: phoneNumber,
+        message: `${propsGenerator.title} ${codeToDelete.toUpperCase()}`,
       });
+
       res.status(201).json({
         blockUserSendVerifiedPhoneSms:
           userSavedData.blockUserSendVerifiedPhoneSms,
@@ -1881,295 +1950,142 @@ exports.deleteUserAccount = (req, res, next) => {
         throw error;
       }
     })
-    .then(() => {
-      return Reserwation.find({
-        fromUser: mongoose.Types.ObjectId(userId),
-        isDraft: { $in: [false, null] },
-        visitNotFinished: false,
-        visitCanceled: false,
-        fullDate: {
-          $gte: new Date().toISOString(),
-        },
-        isDeleted: { $in: [false, null] },
-      })
-        .populate("company", "name linkPath _id")
-        .populate("fromUser toWorkerUserId", "name surname _id")
-        .then((allWorkerReserwations) => {
-          const allUsersReserwations = [];
-          const bulkArrayToUpdate = [];
-          if (!!allWorkerReserwations) {
-            allWorkerReserwations.forEach((item) => {
-              bulkArrayToUpdate.push({
-                updateOne: {
-                  filter: { _id: item._id },
-                  update: {
-                    $set: {
-                      visitCanceled: true,
-                    },
-                  },
-                },
-              });
-
-              const findUserReserwations = allUsersReserwations.findIndex(
-                (reserwation) => {
-                  return (
-                    reserwation.userId.toString() ==
-                    item.toWorkerUserId.toString()
-                  );
-                }
-              );
-              if (findUserReserwations >= 0) {
-                allUsersReserwations[findUserReserwations].items.push(item);
-              } else {
-                const newUserData = {
-                  userId: item.toWorkerUserId,
-                  items: [item],
-                };
-                allUsersReserwations.push(newUserData);
-              }
-            });
-          }
-          return Reserwation.bulkWrite(bulkArrayToUpdate)
-            .then(() => {
-              return {
-                allUsersReserwations: allUsersReserwations,
-              };
-            })
-            .catch((err) => {
-              if (!err.statusCode) {
-                err.statusCode = 501;
-                err.message = "Błąd podczas aktualizacji rezerwacji.";
-              }
-              next(err);
-            });
-        });
-    })
-    .then(({ allUsersReserwations }) => {
-      return Service.find({
-        userId: userId,
-        isDeleted: { $in: [false, null] },
-        statusValue: { $in: [1, 2] },
-      })
-        .select(
-          "_id objectName description userId companyId month year day createdAt workerUserId"
-        )
-        .populate("userId", "name surname")
-        .populate("companyId", "name linkPath")
-        .then((workerServices) => {
-          const bulkArrayToUpdateUsers = [];
-          const bulkArrayToUpdateServices = [];
-          workerServices.forEach((workerService) => {
-            bulkArrayToUpdateServices.push({
-              updateOne: {
-                filter: {
-                  _id: workerService._id,
-                },
-                update: {
-                  $set: { statusValue: 4 },
-                },
-              },
-            });
-
-            const userAlertToSave = {
-              serviceId: workerService._id,
-              active: true,
-              type: "service_deleted",
-              creationTime: new Date(),
-              companyChanged: false,
-            };
-
-            io.getIO().emit(`user${workerService.workerUserId}`, {
-              action: "update-alerts",
-              alertData: {
-                serviceId: workerService,
-                active: true,
-                type: "service_deleted",
-                creationTime: new Date(),
-                companyChanged: false,
-              },
-            });
-            bulkArrayToUpdateUsers.push({
-              updateOne: {
-                filter: {
-                  _id: workerService.workerUserId,
-                },
-                update: {
-                  $inc: { alertActiveCount: 1 },
-                  $push: {
-                    alerts: {
-                      $each: [userAlertToSave],
-                      $position: 0,
-                    },
-                  },
-                },
-              },
-            });
-          });
-          return Service.bulkWrite(bulkArrayToUpdateServices)
-            .then(() => {
-              return {
-                allUsersReserwations: allUsersReserwations,
-                bulkArrayToUpdateUsers: bulkArrayToUpdateUsers,
-              };
-            })
-            .catch((err) => {
-              if (!err.statusCode) {
-                err.statusCode = 501;
-                err.message = "Błąd podczas wysyłania powiadomień.";
-              }
-              next(err);
-            });
-        });
-    })
-    .then(({ allUsersReserwations, bulkArrayToUpdateUsers }) => {
-      return Communiting.find({
-        userId: userId,
-        isDeleted: { $in: [false, null] },
-        statusValue: { $in: [1, 2] },
-        fullDate: {
-          $gte: new Date().toISOString(),
-        },
-      })
-        .select(
-          "_id city description userId companyId month year day createdAt workerUserId dateEndValid"
-        )
-        .populate("companyId userId", "_id name surname linkPath")
-        .then((communitingItems) => {
-          const bulkArrayToUpdateUsersCommuniting = [...bulkArrayToUpdateUsers];
-          const bulkArrayToUpdate = [];
-          communitingItems.forEach((communitingItem) => {
-            bulkArrayToUpdate.push({
-              updateOne: {
-                filter: {
-                  _id: communitingItem._id,
-                },
-                update: {
-                  $set: { statusValue: 4 },
-                },
-              },
-            });
-
-            const userAlertToSave = {
-              communitingId: communitingItem._id,
-              active: true,
-              type: "commuting_deleted",
-              creationTime: new Date(),
-              companyChanged: false,
-            };
-
-            io.getIO().emit(`user${communitingItem.workerUserId}`, {
-              action: "update-alerts",
-              alertData: {
-                communitingId: communitingItem,
-                active: true,
-                type: "commuting_deleted",
-                creationTime: new Date(),
-                companyChanged: false,
-              },
-            });
-            bulkArrayToUpdateUsersCommuniting.push({
-              updateOne: {
-                filter: {
-                  _id: communitingItem.workerUserId,
-                },
-                update: {
-                  $inc: { alertActiveCount: 1 },
-                  $push: {
-                    alerts: {
-                      $each: [userAlertToSave],
-                      $position: 0,
-                    },
-                  },
-                },
-              },
-            });
-          });
-
-          return Communiting.bulkWrite(bulkArrayToUpdate)
-            .then(() => {
-              return {
-                allUsersReserwations: allUsersReserwations,
-                bulkArrayToUpdateUsers: bulkArrayToUpdateUsersCommuniting,
-              };
-            })
-            .catch((err) => {
-              if (!err.statusCode) {
-                err.statusCode = 501;
-                err.message = "Błąd podczas wysyłania powiadomień.";
-              }
-              next(err);
-            });
-        });
-    })
-    .then(({ allUsersReserwations, bulkArrayToUpdateUsers }) => {
-      const bulkArrayToUpdate = [...bulkArrayToUpdateUsers];
-      allUsersReserwations.forEach((userDoc) => {
-        const allUserAlertsToSave = [];
-        userDoc.items.forEach((itemReserwation) => {
-          const userAlertToSave = {
-            reserwationId: itemReserwation._id,
-            active: true,
-            type: "reserwation_canceled",
-            creationTime: new Date(),
-            companyChanged: false,
-          };
-
-          io.getIO().emit(`user${userDoc.userId._id}`, {
-            action: "update-alerts",
-            alertData: {
-              reserwationId: itemReserwation,
-              active: true,
-              type: "reserwation_canceled",
-              creationTime: new Date(),
-              companyChanged: false,
-            },
-          });
-
-          allUserAlertsToSave.unshift(userAlertToSave);
-        });
-
-        bulkArrayToUpdate.push({
-          updateOne: {
-            filter: {
-              _id: userDoc.userId._id,
-            },
-            update: {
-              $inc: { alertActiveCount: allUserAlertsToSave.length },
-              $push: {
-                alerts: {
-                  $each: allUserAlertsToSave,
-                  $position: 0,
-                },
-              },
-            },
+    .then(async () => {
+      await notifications.updateAllCollection({
+        companyField: "company",
+        collection: "Reserwation",
+        collectionItems:
+          "_id serviceName fromUser toWorkerUserId company isDeleted oldReserwationId hasCommuniting dateYear dateMonth dateDay dateStart dateEnd fullDate costReserwation extraCost extraTime timeReserwation workerReserwation visitNotFinished visitCanceled visitChanged reserwationMessage serviceId activePromotion activeHappyHour activeStamp basicPrice opinionId isDraft sendSMSReserwation sendSMSReserwationUserChanged sendSMSNotifaction sendSMSCanceled sendSMSChanged communitingId",
+        extraCollectionPhoneField: "phone",
+        extraCollectionEmailField: "email",
+        extraCollectionNameField: "name surname",
+        updateCollectionItemObject: { visitCanceled: true },
+        filtersCollection: {
+          fromUser: mongoose.Types.ObjectId(userId),
+          isDraft: { $in: [false, null] },
+          visitNotFinished: false,
+          visitCanceled: false,
+          fullDate: {
+            $gte: new Date().toISOString(),
           },
-        });
+          isDeleted: { $in: [false, null] },
+          workerReserwation: false,
+          hasCommuniting: { $in: [false, null] },
+        },
+
+        userField: "fromUser",
+        workerField: "toWorkerUserId",
+        sendEmailValid: true,
+        notificationContent: {
+          typeAlert: "reserwationId",
+          avaibleSendAlertToWorker: true,
+        },
+        smsContent: {
+          companySendSMSValidField: "smsCanceledAvaible",
+          titleCompanySMSAlert: "sms_canceled_reserwation",
+          collectionFieldSMSOnSuccess: {
+            sendSMSCanceled: true,
+          },
+        },
+        companyChanged: false,
+        typeNotification: "reserwation_canceled",
+        deleteOpinion: false,
+      });
+      return true;
+    })
+    .then(async () => {
+      await notifications.updateAllCollection({
+        companyField: "companyId",
+        collection: "Service",
+        collectionItems:
+          "_id objectName description userId companyId month year day createdAt workerUserId statusValue dateStart dateService dateEnd opinionId cost",
+        extraCollectionPhoneField: "phone",
+        extraCollectionEmailField: "email",
+        extraCollectionNameField: "name surname",
+        updateCollectionItemObject: { isDeleted: true },
+        filtersCollection: {
+          userId: userId,
+          isDeleted: { $in: [false, null] },
+          statusValue: { $in: [1, 2] },
+        },
+        userField: "userId",
+        workerField: "workerUserId",
+        sendEmailValid: true,
+        notificationContent: {
+          typeAlert: "serviceId",
+          avaibleSendAlertToWorker: true,
+        },
+        smsContent: {
+          companySendSMSValidField: "smsServiceDeletedAvaible",
+          titleCompanySMSAlert: "sms_canceled_service",
+          collectionFieldSMSOnSuccess: {
+            canceledSMS: true,
+          },
+        },
+        companyChanged: false,
+        typeNotification: "service_deleted",
+        deleteOpinion: false,
+      });
+      return true;
+    })
+    .then(async () => {
+      await notifications.updateAllCollection({
+        companyField: "companyId",
+        collection: "Communiting",
+        collectionItems:
+          "_id city description userId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd",
+        extraCollectionPhoneField: "phone",
+        extraCollectionEmailField: "email",
+        extraCollectionNameField: "name surname",
+        updateCollectionItemObject: { isDeleted: true },
+        filtersCollection: {
+          userId: userId,
+          isDeleted: { $in: [false, null] },
+          statusValue: { $in: [1, 2] },
+          fullDate: {
+            $gte: new Date().toISOString(),
+          },
+        },
+        userField: "userId",
+        workerField: "workerUserId",
+        sendEmailValid: true,
+        notificationContent: {
+          typeAlert: "communitingId",
+          avaibleSendAlertToWorker: true,
+        },
+        smsContent: {
+          companySendSMSValidField: "smsCommunitingCanceledAvaible",
+          titleCompanySMSAlert: "sms_canceled_communiting",
+          collectionFieldSMSOnSuccess: {
+            canceledSMS: true,
+          },
+        },
+        companyChanged: false,
+        typeNotification: "commuting_canceled",
+        deleteOpinion: false,
       });
 
-      return User.bulkWrite(bulkArrayToUpdate)
-        .then(() => {
-          return true;
-        })
-        .catch((err) => {
-          if (!err.statusCode) {
-            err.statusCode = 501;
-            err.message = "Błąd podczas wysyłania powiadomień.";
-          }
-          next(err);
-        });
+      return true;
     })
     .then(() => {
       return CompanyUsersInformations.deleteMany({ userId: userId });
     })
     .then(() => {
       return User.findOneAndDelete({ _id: userId })
-        .select("_id email")
+        .select("_id email language")
         .then((userDoc) => {
           if (!!userDoc) {
+            const propsGenerator = generateEmail.generateContentEmail({
+              alertType: "alert_deleted_account_success",
+              companyChanged: false,
+              language: !!userDoc.language ? userDoc.language : "PL",
+              itemAlert: null,
+              collection: "Default",
+            });
+
             notifications.sendEmail({
               email: userDoc.email,
-              title: "Usunięto konto!",
-              defaultText: "Konto została usunięte",
+              ...propsGenerator,
             });
             return true;
           } else {
@@ -2205,7 +2121,7 @@ exports.verifiedUserPhone = (req, res, next) => {
   }
   User.findOne({ _id: userId })
     .select(
-      "_id codeVerifiedPhoneDate codeVerifiedPhone name surname email phoneVerified phone whiteListVerifiedPhones"
+      "_id codeVerifiedPhoneDate codeVerifiedPhone name surname email phoneVerified phone whiteListVerifiedPhones language"
     )
     .then((userData) => {
       if (!!userData.codeVerifiedPhone) {
@@ -2237,10 +2153,17 @@ exports.verifiedUserPhone = (req, res, next) => {
       return userData.save();
     })
     .then((userDoc) => {
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_veryfied_phone_account",
+        companyChanged: false,
+        language: !!userDoc.language ? userDoc.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
       notifications.sendEmail({
         email: userDoc.email,
-        title: "Zweryfikowano numer telefonu!",
-        defaultText: "Numer telefonu został zweryfikowany",
+        ...propsGenerator,
       });
       return true;
     })
@@ -2434,7 +2357,7 @@ exports.userHistoryCommuniting = (req, res, next) => {
     });
 };
 
-exports.userCancelCommuniting = (req, res, next) => {
+exports.userCancelCommuniting = async (req, res, next) => {
   const userId = req.userId;
   const communityId = req.body.communityId;
   const reserwationId = req.body.reserwationId;
@@ -2446,103 +2369,84 @@ exports.userCancelCommuniting = (req, res, next) => {
     throw error;
   }
 
-  User.findOne({
-    _id: userId,
-  })
-    .select("_id")
-    .then((userData) => {
-      if (!!userData) {
-        Reserwation.deleteOne({ _id: reserwationId }).then(() => {});
-        return Communiting.updateOne(
-          {
+  if (!!reserwationId) {
+    Reserwation.deleteOne({ _id: reserwationId })
+      .then(async () => {
+        await notifications.updateAllCollection({
+          companyField: "companyId",
+          collection: "Communiting",
+          collectionItems:
+            "_id city description userId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd",
+          extraCollectionPhoneField: "phone",
+          extraCollectionEmailField: "email",
+          extraCollectionNameField: "name surname",
+          updateCollectionItemObject: { statusValue: 4, reserwationId: null },
+          filtersCollection: {
             _id: communityId,
             userId: userId,
           },
-          {
-            $set: {
-              statusValue: 4,
+          userField: "userId",
+          workerField: "workerUserId",
+          sendEmailValid: true,
+          notificationContent: {
+            typeAlert: "communitingId",
+            avaibleSendAlertToWorker: true,
+          },
+          smsContent: {
+            companySendSMSValidField: "smsCommunitingCanceledAvaible",
+            titleCompanySMSAlert: "sms_canceled_communiting",
+            collectionFieldSMSOnSuccess: {
+              canceledSMS: true,
             },
-          }
-        ).then(() => {
-          return Communiting.findOne({
-            _id: communityId,
-            userId: userId,
-          })
-            .select(
-              "_id city description userId companyId month year day timeStart timeEnd email cost street"
-            )
-            .populate("companyId userId workerUserId", "name surname linkPath")
-            .then(async (resultSavetCommuniting) => {
-              if (!!resultSavetCommuniting) {
-                const emailContent = `Odwołano dojazd dnia: ${
-                  resultSavetCommuniting.day < 10
-                    ? `0${resultSavetCommuniting.day}`
-                    : resultSavetCommuniting.day
-                }-${
-                  resultSavetCommuniting.month < 10
-                    ? `0${resultSavetCommuniting.month}`
-                    : resultSavetCommuniting.month
-                }-${resultSavetCommuniting.year}, miasto: ${
-                  resultSavetCommuniting.city
-                }, ulica: ${resultSavetCommuniting.street}`;
-
-                const payload = {
-                  title: `Odwołano dojazd dnia: ${
-                    resultSavetCommuniting.day < 10
-                      ? `0${resultSavetCommuniting.day}`
-                      : resultSavetCommuniting.day
-                  }-${
-                    resultSavetCommuniting.month < 10
-                      ? `0${resultSavetCommuniting.month}`
-                      : resultSavetCommuniting.month
-                  }-${resultSavetCommuniting.year}, miasto: ${
-                    resultSavetCommuniting.city
-                  }, ulica: ${resultSavetCommuniting.street}`,
-                  body: "this is the body",
-                  icon: "images/someImageInPath.png",
-                };
-
-                const emailSubject = `Odwołano dojazd`;
-
-                await notifications.sendAll({
-                  usersId: [
-                    resultSavetCommuniting.userId._id,
-                    resultSavetCommuniting.workerUserId._id,
-                  ],
-                  clientId: resultSavetCommuniting.userId._id,
-                  emailContent: {
-                    customEmail: null,
-                    emailTitle: emailSubject,
-                    emailMessage: emailContent,
-                  },
-                  notificationContent: {
-                    typeAlert: "communitingId",
-                    dateAlert: resultSavetCommuniting,
-                    typeNotification: "commuting_canceled",
-                    payload: payload,
-                    companyChanged: false,
-                  },
-                  smsContent: null,
-                });
-                res.status(200).json({
-                  message: "Odwołano dojazd",
-                });
-              }
-            });
+          },
+          companyChanged: false,
+          typeNotification: "commuting_canceled",
+          deleteOpinion: false,
         });
-      } else {
-        const error = new Error("Brak użytkownika");
-        error.statusCode = 422;
-        throw error;
-      }
-    })
-    .catch((err) => {
-      if (!err.statusCode) {
-        err.statusCode = 501;
-        err.message = "Brak danego konta firmowego";
-      }
-      next(err);
+      })
+      .catch((err) => {
+        if (!err.statusCode) {
+          err.statusCode = 501;
+          err.message = "Brak danego konta firmowego";
+        }
+        next(err);
+      });
+  } else {
+    await notifications.updateAllCollection({
+      companyField: "companyId",
+      collection: "Communiting",
+      collectionItems:
+        "_id city description userId companyId month year day createdAt workerUserId dateEndValid timeStart timeEnd",
+      extraCollectionPhoneField: "phone",
+      extraCollectionEmailField: "email",
+      extraCollectionNameField: "name surname",
+      updateCollectionItemObject: { statusValue: 4, reserwationId: null },
+      filtersCollection: {
+        _id: communityId,
+        userId: userId,
+      },
+      userField: "userId",
+      workerField: "workerUserId",
+      sendEmailValid: true,
+      notificationContent: {
+        typeAlert: "communitingId",
+        avaibleSendAlertToWorker: true,
+      },
+      smsContent: {
+        companySendSMSValidField: "smsCommunitingCanceledAvaible",
+        titleCompanySMSAlert: "sms_canceled_communiting",
+        collectionFieldSMSOnSuccess: {
+          canceledSMS: true,
+        },
+      },
+      companyChanged: false,
+      typeNotification: "commuting_canceled",
+      deleteOpinion: false,
     });
+  }
+  res.status(200).json({
+    message: "Odwołano dojazd",
+  });
 };
 
 exports.downloadCommuniting = (req, res, next) => {

@@ -309,8 +309,7 @@ schedule.scheduleJob(`10 8 * * *`, () => {
     });
 });
 
-// schedule.scheduleJob(`20 8 * * *`, () => {
-schedule.scheduleJob(`26 10 * * *`, () => {
+schedule.scheduleJob(`20 8 * * *`, () => {
   const validDateToCheckPremium = new Date(
     new Date().setDate(new Date().getDate() + 3)
   );
