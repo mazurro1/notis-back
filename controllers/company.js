@@ -808,10 +808,21 @@ exports.getCompanyData = (req, res, next) => {
                 "base64"
               ).toString("utf-8");
 
-              const unhashedPhone = Buffer.from(
-                companyDoc.phone,
-                "base64"
-              ).toString("utf-8");
+              let unhashedPhone = null;
+              if (!!companyDoc.phone) {
+                unhashedPhone = Buffer.from(
+                  companyDoc.phone,
+                  "base64"
+                ).toString("utf-8");
+              }
+
+              let unhashedLandlinePhone = null;
+              if (!!companyDoc.landlinePhone) {
+                unhashedLandlinePhone = Buffer.from(
+                  companyDoc.landlinePhone,
+                  "base64"
+                ).toString("utf-8");
+              }
 
               const unhashedAdress = Buffer.from(
                 companyDoc.adress,
@@ -963,6 +974,7 @@ exports.getCompanyData = (req, res, next) => {
                     : false,
                 ...dataGUS,
                 nip: !!dataCompany.nip ? dataCompany.nip : null,
+                landlinePhone: unhashedLandlinePhone,
               };
 
               res.status(201).json({
@@ -1551,7 +1563,7 @@ exports.companyPath = (req, res, next) => {
     linkPath: companyPath,
   })
     .select(
-      "premium shopStore companyStamps mainImageUrl imagesUrl workers.active workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name daysOff openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
+      "premium landlinePhone shopStore companyStamps mainImageUrl imagesUrl workers.active workers._id workers.specialization workers.name workers.servicesCategory adress city district email linkFacebook linkInstagram linkPath linkiWebsite name daysOff openingDays owner ownerData pauseCompany phone reserationText services title reservationMonthTime usersInformation.isBlocked usersInformation.userId maps opinionsCount opinionsValue code"
     )
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
@@ -1602,10 +1614,21 @@ exports.companyPath = (req, res, next) => {
               "base64"
             ).toString("utf-8");
 
-            const unhashedPhone = Buffer.from(
-              resultCompanyDoc.phone,
-              "base64"
-            ).toString("utf-8");
+            let unhashedPhone = null;
+            if (!!resultCompanyDoc.phone) {
+              unhashedPhone = Buffer.from(
+                resultCompanyDoc.phone,
+                "base64"
+              ).toString("utf-8");
+            }
+
+            let unhashedLandlinePhone = null;
+            if (!!resultCompanyDoc.landlinePhone) {
+              unhashedLandlinePhone = Buffer.from(
+                resultCompanyDoc.landlinePhone,
+                "base64"
+              ).toString("utf-8");
+            }
 
             const unhashedAdress = Buffer.from(
               resultCompanyDoc.adress,
@@ -1687,6 +1710,7 @@ exports.companyPath = (req, res, next) => {
               shopStore: resultCompanyDoc.shopStore,
               code: resultCompanyDoc.code,
               daysOff: resultCompanyDoc.daysOff,
+              landlinePhone: unhashedLandlinePhone,
             };
 
             res.status(201).json({
@@ -2566,12 +2590,23 @@ exports.companySettingsPatch = (req, res, next) => {
             companyDoc.adress = hashedAdress;
           }
 
+          if (dataSettings.updatedLandlinePhone !== null) {
+            hashedPhoneNumberLandline = Buffer.from(
+              dataSettings.updatedLandlinePhone,
+              "utf-8"
+            ).toString("base64");
+            companyDoc.landlinePhone = hashedPhoneNumberLandline;
+          }
+
           if (!!dataSettings.updatePhoneInput) {
-            const hashedPhoneNumber = Buffer.from(
+            let updatePhone = {};
+
+            hashedPhoneNumber = Buffer.from(
               dataSettings.updatePhoneInput,
               "utf-8"
             ).toString("base64");
             companyDoc.phone = hashedPhoneNumber;
+            updatePhone = { phone: hashedPhoneNumber };
 
             RegisterCompany.updateOne(
               {
@@ -2579,7 +2614,7 @@ exports.companySettingsPatch = (req, res, next) => {
               },
               {
                 $set: {
-                  phone: hashedPhoneNumber,
+                  ...updatePhone,
                 },
               }
             )

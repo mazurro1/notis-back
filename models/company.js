@@ -19,6 +19,10 @@ const companySchema = new Schema(
       type: String,
       required: true,
     },
+    landlinePhone: {
+      type: String,
+      required: false,
+    },
     nip: {
       type: String,
       required: true,
