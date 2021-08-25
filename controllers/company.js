@@ -344,12 +344,19 @@ exports.registrationCompany = (req, res, next) => {
                         }`,
                       };
                       const codeToVerified = makeid(6);
+                      const codeToVerifiedPhone = makeid(6);
+
                       const codeRandom = Math.floor(
                         1000000 + Math.random() * 9000000
                       ).toString();
 
                       const hashedCodeToVerified = Buffer.from(
                         codeToVerified,
+                        "utf-8"
+                      ).toString("base64");
+
+                      const hashedCodeToVerifiedPhone = Buffer.from(
+                        codeToVerifiedPhone,
                         "utf-8"
                       ).toString("base64");
 
@@ -465,8 +472,11 @@ exports.registrationCompany = (req, res, next) => {
                             city: companyCity,
                             district: companyDiscrict,
                             adress: hashedAdress,
-                            accountVerified: false,
+                            accountPhoneVerified: false,
+                            blockSendVerifiedPhoneSms: new Date(),
+                            accountEmailVerified: false,
                             codeToVerified: hashedCodeToVerified,
+                            codeToVerifiedPhone: hashedCodeToVerifiedPhone,
                             owner: ownerId,
                             ownerData: {
                               specialization: "Admin",
@@ -624,7 +634,7 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
 
   Company.findOne({
     _id: companyId,
-    accountVerified: false,
+    accountEmailVerified: false,
   })
     .select("email codeToVerified")
     .then((companyData) => {
@@ -661,6 +671,74 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
     });
 };
 
+exports.sentAgainVerifiedPhoneCompany = (req, res, next) => {
+  const companyId = req.body.companyId;
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    accountPhoneVerified: false,
+    blockSendVerifiedPhoneSms: {
+      $lte: new Date(),
+    },
+  })
+    .select(
+      "phone codeToVerifiedPhone _id accountPhoneVerified blockSendVerifiedPhoneSms"
+    )
+    .then(async (companyData) => {
+      const codeToVerifiedPhone = makeid(6);
+
+      const hashedCodeToVerifiedPhone = Buffer.from(
+        codeToVerifiedPhone,
+        "utf-8"
+      ).toString("base64");
+      companyData.codeToVerifiedPhone = hashedCodeToVerifiedPhone;
+
+      const unhashedPhone = Buffer.from(companyData.phone, "base64").toString(
+        "utf-8"
+      );
+
+      const propsGeneratorPhone = generateEmail.generateContentEmail({
+        alertType: "alert_confirm_account_phone",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      await notifications.sendVerifySMS({
+        phoneNumber: unhashedPhone,
+        message: `${propsGeneratorPhone.title} ${codeToVerifiedPhone}`,
+      });
+
+      companyData.blockSendVerifiedPhoneSms = new Date(
+        new Date().setHours(new Date().getHours() + 1)
+      );
+
+      return companyData.save();
+    })
+    .then((data) => {
+      res.status(201).json({
+        blockSendVerifiedPhoneSms: data.blockSendVerifiedPhoneSms,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message =
+          "Brak danego konta firmowego, lub konto zostało już aktywowane.";
+      }
+      next(err);
+    });
+};
+
 exports.veryfiedCompanyEmail = (req, res, next) => {
   const companyId = req.body.companyId;
   const codeSent = req.body.codeToVerified;
@@ -674,9 +752,11 @@ exports.veryfiedCompanyEmail = (req, res, next) => {
 
   Company.findOne({
     _id: companyId,
-    accountVerified: false,
+    accountEmailVerified: false,
   })
-    .select("email codeToVerified accountVerified")
+    .select(
+      "email codeToVerified accountEmailVerified phone codeToVerifiedPhone"
+    )
     .then((companyDoc) => {
       if (companyDoc) {
         const unhashedCodeToVerified = Buffer.from(
@@ -686,7 +766,94 @@ exports.veryfiedCompanyEmail = (req, res, next) => {
 
         if (unhashedCodeToVerified === codeSent) {
           companyDoc.codeToVerified = null;
-          companyDoc.accountVerified = true;
+          companyDoc.accountEmailVerified = true;
+          return companyDoc.save();
+        } else {
+          const error = new Error("Zły kod uwietrznienia.");
+          error.statusCode = 403;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak konta firmowego.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then(async (result) => {
+      const unhashedPhone = Buffer.from(result.phone, "base64").toString(
+        "utf-8"
+      );
+
+      const unhashedCodePhone = Buffer.from(
+        result.codeToVerifiedPhone,
+        "base64"
+      ).toString("utf-8");
+
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_create_company_email",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      const propsGeneratorPhone = generateEmail.generateContentEmail({
+        alertType: "alert_confirm_account_phone",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      notifications.sendEmail({
+        email: result.email,
+        ...propsGenerator,
+      });
+
+      await notifications.sendVerifySMS({
+        phoneNumber: unhashedPhone,
+        message: `${propsGeneratorPhone.title} ${unhashedCodePhone}`,
+      });
+
+      res.status(201).json({
+        accountEmailVerified: result.accountEmailVerified,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Brak konta firmowego, lub konto zostało już aktywowane.";
+      }
+      next(err);
+    });
+};
+
+exports.veryfiedCompanyPhone = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const codeSent = req.body.codeToVerified;
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    accountPhoneVerified: false,
+  })
+    .select("email codeToVerifiedPhone accountPhoneVerified")
+    .then((companyDoc) => {
+      if (companyDoc) {
+        const unhashedCodeToVerified = Buffer.from(
+          companyDoc.codeToVerifiedPhone,
+          "base64"
+        ).toString("utf-8");
+
+        if (unhashedCodeToVerified === codeSent) {
+          companyDoc.codeToVerifiedPhone = null;
+          companyDoc.accountPhoneVerified = true;
           return companyDoc.save();
         } else {
           const error = new Error("Zły kod uwietrznienia.");
@@ -700,8 +867,21 @@ exports.veryfiedCompanyEmail = (req, res, next) => {
       }
     })
     .then((result) => {
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_create_company_success",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      notifications.sendEmail({
+        email: result.email,
+        ...propsGenerator,
+      });
+
       res.status(201).json({
-        accountVerified: result.accountVerified,
+        accountPhoneVerified: result.accountPhoneVerified,
       });
     })
     .catch((err) => {
@@ -726,7 +906,8 @@ exports.getCompanyData = (req, res, next) => {
 
   Company.findOne({
     _id: companyId,
-    accountVerified: true,
+    accountPhoneVerified: true,
+    accountEmailVerified: true,
   })
     .select(
       "-codeToVerified -raports -codeToActive -workers.noConstantWorkingHours -ownerData.noConstantWorkingHours"
@@ -887,7 +1068,10 @@ exports.getCompanyData = (req, res, next) => {
                 city: dataCompany.city,
                 district: dataCompany.district,
                 adress: unhashedAdress,
-                accountVerified: dataCompany.accountVerified,
+                accountPhoneVerified: dataCompany.accountPhoneVerified,
+                blockSendVerifiedPhoneSms:
+                  dataCompany.blockSendVerifiedPhoneSms,
+                accountEmailVerified: dataCompany.accountEmailVerified,
                 owner: {
                   name: unhashedOwnerName,
                   surname: unhashedOwnerSurname,
@@ -1807,7 +1991,8 @@ exports.allCompanys = (req, res, next) => {
     ...propsFilterFilters,
     ...propsFilterDistrict,
     ...propsSelectedName,
-    accountVerified: true,
+    accountPhoneVerified: true,
+    accountEmailVerified: true,
     pauseCompany: false,
     premium: {
       $gte: new Date().toISOString(),
@@ -1937,7 +2122,8 @@ exports.allCompanysOfType = (req, res, next) => {
     ...propsFilterFilters,
     ...propsFilterDistrict,
     ...propsSelectedName,
-    accountVerified: true,
+    accountPhoneVerified: true,
+    accountEmailVerified: true,
     pauseCompany: false,
     premium: {
       $gte: new Date().toISOString(),
@@ -2069,7 +2255,8 @@ exports.allMapMarks = (req, res, next) => {
     ...propsFilterFilters,
     ...propsSelectedName,
     ...propsFilterDistrict,
-    accountVerified: true,
+    accountPhoneVerified: true,
+    accountEmailVerified: true,
     pauseCompany: false,
     premium: {
       $gte: new Date().toISOString(),
@@ -5404,7 +5591,7 @@ exports.companyDeleteCreatedCompany = (req, res, next) => {
 
   Company.findOne({
     _id: companyId,
-    accountVerified: false,
+    accountPhoneVerified: false,
   })
     .select("_id name email owner workers.user workers._id")
     .then((resultCompanyDoc) => {
@@ -5897,7 +6084,8 @@ exports.getCompanyMarker = (req, res, next) => {
 
   Company.findOne({
     _id: companyId,
-    accountVerified: true,
+    accountPhoneVerified: true,
+    accountEmailVerified: true,
     pauseCompany: false,
     premium: {
       $gte: new Date().toISOString(),

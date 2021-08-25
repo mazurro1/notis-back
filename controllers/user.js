@@ -226,7 +226,7 @@ exports.login = (req, res, next) => {
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "allCompanys",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
+      "accountPhoneVerified blockSendVerifiedPhoneSms accountEmailVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .populate(
       "stamps.companyId",
@@ -756,7 +756,7 @@ exports.autoLogin = (req, res, next) => {
     )
     .populate(
       "allCompanys",
-      "accountVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
+      "accountPhoneVerified blockSendVerifiedPhoneSms accountEmailVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .then((user) => {
       if (!!user) {
@@ -1831,6 +1831,9 @@ exports.userSentCodeVerifiedPhone = (req, res, next) => {
 
   User.findOne({
     _id: userId,
+    blockUserSendVerifiedPhoneSms: {
+      $lte: new Date(),
+    },
   })
     .select(
       "_id blockUserSendVerifiedPhoneSms codeVerifiedPhoneDate codeVerifiedPhone email phone language"

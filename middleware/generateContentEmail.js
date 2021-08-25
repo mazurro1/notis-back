@@ -329,6 +329,20 @@ exports.generateContentEmail = ({
       break;
     }
 
+    case "alert_create_company_email": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_create_company_success": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
     case "alert_created_account_social": {
       alertColor = "red";
       title = `${texts[alertType].companyChangedUser.title[0]}`;

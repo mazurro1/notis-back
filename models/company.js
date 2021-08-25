@@ -57,7 +57,11 @@ const companySchema = new Schema(
         required: false,
       },
     ],
-    accountVerified: {
+    accountEmailVerified: {
+      type: Boolean,
+      required: true,
+    },
+    accountPhoneVerified: {
       type: Boolean,
       required: true,
     },
@@ -333,6 +337,14 @@ const companySchema = new Schema(
     },
     codeToVerified: {
       type: String,
+      required: false,
+    },
+    codeToVerifiedPhone: {
+      type: String,
+      required: false,
+    },
+    blockSendVerifiedPhoneSms: {
+      type: Date,
       required: false,
     },
     openingDays: {

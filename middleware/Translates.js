@@ -282,9 +282,23 @@ exports.Translates = {
       },
       alert_create_company: {
         companyChangedUser: {
-          title: ["Potwierdzenie dodania do listy pracowników w firmie:"],
+          title: ["Utworzono nowe konto firmowe, kod do weryfikacji:"],
         },
       },
+      alert_create_company_email: {
+        companyChangedUser: {
+          title: [
+            "Potwierdzono adres email. Wkrótce otrzymasz kod do aktywacji numeru telefonu na telefon",
+          ],
+        },
+      },
+
+      alert_create_company_success: {
+        companyChangedUser: {
+          title: ["Konto firmowe zostało utworzone!"],
+        },
+      },
+
       alert_created_account_fb: {
         companyChangedUser: {
           title: [
@@ -666,6 +680,18 @@ exports.Translates = {
           title: [
             "A new company account has been created, code to verify the activity:",
           ],
+        },
+      },
+      alert_create_company_email: {
+        companyChangedUser: {
+          title: [
+            "Email address confirmed. Soon you will receive a code to activate the phone number on the phone",
+          ],
+        },
+      },
+      alert_create_company_success: {
+        companyChangedUser: {
+          title: ["Company account has been created!"],
         },
       },
       alert_created_account_fb: {

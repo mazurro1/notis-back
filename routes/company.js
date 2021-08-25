@@ -27,12 +27,28 @@ router.post(
   [body("companyId").trim().isLength({ min: 5 })],
   company.sentAgainVerifiedEmailCompany
 );
+
+router.post(
+  "/company-sent-again-verification-phone",
+  isAuth,
+  [body("companyId").trim().isLength({ min: 5 })],
+  company.sentAgainVerifiedPhoneCompany
+);
+
 router.patch(
   "/company-veryfied-email",
   isAuth,
   [body("companyId").trim().isLength({ min: 5 })],
   [body("codeToVerified").trim().isLength({ min: 5 })],
   company.veryfiedCompanyEmail
+);
+
+router.patch(
+  "/company-veryfied-phone",
+  isAuth,
+  [body("companyId").trim().isLength({ min: 5 })],
+  [body("codeToVerified").trim().isLength({ min: 5 })],
+  company.veryfiedCompanyPhone
 );
 
 router.post(
