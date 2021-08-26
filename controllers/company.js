@@ -7972,7 +7972,7 @@ exports.companyUpdatePhoneVeryfiedCode = (req, res, next) => {
     _id: companyId,
     owner: userId,
   })
-    .select("_id codeToVerifiedPhone owner phoneToVeryfied phone")
+    .select("_id codeToVerifiedPhone owner phoneToVeryfied phone email name")
     .then((companyDoc) => {
       if (!!companyDoc) {
         const unhashedCodeFromClient = Buffer.from(
@@ -8023,6 +8023,19 @@ exports.companyUpdatePhoneVeryfiedCode = (req, res, next) => {
         resultCompanyDoc.phone,
         "base64"
       ).toString("utf-8");
+
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_veryfied_phone_account_success",
+        companyChanged: true,
+        language: "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      notifications.sendEmail({
+        email: resultCompanyDoc.email,
+        title: `${propsGenerator.title} ${resultCompanyDoc.name}`,
+      });
 
       res.status(201).json({
         newPhone: unhashedPhone,

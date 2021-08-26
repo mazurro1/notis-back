@@ -354,6 +354,11 @@ exports.Translates = {
           title: ["Numer telefonu został zweryfikowany."],
         },
       },
+      alert_veryfied_phone_account_success: {
+        companyChangedUser: {
+          title: ["Numer telefonu został zaktualizowany w firmie:."],
+        },
+      },
       alert_deleted_account_success: {
         companyChangedUser: {
           title: ["Konto została usunięte"],
@@ -774,6 +779,11 @@ exports.Translates = {
       alert_veryfied_phone_account: {
         companyChangedUser: {
           title: ["The phone number has been verified."],
+        },
+      },
+      alert_veryfied_phone_account_success: {
+        companyChangedUser: {
+          title: ["The phone number has been updated in the company:"],
         },
       },
       alert_invoice: {
