@@ -19,6 +19,22 @@ const companySchema = new Schema(
       type: String,
       required: true,
     },
+    sharePhone: {
+      type: Boolean,
+      required: true,
+    },
+    phoneToVeryfied: {
+      type: String,
+      required: false,
+    },
+    emailToVeryfied: {
+      type: String,
+      required: false,
+    },
+    disabledChangeEmailDate: {
+      type: Date,
+      required: false,
+    },
     landlinePhone: {
       type: String,
       required: false,

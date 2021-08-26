@@ -395,6 +395,10 @@ exports.registrationCompany = (req, res, next) => {
                       email: companyEmail.toLowerCase(),
                       name: companyName.toLowerCase(),
                       phone: hashedPhoneNumber,
+                      sharePhone: false,
+                      phoneToVeryfied: null,
+                      emailToVeryfied: null,
+                      disabledChangeEmailDate: null,
                       city: companyCity,
                       district: companyDiscrict,
                       adress: hashedAdress,
@@ -528,6 +532,7 @@ exports.registrationCompany = (req, res, next) => {
 
 exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
   const companyId = req.body.companyId;
+  const userId = req.userId;
 
   const errors = validationResult(req);
 
@@ -540,6 +545,7 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
   Company.findOne({
     _id: companyId,
     accountEmailVerified: false,
+    owner: userId,
   })
     .select("email codeToVerified")
     .then((companyData) => {
@@ -578,6 +584,7 @@ exports.sentAgainVerifiedEmailCompany = (req, res, next) => {
 
 exports.sentAgainVerifiedPhoneCompany = (req, res, next) => {
   const companyId = req.body.companyId;
+  const userId = req.userId;
 
   const errors = validationResult(req);
 
@@ -593,6 +600,7 @@ exports.sentAgainVerifiedPhoneCompany = (req, res, next) => {
     blockSendVerifiedPhoneSms: {
       $lte: new Date(),
     },
+    owner: userId,
   })
     .select(
       "phone codeToVerifiedPhone _id accountPhoneVerified blockSendVerifiedPhoneSms"
@@ -647,6 +655,8 @@ exports.sentAgainVerifiedPhoneCompany = (req, res, next) => {
 exports.veryfiedCompanyEmail = (req, res, next) => {
   const companyId = req.body.companyId;
   const codeSent = req.body.codeToVerified;
+  const userId = req.userId;
+
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -658,6 +668,7 @@ exports.veryfiedCompanyEmail = (req, res, next) => {
   Company.findOne({
     _id: companyId,
     accountEmailVerified: false,
+    owner: userId,
   })
     .select(
       "email codeToVerified accountEmailVerified phone codeToVerifiedPhone"
@@ -736,6 +747,7 @@ exports.veryfiedCompanyEmail = (req, res, next) => {
 exports.veryfiedCompanyPhone = (req, res, next) => {
   const companyId = req.body.companyId;
   const codeSent = req.body.codeToVerified;
+  const userId = req.userId;
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -747,9 +759,10 @@ exports.veryfiedCompanyPhone = (req, res, next) => {
   Company.findOne({
     _id: companyId,
     accountPhoneVerified: false,
+    owner: userId,
   })
     .select(
-      "_id email codeToVerifiedPhone accountPhoneVerified nip phone adress name code city"
+      "_id email codeToVerifiedPhone accountPhoneVerified nip phone adress name code city blockSendVerifiedPhoneSms disabledChangeEmailDate"
     )
     .then((companyDoc) => {
       if (!!companyDoc) {
@@ -852,6 +865,12 @@ exports.veryfiedCompanyPhone = (req, res, next) => {
                       ? new Date(new Date().setDate(actualDate + 7))
                       : new Date(new Date().setDate(actualDate + 1))
                     : new Date(new Date().setMonth(actualMonth + 3));
+                  companyDoc.blockSendVerifiedPhoneSms = new Date(
+                    new Date().setHours(new Date().getHours() + 1)
+                  );
+                  companyDoc.disabledChangeEmailDate = new Date(
+                    new Date().setHours(new Date().getHours() + 1)
+                  );
                   companyDoc.codeToVerifiedPhone = null;
                   companyDoc.accountPhoneVerified = true;
                   return companyDoc.save();
@@ -1075,6 +1094,10 @@ exports.getCompanyData = (req, res, next) => {
                 linkPath: dataCompany.linkPath,
                 name: dataCompany.name,
                 phone: unhashedPhone,
+                sharePhone: dataCompany.sharePhone,
+                phoneToVeryfied: dataCompany.phoneToVeryfied,
+                emailToVeryfied: dataCompany.emailToVeryfied,
+                disabledChangeEmailDate: dataCompany.disabledChangeEmailDate,
                 city: dataCompany.city,
                 district: dataCompany.district,
                 adress: unhashedAdress,
@@ -1525,6 +1548,7 @@ exports.deleteWorkerFromCompany = (req, res, next) => {
 
   Company.findOne({
     _id: companyId,
+    owner: userId,
   })
     .select("name _id owner")
     .then((companyDoc) => {
@@ -2795,34 +2819,14 @@ exports.companySettingsPatch = (req, res, next) => {
             companyDoc.landlinePhone = hashedPhoneNumberLandline;
           }
 
-          // if (!!dataSettings.updatePhoneInput) {
-          //   let updatePhone = {};
-
-          //   hashedPhoneNumber = Buffer.from(
-          //     dataSettings.updatePhoneInput,
-          //     "utf-8"
-          //   ).toString("base64");
-          //   companyDoc.phone = hashedPhoneNumber;
-          //   updatePhone = { phone: hashedPhoneNumber };
-
-          //   RegisterCompany.updateOne(
-          //     {
-          //       companyId: companyDoc._id,
-          //     },
-          //     {
-          //       $set: {
-          //         ...updatePhone,
-          //       },
-          //     }
-          //   )
-          //     .then(() => {})
-          //     .catch(() => {});
-          // }
-
           if (!!dataSettings.industriesComponent) {
             if (dataSettings.industriesComponent != companyDoc.companyType) {
               companyDoc.companyType = dataSettings.industriesComponent;
             }
+          }
+
+          if (dataSettings.updateCompanySharePhone !== null) {
+            companyDoc.sharePhone = dataSettings.updateCompanySharePhone;
           }
 
           if (dataSettings.pauseCompanyToServer !== null) {
@@ -7787,6 +7791,247 @@ exports.companyUpdateCommuniting = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Brak danego konta firmowego";
+      }
+      next(err);
+    });
+};
+
+exports.companyUpdatePhone = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+  const newPhone = req.body.newPhone;
+  const password = req.body.password;
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    owner: userId,
+    phoneToVeryfied: { $in: [false, null] },
+    blockSendVerifiedPhoneSms: {
+      $lte: new Date(),
+    },
+    owner: userId,
+  })
+    .select("name _id owner phoneToVeryfied")
+    .then((companyDoc) => {
+      if (!!companyDoc) {
+        if (companyDoc.owner == userId) {
+          return User.findOne({
+            _id: companyDoc.owner,
+          })
+            .select("_id password")
+            .then((user) => {
+              if (!!user) {
+                return bcrypt
+                  .compare(password, user.password)
+                  .then((doMatch) => {
+                    if (doMatch) {
+                      const hashedPhoneNumber = Buffer.from(
+                        newPhone,
+                        "utf-8"
+                      ).toString("base64");
+                      return Company.countDocuments({
+                        phone: hashedPhoneNumber,
+                      }).then(async (countCompanyWithPhone) => {
+                        if (!!!countCompanyWithPhone) {
+                          const propsGeneratorPhone =
+                            generateEmail.generateContentEmail({
+                              alertType: "alert_confirm_account_phone",
+                              companyChanged: true,
+                              language: "PL",
+                              itemAlert: null,
+                              collection: "Default",
+                            });
+
+                          const codeToVerifiedPhone = makeid(6);
+
+                          const hashedCodeToVerifiedPhone = Buffer.from(
+                            codeToVerifiedPhone,
+                            "utf-8"
+                          ).toString("base64");
+
+                          await notifications.sendVerifySMS({
+                            phoneNumber: newPhone,
+                            message: `${propsGeneratorPhone.title} ${codeToVerifiedPhone}`,
+                          });
+                          companyDoc.codeToVerifiedPhone =
+                            hashedCodeToVerifiedPhone;
+                          companyDoc.phoneToVeryfied = hashedPhoneNumber;
+                          companyDoc.blockSendVerifiedPhoneSms = new Date(
+                            new Date().setHours(new Date().getHours() + 1)
+                          );
+                          return companyDoc.save();
+                        } else {
+                          const error = new Error("Numer telefonu zajęty.");
+                          error.statusCode = 443;
+                          throw error;
+                        }
+                      });
+                    } else {
+                      const error = new Error("Błędne hasło.");
+                      error.statusCode = 441;
+                      throw error;
+                    }
+                  });
+              }
+            });
+        } else {
+          const error = new Error("Brak uprawnień.");
+          error.statusCode = 501;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak firmy.");
+        error.statusCode = 501;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Numer telefonu do weryfikacji",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas usuwania użytkownika.";
+      }
+      next(err);
+    });
+};
+
+exports.cancelCompanyUpdatePhone = (req, res, next) => {
+  const userId = req.userId;
+  const companyId = req.body.companyId;
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    owner: userId,
+  })
+    .select("name _id owner phoneToVeryfied")
+    .then((companyDoc) => {
+      if (!!companyDoc) {
+        if (companyDoc.owner == userId) {
+          companyDoc.codeToVerifiedPhone = null;
+          companyDoc.phoneToVeryfied = null;
+          return companyDoc.save();
+        } else {
+          const error = new Error("Brak uprawnień.");
+          error.statusCode = 501;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak firmy.");
+        error.statusCode = 501;
+        throw error;
+      }
+    })
+    .then(() => {
+      res.status(201).json({
+        message: "Zmiana numeru telefonu anulowana",
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas usuwania użytkownika.";
+      }
+      next(err);
+    });
+};
+
+exports.companyUpdatePhoneVeryfiedCode = (req, res, next) => {
+  const companyId = req.body.companyId;
+  const code = req.body.code;
+  const userId = req.userId;
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+
+  Company.findOne({
+    _id: companyId,
+    owner: userId,
+  })
+    .select("_id codeToVerifiedPhone owner phoneToVeryfied phone")
+    .then((companyDoc) => {
+      if (!!companyDoc) {
+        const unhashedCodeFromClient = Buffer.from(
+          companyDoc.codeToVerifiedPhone,
+          "base64"
+        ).toString("utf-8");
+
+        if (unhashedCodeFromClient == code) {
+          companyDoc.phone = companyDoc.phoneToVeryfied;
+          companyDoc.phoneToVeryfied = null;
+          companyDoc.codeToVerifiedPhone = null;
+          return companyDoc.save();
+        } else {
+          const error = new Error("Błędny kod.");
+          error.statusCode = 443;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak konta firmowego.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((resultCompanyDoc) => {
+      return RegisterCompany.updateOne(
+        {
+          companyId: resultCompanyDoc._id,
+        },
+        {
+          $set: {
+            phone: resultCompanyDoc.phone,
+          },
+        }
+      )
+        .then(() => {
+          return resultCompanyDoc;
+        })
+        .catch(() => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas aktywowania użytkownika.";
+          }
+          next(err);
+        });
+    })
+    .then((resultCompanyDoc) => {
+      const unhashedPhone = Buffer.from(
+        resultCompanyDoc.phone,
+        "base64"
+      ).toString("utf-8");
+
+      res.status(201).json({
+        newPhone: unhashedPhone,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas aktywowania użytkownika.";
       }
       next(err);
     });

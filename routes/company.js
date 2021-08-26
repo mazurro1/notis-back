@@ -586,4 +586,25 @@ router.post(
   company.companyUpdateCommuniting
 );
 
+router.post(
+  "/update-company-phone",
+  isAuth,
+  [body("companyId"), body("newPhone"), body("password")],
+  company.companyUpdatePhone
+);
+
+router.post(
+  "/cancel-update-company-phone",
+  isAuth,
+  [body("companyId")],
+  company.cancelCompanyUpdatePhone
+);
+
+router.post(
+  "/update-company-phone-veryfied-code",
+  isAuth,
+  [body("companyId"), body("code")],
+  company.companyUpdatePhoneVeryfiedCode
+);
+
 module.exports = router;

@@ -226,7 +226,7 @@ exports.login = (req, res, next) => {
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
       "allCompanys",
-      "accountPhoneVerified blockSendVerifiedPhoneSms accountEmailVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
+      "accountPhoneVerified phoneToVeryfied emailToVeryfied disabledChangeEmailDate sharePhone blockSendVerifiedPhoneSms accountEmailVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .populate(
       "stamps.companyId",
@@ -756,7 +756,7 @@ exports.autoLogin = (req, res, next) => {
     )
     .populate(
       "allCompanys",
-      "accountPhoneVerified blockSendVerifiedPhoneSms accountEmailVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
+      "accountPhoneVerified phoneToVeryfied emailToVeryfied disabledChangeEmailDate sharePhone blockSendVerifiedPhoneSms accountEmailVerified allDataVerified owner pauseCompany name workers._id workers.user workers.permissions sms premium"
     )
     .then((user) => {
       if (!!user) {
