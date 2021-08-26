@@ -5,7 +5,7 @@ const companySchema = new Schema(
   {
     linkPath: {
       type: String,
-      required: true,
+      required: false,
     },
     email: {
       type: String,

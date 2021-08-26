@@ -275,11 +275,6 @@ exports.Translates = {
           ],
         },
       },
-      alert_delete_company: {
-        companyChangedUser: {
-          title: ["Działalność została usunięta"],
-        },
-      },
       alert_create_company: {
         companyChangedUser: {
           title: ["Utworzono nowe konto firmowe, kod do weryfikacji:"],
@@ -668,11 +663,6 @@ exports.Translates = {
           title: [
             "Thank you for your purchase! The VAT invoice will be sent within 1 business day.",
           ],
-        },
-      },
-      alert_delete_company: {
-        companyChangedUser: {
-          title: ["Company has been deleted"],
         },
       },
       alert_create_company: {

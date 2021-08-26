@@ -306,249 +306,154 @@ exports.registrationCompany = (req, res, next) => {
           .select("_id email")
           .then(async (companyDoc) => {
             if (!!!companyDoc) {
-              const companyInfoByNip = await getGUSInfo(companyNip);
+              try {
+                const companyInfoByNip = await getGUSInfo(companyNip);
 
-              if (!!companyInfoByNip) {
-                if (
-                  !!companyInfoByNip.nazwa &&
-                  !!companyInfoByNip.miejscowosc &&
-                  !!companyInfoByNip.kodPocztowy &&
-                  !!companyInfoByNip.ulica
-                ) {
-                  return RegisterCompany.countDocuments({
-                    nip: companyNip,
-                  }).then((resultFromNip) => {
+                if (!!companyInfoByNip) {
+                  if (
+                    !!companyInfoByNip.nazwa &&
+                    !!companyInfoByNip.miejscowosc &&
+                    !!companyInfoByNip.kodPocztowy &&
+                    !!companyInfoByNip.ulica
+                  ) {
                     const hashedPhoneNumber = Buffer.from(
                       companyNumber,
                       "utf-8"
                     ).toString("base64");
-                    return RegisterCompany.countDocuments({
+
+                    const dateCompanyToInvoice = {
+                      name: companyInfoByNip.nazwa,
+                      city: companyInfoByNip.miejscowosc,
+                      postalCode: companyInfoByNip.kodPocztowy,
+                      street: `${companyInfoByNip.ulica} ${
+                        !!companyInfoByNip.nrNieruchomosci
+                          ? companyInfoByNip.nrNieruchomosci
+                          : 1
+                      }${
+                        !!companyInfoByNip.nrLokalu
+                          ? `/${companyInfoByNip.nrLokalu}`
+                          : ""
+                      }`,
+                    };
+                    const codeToVerified = makeid(6);
+                    const codeToVerifiedPhone = makeid(6);
+
+                    const hashedCodeToVerified = Buffer.from(
+                      codeToVerified,
+                      "utf-8"
+                    ).toString("base64");
+
+                    const hashedCodeToVerifiedPhone = Buffer.from(
+                      codeToVerifiedPhone,
+                      "utf-8"
+                    ).toString("base64");
+
+                    const hashedAdress = Buffer.from(
+                      companyAdress,
+                      "utf-8"
+                    ).toString("base64");
+
+                    const newOpeningDays = {
+                      mon: {
+                        disabled: false,
+                        start: "10:00",
+                        end: "20:00",
+                      },
+                      tue: {
+                        disabled: false,
+                        start: "10:00",
+                        end: "20:00",
+                      },
+                      wed: {
+                        disabled: false,
+                        start: "10:00",
+                        end: "20:00",
+                      },
+                      thu: {
+                        disabled: false,
+                        start: "10:00",
+                        end: "20:00",
+                      },
+                      fri: {
+                        disabled: false,
+                        start: "10:00",
+                        end: "20:00",
+                      },
+                      sat: {
+                        disabled: true,
+                        start: "0:00",
+                        end: "0:00",
+                      },
+                      sun: {
+                        disabled: true,
+                        start: "0:00",
+                        end: "0:00",
+                      },
+                    };
+                    const company = new Company({
+                      linkPath: "",
+                      email: companyEmail.toLowerCase(),
+                      name: companyName.toLowerCase(),
                       phone: hashedPhoneNumber,
-                    }).then((resultFromPhone) => {
-                      const maxCountValid =
-                        resultFromNip >= resultFromPhone
-                          ? resultFromNip
-                          : resultFromPhone;
-                      const dateCompanyToInvoice = {
-                        name: companyInfoByNip.nazwa,
-                        city: companyInfoByNip.miejscowosc,
-                        postalCode: companyInfoByNip.kodPocztowy,
-                        street: `${companyInfoByNip.ulica} ${
-                          !!companyInfoByNip.nrNieruchomosci
-                            ? companyInfoByNip.nrNieruchomosci
-                            : 1
-                        }${
-                          !!companyInfoByNip.nrLokalu
-                            ? `/${companyInfoByNip.nrLokalu}`
-                            : ""
-                        }`,
-                      };
-                      const codeToVerified = makeid(6);
-                      const codeToVerifiedPhone = makeid(6);
-
-                      const codeRandom = Math.floor(
-                        1000000 + Math.random() * 9000000
-                      ).toString();
-
-                      const hashedCodeToVerified = Buffer.from(
-                        codeToVerified,
-                        "utf-8"
-                      ).toString("base64");
-
-                      const hashedCodeToVerifiedPhone = Buffer.from(
-                        codeToVerifiedPhone,
-                        "utf-8"
-                      ).toString("base64");
-
-                      const hashedAdress = Buffer.from(
-                        companyAdress,
-                        "utf-8"
-                      ).toString("base64");
-
-                      const newOpeningDays = {
-                        mon: {
-                          disabled: false,
-                          start: "10:00",
-                          end: "20:00",
-                        },
-                        tue: {
-                          disabled: false,
-                          start: "10:00",
-                          end: "20:00",
-                        },
-                        wed: {
-                          disabled: false,
-                          start: "10:00",
-                          end: "20:00",
-                        },
-                        thu: {
-                          disabled: false,
-                          start: "10:00",
-                          end: "20:00",
-                        },
-                        fri: {
-                          disabled: false,
-                          start: "10:00",
-                          end: "20:00",
-                        },
-                        sat: {
-                          disabled: true,
-                          start: "0:00",
-                          end: "0:00",
-                        },
-                        sun: {
-                          disabled: true,
-                          start: "0:00",
-                          end: "0:00",
-                        },
-                      };
-                      const actualMonth = new Date().getMonth();
-                      const actualDate = new Date().getDate();
-                      const pathCompanyName = encodeURI(
-                        convertLinkString(companyName)
-                      );
-                      const adress = `${companyAdressCode} ${companyCity} ${companyAdress}`;
-                      return Geolocations.findOne({
-                        adress: convertString(adress.toLowerCase().trim()),
-                      })
-                        .then((geolocationData) => {
-                          if (!!geolocationData) {
-                            return {
-                              adress: geolocationData.adress,
-                              lat: geolocationData.lat,
-                              long: geolocationData.long,
-                            };
-                          } else {
-                            const url =
-                              "https://maps.googleapis.com/maps/api/geocode/json?address=" +
-                              convertString(adress.toLowerCase().trim()) +
-                              "&key=" +
-                              GOOGLE_API_KEY;
-
-                            return rp(url)
-                              .then((resultRp) => {
-                                if (!!resultRp) {
-                                  const resultReq = JSON.parse(resultRp);
-                                  const newgeolocation = new Geolocations({
-                                    adress: convertString(
-                                      adress.toLowerCase().trim()
-                                    ),
-                                    lat: resultReq.results[0].geometry.location
-                                      .lat,
-                                    long: resultReq.results[0].geometry.location
-                                      .lng,
-                                  });
-                                  newgeolocation.save();
-                                  return {
-                                    adress: adress.toLowerCase().trim(),
-                                    lat: resultReq.results[0].geometry.location
-                                      .lat,
-                                    long: resultReq.results[0].geometry.location
-                                      .lng,
-                                  };
-                                } else {
-                                  const error = new Error(
-                                    "Błąd podczas pobierania geolokalizacji"
-                                  );
-                                  error.statusCode = 421;
-                                  throw error;
-                                }
-                              })
-                              .catch((err) => {
-                                const error = new Error(
-                                  "Nie znaleziono danej geolokalizacji"
-                                );
-                                error.statusCode = 442;
-                                throw error;
-                              });
-                          }
-                        })
-                        .then((resultGeolocation) => {
-                          const company = new Company({
-                            linkPath: pathCompanyName + codeRandom,
-                            email: companyEmail.toLowerCase(),
-                            name: companyName.toLowerCase(),
-                            phone: hashedPhoneNumber,
-                            city: companyCity,
-                            district: companyDiscrict,
-                            adress: hashedAdress,
-                            accountPhoneVerified: false,
-                            blockSendVerifiedPhoneSms: new Date(),
-                            accountEmailVerified: false,
-                            codeToVerified: hashedCodeToVerified,
-                            codeToVerifiedPhone: hashedCodeToVerifiedPhone,
-                            owner: ownerId,
-                            ownerData: {
-                              specialization: "Admin",
-                            },
-                            pauseCompany: true,
-                            allDataVerified: false,
-                            messangerAvaible: false,
-                            title: "",
-                            reservationEveryTime: 5,
-                            reservationMonthTime: 12,
-                            companyType: companyIndustries,
-                            openingDays: newOpeningDays,
-                            nip: companyNip,
-                            code: companyAdressCode,
-                            premium: !!maxCountValid
-                              ? maxCountValid >= 1 && maxCountValid <= 3
-                                ? new Date(new Date().setDate(actualDate + 14))
-                                : maxCountValid >= 4 && maxCountValid <= 6
-                                ? new Date(new Date().setDate(actualDate + 7))
-                                : new Date()
-                              : new Date(new Date().setMonth(actualMonth + 3)),
-                            smsReserwationAvaible: false,
-                            smsReserwationChangedUserAvaible: false,
-                            smsNotifactionAvaible: false,
-                            smsCanceledAvaible: false,
-                            smsChangedAvaible: false,
-                            smsServiceCreatedAvaible: false,
-                            smsServiceChangedAvaible: false,
-                            smsServiceFinishedAvaible: false,
-                            smsServiceCanceledAvaible: false,
-                            smsCommunitingNotificationAvaible: false,
-                            smsCommunitingCreatedAvaible: false,
-                            smsCommunitingChangedAvaible: false,
-                            smsCommunitingCanceledAvaible: false,
-                            sms: 0,
-                            raportSMS: [],
-                            maps: {
-                              lat: resultGeolocation.lat,
-                              long: resultGeolocation.long,
-                            },
-                            notifactionNoSMS: true,
-                            notifactionNoPremium: true,
-                            dataToInvoice: dateCompanyToInvoice,
-                            dateUpdateNip: new Date(),
-                          });
-
-                          const newRegisterCompany = new RegisterCompany({
-                            nip: company.nip,
-                            phone: company.phone,
-                            companyId: company._id,
-                          });
-                          newRegisterCompany.save();
-                          return company.save();
-                        })
-                        .catch((err) => {
-                          if (!err.statusCode) {
-                            err.statusCode = 501;
-                            err.message =
-                              "Błąd podczas pobierania geolokalizacji.";
-                          }
-                          next(err);
-                        });
+                      city: companyCity,
+                      district: companyDiscrict,
+                      adress: hashedAdress,
+                      accountPhoneVerified: false,
+                      blockSendVerifiedPhoneSms: new Date(),
+                      accountEmailVerified: false,
+                      codeToVerified: hashedCodeToVerified,
+                      codeToVerifiedPhone: hashedCodeToVerifiedPhone,
+                      owner: ownerId,
+                      ownerData: {
+                        specialization: "Admin",
+                      },
+                      pauseCompany: true,
+                      allDataVerified: false,
+                      messangerAvaible: false,
+                      title: "",
+                      reservationEveryTime: 5,
+                      reservationMonthTime: 12,
+                      companyType: companyIndustries,
+                      openingDays: newOpeningDays,
+                      nip: companyNip,
+                      code: companyAdressCode,
+                      premium: new Date(),
+                      smsReserwationAvaible: false,
+                      smsReserwationChangedUserAvaible: false,
+                      smsNotifactionAvaible: false,
+                      smsCanceledAvaible: false,
+                      smsChangedAvaible: false,
+                      smsServiceCreatedAvaible: false,
+                      smsServiceChangedAvaible: false,
+                      smsServiceFinishedAvaible: false,
+                      smsServiceCanceledAvaible: false,
+                      smsCommunitingNotificationAvaible: false,
+                      smsCommunitingCreatedAvaible: false,
+                      smsCommunitingChangedAvaible: false,
+                      smsCommunitingCanceledAvaible: false,
+                      sms: 0,
+                      raportSMS: [],
+                      maps: null,
+                      notifactionNoSMS: true,
+                      notifactionNoPremium: true,
+                      dataToInvoice: dateCompanyToInvoice,
+                      dateUpdateNip: new Date(),
                     });
-                  });
+
+                    return company.save();
+                  } else {
+                    const error = new Error("Nieprawidłowy numer NIP.");
+                    error.statusCode = 443;
+                    throw error;
+                  }
                 } else {
                   const error = new Error("Nieprawidłowy numer NIP.");
                   error.statusCode = 443;
                   throw error;
                 }
-              } else {
+              } catch {
                 const error = new Error("Nieprawidłowy numer NIP.");
-                error.statusCode = 500;
+                error.statusCode = 443;
                 throw error;
               }
             } else {
@@ -843,18 +748,123 @@ exports.veryfiedCompanyPhone = (req, res, next) => {
     _id: companyId,
     accountPhoneVerified: false,
   })
-    .select("email codeToVerifiedPhone accountPhoneVerified")
+    .select(
+      "_id email codeToVerifiedPhone accountPhoneVerified nip phone adress name code city"
+    )
     .then((companyDoc) => {
-      if (companyDoc) {
+      if (!!companyDoc) {
         const unhashedCodeToVerified = Buffer.from(
           companyDoc.codeToVerifiedPhone,
           "base64"
         ).toString("utf-8");
 
+        const unhashedAdress = Buffer.from(
+          companyDoc.adress,
+          "base64"
+        ).toString("utf-8");
+
         if (unhashedCodeToVerified === codeSent) {
-          companyDoc.codeToVerifiedPhone = null;
-          companyDoc.accountPhoneVerified = true;
-          return companyDoc.save();
+          return RegisterCompany.countDocuments({
+            nip: companyDoc.nip,
+          }).then((resultFromNip) => {
+            return RegisterCompany.countDocuments({
+              phone: companyDoc.phone,
+            }).then((resultFromPhone) => {
+              const maxCountValid =
+                resultFromNip >= resultFromPhone
+                  ? resultFromNip
+                  : resultFromPhone;
+
+              const actualMonth = new Date().getMonth();
+              const actualDate = new Date().getDate();
+              const pathCompanyName = encodeURI(
+                convertLinkString(companyDoc.name)
+              );
+              const adress = `${companyDoc.code} ${companyDoc.city} ${unhashedAdress}`;
+              return Geolocations.findOne({
+                adress: convertString(adress.toLowerCase().trim()),
+              })
+                .then((geolocationData) => {
+                  if (!!geolocationData) {
+                    return {
+                      adress: geolocationData.adress,
+                      lat: geolocationData.lat,
+                      long: geolocationData.long,
+                    };
+                  } else {
+                    const url =
+                      "https://maps.googleapis.com/maps/api/geocode/json?address=" +
+                      convertString(adress.toLowerCase().trim()) +
+                      "&key=" +
+                      GOOGLE_API_KEY;
+
+                    return rp(url)
+                      .then((resultRp) => {
+                        if (!!resultRp) {
+                          const resultReq = JSON.parse(resultRp);
+                          const newgeolocation = new Geolocations({
+                            adress: convertString(adress.toLowerCase().trim()),
+                            lat: resultReq.results[0].geometry.location.lat,
+                            long: resultReq.results[0].geometry.location.lng,
+                          });
+                          newgeolocation.save();
+                          return {
+                            adress: adress.toLowerCase().trim(),
+                            lat: resultReq.results[0].geometry.location.lat,
+                            long: resultReq.results[0].geometry.location.lng,
+                          };
+                        } else {
+                          const error = new Error(
+                            "Błąd podczas pobierania geolokalizacji"
+                          );
+                          error.statusCode = 421;
+                          throw error;
+                        }
+                      })
+                      .catch((err) => {
+                        const error = new Error(
+                          "Nie znaleziono danej geolokalizacji"
+                        );
+                        error.statusCode = 442;
+                        throw error;
+                      });
+                  }
+                })
+                .then((resultGeolocation) => {
+                  const newRegisterCompany = new RegisterCompany({
+                    nip: companyDoc.nip,
+                    phone: companyDoc.phone,
+                    companyId: companyDoc._id,
+                  });
+                  newRegisterCompany.save();
+
+                  companyDoc.linkPath =
+                    pathCompanyName +
+                    companyDoc._id.toString().split("").reverse().join("");
+                  companyDoc.maps = {
+                    lat: resultGeolocation.lat,
+                    long: resultGeolocation.long,
+                  };
+                  companyDoc.premium = !!maxCountValid
+                    ? maxCountValid >= 1 && maxCountValid <= 3
+                      ? new Date(new Date().setDate(actualDate + 14))
+                      : maxCountValid >= 4 && maxCountValid <= 6
+                      ? new Date(new Date().setDate(actualDate + 7))
+                      : new Date(new Date().setDate(actualDate + 1))
+                    : new Date(new Date().setMonth(actualMonth + 3));
+                  companyDoc.codeToVerifiedPhone = null;
+                  companyDoc.accountPhoneVerified = true;
+                  return companyDoc.save();
+                })
+                .catch((err) => {
+                  if (!err.statusCode) {
+                    err.statusCode = 501;
+                    err.message = "Błąd podczas pobierania geolokalizacji.";
+                  }
+                  next(err);
+                });
+            });
+          });
         } else {
           const error = new Error("Zły kod uwietrznienia.");
           error.statusCode = 403;
@@ -2785,29 +2795,29 @@ exports.companySettingsPatch = (req, res, next) => {
             companyDoc.landlinePhone = hashedPhoneNumberLandline;
           }
 
-          if (!!dataSettings.updatePhoneInput) {
-            let updatePhone = {};
+          // if (!!dataSettings.updatePhoneInput) {
+          //   let updatePhone = {};
 
-            hashedPhoneNumber = Buffer.from(
-              dataSettings.updatePhoneInput,
-              "utf-8"
-            ).toString("base64");
-            companyDoc.phone = hashedPhoneNumber;
-            updatePhone = { phone: hashedPhoneNumber };
+          //   hashedPhoneNumber = Buffer.from(
+          //     dataSettings.updatePhoneInput,
+          //     "utf-8"
+          //   ).toString("base64");
+          //   companyDoc.phone = hashedPhoneNumber;
+          //   updatePhone = { phone: hashedPhoneNumber };
 
-            RegisterCompany.updateOne(
-              {
-                companyId: companyDoc._id,
-              },
-              {
-                $set: {
-                  ...updatePhone,
-                },
-              }
-            )
-              .then(() => {})
-              .catch(() => {});
-          }
+          //   RegisterCompany.updateOne(
+          //     {
+          //       companyId: companyDoc._id,
+          //     },
+          //     {
+          //       $set: {
+          //         ...updatePhone,
+          //       },
+          //     }
+          //   )
+          //     .then(() => {})
+          //     .catch(() => {});
+          // }
 
           if (!!dataSettings.industriesComponent) {
             if (dataSettings.industriesComponent != companyDoc.companyType) {
@@ -5549,7 +5559,7 @@ exports.companyDeleteCompany = (req, res, next) => {
     })
     .then(() => {
       return Company.findOneAndDelete({ _id: companyId })
-        .select("email _id")
+        .select("email _id name")
         .then((companyData) => {
           if (!!companyData) {
             const propsGenerator = generateEmail.generateContentEmail({
@@ -5561,7 +5571,7 @@ exports.companyDeleteCompany = (req, res, next) => {
             });
             notifications.sendEmail({
               email: companyData.email,
-              ...propsGenerator,
+              title: `${propsGenerator.title} ${companyData.name}`,
             });
             return true;
           } else {

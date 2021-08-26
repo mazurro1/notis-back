@@ -322,6 +322,13 @@ exports.generateContentEmail = ({
       break;
     }
 
+    case "alert_delete_company_code": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
     case "alert_create_company": {
       alertColor = "red";
       title = `${texts[alertType].companyChangedUser.title[0]}`;
