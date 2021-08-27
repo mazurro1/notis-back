@@ -313,8 +313,8 @@ const sendVerifySMS = ({ phoneNumber = null, message = null }) => {
   if (!!phoneNumber && !!message) {
     const params = {
       Message: message,
-      // PhoneNumber: `+48${phoneNumber}`,
-      PhoneNumber: `+48515873009`,
+      PhoneNumber: `+48${phoneNumber}`,
+      // PhoneNumber: `+48515873009`,
     };
 
     return sns
@@ -376,8 +376,8 @@ const sendSMS = ({
       .then((updated) => {
         const params = {
           Message: message,
-          // PhoneNumber: `+48${customPhone}`,
-          PhoneNumber: `+48515873009`,
+          PhoneNumber: `+48${customPhone}`,
+          // PhoneNumber: `+48515873009`,
         };
 
         return sns
@@ -460,8 +460,8 @@ const sendSMS = ({
                 .then(() => {
                   const params = {
                     Message: message,
-                    // PhoneNumber: `+48${userPhone}`,
-                    PhoneNumber: `+48515873009`,
+                    PhoneNumber: `+48${userPhone}`,
+                    // PhoneNumber: `+48515873009`,
                   };
 
                   return sns

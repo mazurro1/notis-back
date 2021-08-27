@@ -23,18 +23,6 @@ const companySchema = new Schema(
       type: Boolean,
       required: true,
     },
-    phoneToVeryfied: {
-      type: String,
-      required: false,
-    },
-    emailToVeryfied: {
-      type: String,
-      required: false,
-    },
-    disabledChangeEmailDate: {
-      type: Date,
-      required: false,
-    },
     landlinePhone: {
       type: String,
       required: false,
@@ -360,6 +348,18 @@ const companySchema = new Schema(
       required: false,
     },
     blockSendVerifiedPhoneSms: {
+      type: Date,
+      required: false,
+    },
+    phoneToVeryfied: {
+      type: String,
+      required: false,
+    },
+    emailToVeryfied: {
+      type: String,
+      required: false,
+    },
+    blockSendVerifiedEmail: {
       type: Date,
       required: false,
     },

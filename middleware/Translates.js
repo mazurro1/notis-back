@@ -343,10 +343,14 @@ exports.Translates = {
           title: ["Edycja konta zakończone powodzeniem"],
         },
       },
-
       alert_confirm_account_phone: {
         companyChangedUser: {
           title: ["Kod potwierdzający numer telefonu:"],
+        },
+      },
+      alert_confirm_account_email: {
+        companyChangedUser: {
+          title: ["Kod potwierdzający adres email"],
         },
       },
       alert_veryfied_phone_account: {
@@ -356,7 +360,12 @@ exports.Translates = {
       },
       alert_veryfied_phone_account_success: {
         companyChangedUser: {
-          title: ["Numer telefonu został zaktualizowany w firmie:."],
+          title: ["Numer telefonu został zaktualizowany w firmie:"],
+        },
+      },
+      alert_veryfied_email_account_success: {
+        companyChangedUser: {
+          title: ["Adres email został zaktualizowany w firmie:"],
         },
       },
       alert_deleted_account_success: {
@@ -724,6 +733,11 @@ exports.Translates = {
           title: ["Code confirming the phone number:"],
         },
       },
+      alert_confirm_account_email: {
+        companyChangedUser: {
+          title: ["Code confirming the email address"],
+        },
+      },
       alert_deleted_account_success: {
         companyChangedUser: {
           title: ["The account has been deleted"],
@@ -784,6 +798,11 @@ exports.Translates = {
       alert_veryfied_phone_account_success: {
         companyChangedUser: {
           title: ["The phone number has been updated in the company:"],
+        },
+      },
+      alert_veryfied_email_account_success: {
+        companyChangedUser: {
+          title: ["The email address has been updated in the company:"],
         },
       },
       alert_invoice: {

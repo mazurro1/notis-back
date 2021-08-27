@@ -35,6 +35,20 @@ router.post(
   company.sentAgainVerifiedPhoneCompany
 );
 
+router.post(
+  "/company-sent-again-verification-new-phone",
+  isAuth,
+  [body("companyId").trim().isLength({ min: 5 })],
+  company.sentAgainVerifiedNewPhoneCompany
+);
+
+router.post(
+  "/company-sent-again-verification-new-email",
+  isAuth,
+  [body("companyId").trim().isLength({ min: 5 })],
+  company.sentAgainVerifiedNewEmailCompany
+);
+
 router.patch(
   "/company-veryfied-email",
   isAuth,
@@ -594,6 +608,13 @@ router.post(
 );
 
 router.post(
+  "/update-company-email",
+  isAuth,
+  [body("companyId"), body("newEmail"), body("password")],
+  company.companyUpdateEmail
+);
+
+router.post(
   "/cancel-update-company-phone",
   isAuth,
   [body("companyId")],
@@ -601,10 +622,24 @@ router.post(
 );
 
 router.post(
+  "/cancel-update-company-email",
+  isAuth,
+  [body("companyId")],
+  company.cancelCompanyUpdateEmail
+);
+
+router.post(
   "/update-company-phone-veryfied-code",
   isAuth,
   [body("companyId"), body("code")],
   company.companyUpdatePhoneVeryfiedCode
+);
+
+router.post(
+  "/update-company-email-veryfied-code",
+  isAuth,
+  [body("companyId"), body("code")],
+  company.companyUpdateEmailVeryfiedCode
 );
 
 module.exports = router;
