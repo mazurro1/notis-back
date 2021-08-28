@@ -35,6 +35,22 @@ const userSchema = new Schema(
       type: Boolean,
       required: false,
     },
+    emailVerified: {
+      type: Boolean,
+      required: false,
+    },
+    emailToVerified: {
+      type: String,
+      required: false,
+    },
+    codeToVerifiedEmail: {
+      type: String,
+      required: false,
+    },
+    blockUserChangeEmail: {
+      type: Date,
+      required: false,
+    },
     phoneVerified: {
       type: Boolean,
       required: false,
@@ -57,14 +73,6 @@ const userSchema = new Schema(
       type: String,
       required: true,
     },
-    // dateBirth: {
-    //   type: Number,
-    //   required: false,
-    // },
-    // monthBirth: {
-    //   type: Number,
-    //   required: false,
-    // },
     imageUrl: {
       type: String,
       required: false,

@@ -233,6 +233,8 @@ exports.addReserwation = (req, res, next) => {
             const companyDocData = companyDoc[0];
             return User.findOne({
               _id: userId,
+              phoneVerified: true,
+              emailVerified: true,
             })
               .select("_id stamps")
               .populate(

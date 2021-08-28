@@ -222,6 +222,12 @@ router.post(
 );
 
 router.post(
+  "/user-sent-code-verified-email",
+  isAuth,
+  user.userSentCodeVerifiedEmail
+);
+
+router.post(
   "/delete-user-account",
   isAuth,
   [body("code")],
@@ -233,6 +239,13 @@ router.post(
   isAuth,
   [body("code")],
   user.verifiedUserPhone
+);
+
+router.post(
+  "/verified-user-email",
+  isAuth,
+  [body("code")],
+  user.verifiedUserEmail
 );
 
 router.post(

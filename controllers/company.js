@@ -6518,7 +6518,6 @@ exports.companyAddService = (req, res, next) => {
 
         return User.findOne({
           phone: hashedPhoneNumber,
-          phoneVerified: true,
         })
           .select("_id")
           .then((resultToUser) => {
@@ -7310,7 +7309,6 @@ exports.companyAddCommuniting = (req, res, next) => {
 
         return User.findOne({
           phone: hashedPhoneNumber,
-          phoneVerified: true,
         })
           .select("_id")
           .then((resultToUser) => {
@@ -8373,10 +8371,20 @@ exports.companyUpdateEmailVeryfiedCode = (req, res, next) => {
         ).toString("utf-8");
 
         if (unhashedCodeFromClient == code) {
-          companyDoc.email = companyDoc.emailToVeryfied;
-          companyDoc.emailToVeryfied = null;
-          companyDoc.codeToVerified = null;
-          return companyDoc.save();
+          return Company.countDocuments({
+            email: companyDoc.emailToVeryfied,
+          }).then((countCompanyEmails) => {
+            if (!!!countCompanyEmails) {
+              companyDoc.email = companyDoc.emailToVeryfied;
+              companyDoc.emailToVeryfied = null;
+              companyDoc.codeToVerified = null;
+              return companyDoc.save();
+            } else {
+              const error = new Error("Adres email zajęty.");
+              error.statusCode = 442;
+              throw error;
+            }
+          });
         } else {
           const error = new Error("Błędny kod.");
           error.statusCode = 443;

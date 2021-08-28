@@ -136,6 +136,9 @@ exports.registration = (req, res, next) => {
                       language: "PL",
                       darkMode: false,
                       blindMode: false,
+                      emailVerified: false,
+                      emailToVerified: null,
+                      blockUserChangeEmail: new Date(),
                     });
                     const token = jwt.sign(
                       {
@@ -221,7 +224,7 @@ exports.login = (req, res, next) => {
     email: email,
   })
     .select(
-      "darkMode blindMode language email blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified alertActiveCount imageOther"
+      "darkMode blindMode language email blockUserSendVerifiedPhoneSms emailVerified emailToVerified blockUserChangeEmail blockUserChangePhoneNumber _id phoneVerified imageUrl hasPhone name surname favouritesCompanys company stamps loginToken password codeToResetPassword token accountVerified alertActiveCount imageOther"
     )
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
@@ -380,6 +383,9 @@ exports.login = (req, res, next) => {
                     favouritesCompanys: user.favouritesCompanys,
                     phoneVerified: user.phoneVerified,
                     blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
+                    emailVerified: user.emailVerified,
+                    emailToVerified: user.emailToVerified,
+                    blockUserChangeEmail: user.blockUserChangeEmail,
                     blockUserSendVerifiedPhoneSms:
                       user.blockUserSendVerifiedPhoneSms,
                     vapidPublic: PUBLIC_KEY_VAPID,
@@ -464,11 +470,26 @@ exports.getUserPhone = (req, res, next) => {
   User.findOne({
     _id: userId,
   })
-    .select("_id phone")
+    .select("_id phone phoneVerified whiteListVerifiedPhones")
     .then((user) => {
       if (!!user) {
-        if (!!user.phone) {
-          const userPhone = Buffer.from(user.phone, "base64").toString("utf-8");
+        let selectedPhoneNumber = null;
+        if (!!user.phoneVerified) {
+          selectedPhoneNumber = user.phone;
+        } else {
+          if (!!user.whiteListVerifiedPhones) {
+            if (user.whiteListVerifiedPhones.length > 0) {
+              selectedPhoneNumber =
+                user.whiteListVerifiedPhones[
+                  user.whiteListVerifiedPhones.length - 1
+                ];
+            }
+          }
+        }
+        if (!!selectedPhoneNumber) {
+          const userPhone = Buffer.from(selectedPhoneNumber, "base64").toString(
+            "utf-8"
+          );
           res.status(201).json({
             userPhone: userPhone,
           });
@@ -603,6 +624,7 @@ exports.veryfiedEmail = (req, res, next) => {
         if (unhashedCodeToVerified.toUpperCase() === codeSent.toUpperCase()) {
           user.codeToVerified = null;
           user.accountVerified = true;
+          user.emailVerified = true;
           user.company = null;
           user.allCompanys = [];
           return user.save();
@@ -743,7 +765,7 @@ exports.autoLogin = (req, res, next) => {
     loginToken: token,
   })
     .select(
-      "_id darkMode blindMode language loginToken blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company name surname alertActiveCount email accountVerified imageUrl hasPhone imageOther"
+      "_id darkMode blindMode language loginToken blockUserSendVerifiedPhoneSms emailVerified emailToVerified blockUserChangeEmail blockUserChangePhoneNumber phoneVerified favouritesCompanys stamps company name surname alertActiveCount email accountVerified imageUrl hasPhone imageOther"
     )
     .populate("favouritesCompanys", "_id linkPath name")
     .populate(
@@ -885,6 +907,9 @@ exports.autoLogin = (req, res, next) => {
                 favouritesCompanys: user.favouritesCompanys,
                 phoneVerified: user.phoneVerified,
                 blockUserChangePhoneNumber: user.blockUserChangePhoneNumber,
+                emailVerified: user.emailVerified,
+                emailToVerified: user.emailToVerified,
+                blockUserChangeEmail: user.blockUserChangeEmail,
                 blockUserSendVerifiedPhoneSms:
                   user.blockUserSendVerifiedPhoneSms,
                 vapidPublic: PUBLIC_KEY_VAPID,
@@ -914,6 +939,7 @@ exports.edit = (req, res, next) => {
   const password = req.body.password;
   const newPassword = req.body.newPassword ? req.body.newPassword : null;
   const newPhone = req.body.newPhone ? req.body.newPhone : null;
+  const newEmail = req.body.newEmail ? req.body.newEmail : null;
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -926,7 +952,7 @@ exports.edit = (req, res, next) => {
     _id: userId,
   })
     .select(
-      "_id language phoneVerified blockUserSendVerifiedPhoneSms blockUserChangePhoneNumber password email loginToken phone accountVerified company codeVerifiedPhoneDate codeVerifiedPhone whiteListVerifiedPhones"
+      "_id language phoneVerified blockUserSendVerifiedPhoneSms emailVerified emailToVerified blockUserChangeEmail blockUserChangePhoneNumber password email loginToken phone accountVerified company codeVerifiedPhoneDate codeVerifiedPhone whiteListVerifiedPhones"
     )
     .then((user) => {
       if (!!user) {
@@ -934,7 +960,7 @@ exports.edit = (req, res, next) => {
           .compare(password, user.password)
           .then((doMatch) => {
             if (!!doMatch) {
-              if (!!newPhone || !!newPassword) {
+              if (!!newPhone || !!newPassword || newEmail) {
                 const token = jwt.sign(
                   {
                     email: user.email,
@@ -946,6 +972,30 @@ exports.edit = (req, res, next) => {
                   }
                 );
                 user.loginToken = token;
+                if (!!newEmail) {
+                  return User.countDocuments({
+                    email: newEmail,
+                  }).then((countUsersPhone) => {
+                    if (!!!countUsersPhone) {
+                      const randomCodeEmail = makeid(6);
+                      const hashedCodeToVerifiedEmail = Buffer.from(
+                        randomCodeEmail,
+                        "utf-8"
+                      ).toString("base64");
+                      user.emailVerified = false;
+                      user.emailToVerified = newEmail;
+                      user.blockUserChangeEmail = new Date(
+                        new Date().setHours(new Date().getHours() + 1)
+                      );
+                      user.codeToVerifiedEmail = hashedCodeToVerifiedEmail;
+                      return user.save();
+                    } else {
+                      const error = new Error("Adres email jest zajęty");
+                      error.statusCode = 443;
+                      throw error;
+                    }
+                  });
+                }
                 if (!!newPhone) {
                   const validBlockUserChangePhoneNumber =
                     !!user.blockUserChangePhoneNumber
@@ -1032,7 +1082,7 @@ exports.edit = (req, res, next) => {
             }
           })
           .then(async (userSavedData) => {
-            if (!!!userSavedData.phoneVerified) {
+            if (!!!userSavedData.phoneVerified && !!newPhone) {
               const codeToDelete = Buffer.from(
                 userSavedData.codeVerifiedPhone,
                 "base64"
@@ -1054,6 +1104,27 @@ exports.edit = (req, res, next) => {
                   propsGenerator.title
                 } ${codeToDelete.toUpperCase()}`,
               });
+            } else if (!!newEmail && !!!userSavedData.emailVerified) {
+              const codeToActiveEmail = Buffer.from(
+                userSavedData.codeToVerifiedEmail,
+                "base64"
+              ).toString("utf-8");
+
+              const propsGenerator = generateEmail.generateContentEmail({
+                alertType: "alert_confirm_account_email",
+                companyChanged: false,
+                language: !!userSavedData.language
+                  ? userSavedData.language
+                  : "PL",
+                itemAlert: null,
+                collection: "Default",
+              });
+
+              notifications.sendEmail({
+                email: userSavedData.emailToVerified,
+                title: propsGenerator.title,
+                defaultText: `${propsGenerator.title} ${codeToActiveEmail}`,
+              });
             }
             return userSavedData;
           })
@@ -1062,20 +1133,25 @@ exports.edit = (req, res, next) => {
               ? Buffer.from(result.phone, "base64").toString("utf-8")
               : null;
 
-            const propsGenerator = generateEmail.generateContentEmail({
-              alertType: "alert_confirm_account_edit",
-              companyChanged: false,
-              language: !!result.language ? result.language : "PL",
-              itemAlert: null,
-              collection: "Default",
-            });
+            if (!!newPassword) {
+              const propsGenerator = generateEmail.generateContentEmail({
+                alertType: "alert_confirm_account_edit",
+                companyChanged: false,
+                language: !!result.language ? result.language : "PL",
+                itemAlert: null,
+                collection: "Default",
+              });
 
-            notifications.sendEmail({
-              email: result.email,
-              ...propsGenerator,
-            });
+              notifications.sendEmail({
+                email: result.email,
+                ...propsGenerator,
+              });
+            }
 
             res.status(201).json({
+              emailVerified: result.emailVerified,
+              emailToVerified: result.emailToVerified,
+              blockUserChangeEmail: result.blockUserChangeEmail,
               email: result.email,
               token: result.loginToken,
               userPhone: userPhone,
@@ -1088,7 +1164,7 @@ exports.edit = (req, res, next) => {
           })
           .catch((err) => {
             if (!err.statusCode) {
-              const error = new Error("Błędne hasła");
+              const error = new Error(err);
               error.statusCode = 501;
               throw error;
             }
@@ -1484,6 +1560,9 @@ exports.loginFacebookNew = (req, res, next) => {
                   language: "pl",
                   darkMode: false,
                   blindMode: false,
+                  emailVerified: true,
+                  emailToVerified: null,
+                  blockUserChangeEmail: new Date(),
                 });
                 const token = jwt.sign(
                   {
@@ -1692,6 +1771,9 @@ exports.loginGoogle = (req, res, next) => {
                   language: "pl",
                   darkMode: false,
                   blindMode: false,
+                  emailVerified: true,
+                  emailToVerified: null,
+                  blockUserChangeEmail: new Date(),
                 });
                 const token = jwt.sign(
                   {
@@ -2127,28 +2209,59 @@ exports.verifiedUserPhone = (req, res, next) => {
       "_id codeVerifiedPhoneDate codeVerifiedPhone name surname email phoneVerified phone whiteListVerifiedPhones language"
     )
     .then((userData) => {
-      if (!!userData.codeVerifiedPhone) {
-        const codeToVerified = Buffer.from(
-          userData.codeVerifiedPhone,
-          "base64"
-        ).toString("utf-8");
-        if (
-          code.toUpperCase() === codeToVerified.toUpperCase() &&
-          userData.codeVerifiedPhoneDate > new Date()
-        ) {
-          return userData;
+      if (!!userData) {
+        if (!!userData.codeVerifiedPhone) {
+          const unhashedPhone = Buffer.from(userData.phone, "base64").toString(
+            "utf-8"
+          );
+
+          return User.countDocuments({
+            phone: unhashedPhone,
+          }).then((countUsersWithThisPhone) => {
+            if (!!!countUsersWithThisPhone) {
+              const codeToVerified = Buffer.from(
+                userData.codeVerifiedPhone,
+                "base64"
+              ).toString("utf-8");
+              if (
+                code.toUpperCase() === codeToVerified.toUpperCase() &&
+                userData.codeVerifiedPhoneDate > new Date()
+              ) {
+                return userData;
+              } else {
+                const error = new Error("Błędny kod.");
+                error.statusCode = 422;
+                throw error;
+              }
+            } else {
+              const error = new Error("Numer telefonu jest zajęty.");
+              error.statusCode = 423;
+              throw error;
+            }
+          });
         } else {
-          const error = new Error("Błędny kod.");
+          const error = new Error("Numer już aktywowany.");
           error.statusCode = 422;
           throw error;
         }
       } else {
-        const error = new Error("Numer już aktywowany.");
-        error.statusCode = 422;
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 403;
         throw error;
       }
     })
     .then((userData) => {
+      const token = jwt.sign(
+        {
+          email: userData.email,
+          userId: userData._id.toString(),
+        },
+        TOKEN_PASSWORD,
+        {
+          expiresIn: BCRIPT_EXPIRES_IN,
+        }
+      );
+      userData.loginToken = token;
       userData.codeVerifiedPhoneDate = null;
       userData.codeVerifiedPhone = null;
       userData.phoneVerified = true;
@@ -2168,11 +2281,11 @@ exports.verifiedUserPhone = (req, res, next) => {
         email: userDoc.email,
         ...propsGenerator,
       });
-      return true;
+      return userDoc;
     })
-    .then(() => {
+    .then((userDoc) => {
       res.status(201).json({
-        message: "Numer telefonu został zweryfikowany",
+        token: userDoc.loginToken,
       });
     })
     .catch((err) => {
@@ -2564,6 +2677,182 @@ exports.userUpdateProps = (req, res, next) => {
       if (!err.statusCode) {
         err.statusCode = 501;
         err.message = "Błąd serwera.";
+      }
+      next(err);
+    });
+};
+
+exports.verifiedUserEmail = (req, res, next) => {
+  const userId = req.userId;
+  const code = req.body.code;
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const error = new Error("Validation faild entered data is incorrect.");
+    error.statusCode = 422;
+    throw error;
+  }
+  User.findOne({ _id: userId })
+    .select(
+      "_id emailVerified emailToVerified codeToVerifiedEmail blockUserChangeEmail email language"
+    )
+    .then((userData) => {
+      if (!!userData) {
+        if (!!userData.codeToVerifiedEmail) {
+          return User.countDocuments({
+            email: userData.emailToVerified,
+          }).then((countUsersWithThisEmail) => {
+            if (!!!countUsersWithThisEmail) {
+              const codeToVerified = Buffer.from(
+                userData.codeToVerifiedEmail,
+                "base64"
+              ).toString("utf-8");
+              if (
+                code.toUpperCase() === codeToVerified.toUpperCase() &&
+                userData.blockUserChangeEmail > new Date()
+              ) {
+                return userData;
+              } else {
+                const error = new Error("Błędny kod.");
+                error.statusCode = 422;
+                throw error;
+              }
+            } else {
+              const error = new Error("Adres email jest zajęty.");
+              error.statusCode = 423;
+              throw error;
+            }
+          });
+        } else {
+          const error = new Error("Adres email już aktywowany.");
+          error.statusCode = 422;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 403;
+        throw error;
+      }
+    })
+    .then((userData) => {
+      const token = jwt.sign(
+        {
+          email: userData.emailToVerified,
+          userId: userData._id.toString(),
+        },
+        TOKEN_PASSWORD,
+        {
+          expiresIn: BCRIPT_EXPIRES_IN,
+        }
+      );
+      userData.loginToken = token;
+      userData.codeToVerifiedEmail = null;
+      userData.email = userData.emailToVerified;
+      userData.emailToVerified = null;
+      userData.emailVerified = true;
+      return userData.save();
+    })
+    .then((userDoc) => {
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_veryfied_email_user_account_success",
+        companyChanged: false,
+        language: !!userDoc.language ? userDoc.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      notifications.sendEmail({
+        email: userDoc.email,
+        ...propsGenerator,
+      });
+      return userDoc;
+    })
+    .then((userDoc) => {
+      res.status(201).json({
+        token: userDoc.loginToken,
+      });
+    })
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message = "Błąd podczas weryfikowania numeru telefonu.";
+      }
+      next(err);
+    });
+};
+
+exports.userSentCodeVerifiedEmail = (req, res, next) => {
+  const userId = req.userId;
+
+  User.findOne({
+    _id: userId,
+    blockUserChangeEmail: {
+      $lte: new Date(),
+    },
+  })
+    .select(
+      "_id emailVerified emailToVerified codeToVerifiedEmail blockUserChangeEmail email language"
+    )
+    .then((resultUserDoc) => {
+      if (!!resultUserDoc) {
+        const validBlockUserSendVerifiedEmail =
+          !!resultUserDoc.blockUserChangeEmail
+            ? resultUserDoc.blockUserChangeEmail
+            : null;
+        if (validBlockUserSendVerifiedEmail <= new Date()) {
+          const randomCode = makeid(6);
+          const hashedCodeToVerified = Buffer.from(
+            randomCode,
+            "utf-8"
+          ).toString("base64");
+          resultUserDoc.codeToVerifiedEmail = hashedCodeToVerified;
+          resultUserDoc.blockUserChangeEmail = new Date(
+            new Date().setHours(new Date().getHours() + 1)
+          );
+          return resultUserDoc.save();
+        } else {
+          const error = new Error(
+            "Nie można wysłać ponownie wiadomość do aktywcji adresu email"
+          );
+          error.statusCode = 423;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((userSavedData) => {
+      const codeToVerified = Buffer.from(
+        userSavedData.codeToVerifiedEmail,
+        "base64"
+      ).toString("utf-8");
+
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_confirm_account_email",
+        companyChanged: false,
+        language: !!userSavedData.language ? userSavedData.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      notifications.sendEmail({
+        email: userSavedData.emailToVerified,
+        title: propsGenerator.title,
+        defaultText: `${propsGenerator.title} ${codeToVerified}`,
+      });
+
+      res.status(201).json({
+        blockUserChangeEmail: userSavedData.blockUserChangeEmail,
+      });
+    })
+
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message =
+          "Błąd podczas wysyłania kodu do potwierdzenia adresu email.";
       }
       next(err);
     });

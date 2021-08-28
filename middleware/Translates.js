@@ -368,6 +368,11 @@ exports.Translates = {
           title: ["Adres email został zaktualizowany w firmie:"],
         },
       },
+      alert_veryfied_email_user_account_success: {
+        companyChangedUser: {
+          title: ["Adres email został zaktualizowany."],
+        },
+      },
       alert_deleted_account_success: {
         companyChangedUser: {
           title: ["Konto została usunięte"],
@@ -803,6 +808,11 @@ exports.Translates = {
       alert_veryfied_email_account_success: {
         companyChangedUser: {
           title: ["The email address has been updated in the company:"],
+        },
+      },
+      alert_veryfied_email_user_account_success: {
+        companyChangedUser: {
+          title: ["The email address has been updated."],
         },
       },
       alert_invoice: {
