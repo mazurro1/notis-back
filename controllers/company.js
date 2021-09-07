@@ -277,8 +277,8 @@ const getImageUrl = async (type, base64Image) => {
 };
 
 exports.registrationCompany = (req, res, next) => {
-  const companyEmail = req.body.companyEmail;
-  const companyName = req.body.companyName;
+  const companyEmail = req.body.companyEmail.toLowerCase();
+  const companyName = req.body.companyName.toLowerCase();
   const companyNumber = req.body.companyNumber;
   const companyCity = req.body.companyCity;
   const companyDiscrict = req.body.companyDiscrict;
@@ -297,7 +297,7 @@ exports.registrationCompany = (req, res, next) => {
   }
 
   Company.findOne({
-    name: companyName.toLowerCase(),
+    name: companyName,
   })
     .select("name")
     .then((companyNameDoc) => {

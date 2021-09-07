@@ -413,6 +413,21 @@ exports.generateContentEmail = ({
 
       break;
     }
+
+    case "alert_delete_verified_phone": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
+    case "alert_delete_verified_email": {
+      alertColor = "red";
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
+      break;
+    }
+
     case "alert_veryfied_phone_account": {
       alertColor = "red";
       title = `${texts[alertType].companyChangedUser.title[0]}`;

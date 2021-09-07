@@ -301,4 +301,16 @@ router.post(
   user.userUpdateProps
 );
 
+router.post(
+  "/user-delete-verified-phone",
+  isAuth,
+  user.userDeleteVerifiedPhone
+);
+
+router.post(
+  "/user-delete-verified-email",
+  isAuth,
+  user.userDeleteVerifiedEmail
+);
+
 module.exports = router;

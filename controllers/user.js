@@ -77,7 +77,7 @@ const getImageUrl = async (type, base64Image) => {
 };
 
 exports.registration = (req, res, next) => {
-  const email = req.body.email;
+  const email = req.body.email.toLowerCase();
   const password = req.body.password;
   const phoneNumber = req.body.phoneNumber;
   const userName = req.body.userName;
@@ -209,7 +209,7 @@ exports.registration = (req, res, next) => {
 };
 
 exports.login = (req, res, next) => {
-  const email = req.body.email;
+  const email = req.body.email.toLowerCase();
   const password = req.body.password;
 
   const errors = validationResult(req);
@@ -1496,7 +1496,7 @@ exports.loginFacebookNew = (req, res, next) => {
     _json: { email, name },
   } = req.user.profile;
   User.findOne({
-    email: email,
+    email: email.toLowerCase(),
   })
     .select("email _id loginToken")
     .then((userDoc) => {
@@ -1544,7 +1544,7 @@ exports.loginFacebookNew = (req, res, next) => {
                 ).toString("base64");
 
                 const user = new User({
-                  email: email,
+                  email: email.toLowerCase(),
                   name: hashedUserName,
                   surname: hashedUserSurname,
                   password: hashedPassword,
@@ -1707,7 +1707,7 @@ exports.loginGoogle = (req, res, next) => {
     _json: { email, name },
   } = req.user.profile;
   User.findOne({
-    email: email,
+    email: email.toLowerCase(),
   })
     .select("email _id loginToken")
     .then((userDoc) => {
@@ -1755,7 +1755,7 @@ exports.loginGoogle = (req, res, next) => {
                 ).toString("base64");
 
                 const user = new User({
-                  email: email,
+                  email: email.toLowerCase(),
                   name: hashedUserName,
                   surname: hashedUserSurname,
                   password: hashedPassword,
@@ -2845,6 +2845,136 @@ exports.userSentCodeVerifiedEmail = (req, res, next) => {
 
       res.status(201).json({
         blockUserChangeEmail: userSavedData.blockUserChangeEmail,
+      });
+    })
+
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message =
+          "Błąd podczas wysyłania kodu do potwierdzenia adresu email.";
+      }
+      next(err);
+    });
+};
+
+exports.userDeleteVerifiedPhone = (req, res, next) => {
+  const userId = req.userId;
+
+  User.findOne({
+    _id: userId,
+    accountVerified: true,
+  })
+    .select(
+      "_id phone whiteListVerifiedPhones phoneVerified email language codeVerifiedPhone"
+    )
+    .then((resultUserDoc) => {
+      if (!!resultUserDoc) {
+        if (!!resultUserDoc.whiteListVerifiedPhones) {
+          if (resultUserDoc.whiteListVerifiedPhones.length > 0) {
+            const selectedPhoneNumber =
+              resultUserDoc.whiteListVerifiedPhones[
+                resultUserDoc.whiteListVerifiedPhones.length - 1
+              ];
+            resultUserDoc.phone = selectedPhoneNumber;
+            resultUserDoc.phoneVerified = true;
+            resultUserDoc.codeVerifiedPhone = null;
+
+            return resultUserDoc.save();
+          } else {
+            const error = new Error("Nie można zmienić numeru.");
+            error.statusCode = 420;
+            throw error;
+          }
+        } else {
+          const error = new Error("Nie można zmienić numeru.");
+          error.statusCode = 420;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((userSavedData) => {
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_delete_verified_phone",
+        companyChanged: false,
+        language: !!userSavedData.language ? userSavedData.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      notifications.sendEmail({
+        email: userSavedData.email,
+        ...propsGenerator,
+      });
+
+      const userPhone = Buffer.from(userSavedData.phone, "base64").toString(
+        "utf-8"
+      );
+
+      res.status(201).json({
+        userPhone: userPhone,
+      });
+    })
+
+    .catch((err) => {
+      if (!err.statusCode) {
+        err.statusCode = 501;
+        err.message =
+          "Błąd podczas wysyłania kodu do potwierdzenia adresu email.";
+      }
+      next(err);
+    });
+};
+
+exports.userDeleteVerifiedEmail = (req, res, next) => {
+  const userId = req.userId;
+
+  User.findOne({
+    _id: userId,
+    accountVerified: true,
+  })
+    .select(
+      "_id emailVerified emailToVerified codeToVerifiedEmail email language"
+    )
+    .then((resultUserDoc) => {
+      if (!!resultUserDoc) {
+        if (!!resultUserDoc.email) {
+          resultUserDoc.emailVerified = true;
+          resultUserDoc.emailToVerified = null;
+          resultUserDoc.codeToVerifiedEmail = null;
+
+          return resultUserDoc.save();
+        } else {
+          const error = new Error("Nie można anulować zmiany.");
+          error.statusCode = 420;
+          throw error;
+        }
+      } else {
+        const error = new Error("Brak użytkownika.");
+        error.statusCode = 422;
+        throw error;
+      }
+    })
+    .then((userSavedData) => {
+      const propsGenerator = generateEmail.generateContentEmail({
+        alertType: "alert_delete_verified_email",
+        companyChanged: false,
+        language: !!userSavedData.language ? userSavedData.language : "PL",
+        itemAlert: null,
+        collection: "Default",
+      });
+
+      notifications.sendEmail({
+        email: userSavedData.email,
+        ...propsGenerator,
+      });
+
+      res.status(201).json({
+        userEmail: userSavedData.email,
       });
     })
 

@@ -353,6 +353,16 @@ exports.Translates = {
           title: ["Kod potwierdzający adres email"],
         },
       },
+      alert_delete_verified_phone: {
+        companyChangedUser: {
+          title: ["Anulowano zmianę numeru telefonu"],
+        },
+      },
+      alert_delete_verified_email: {
+        companyChangedUser: {
+          title: ["Anulowano zmianę adresu e-mail"],
+        },
+      },
       alert_veryfied_phone_account: {
         companyChangedUser: {
           title: ["Numer telefonu został zweryfikowany."],
@@ -741,6 +751,16 @@ exports.Translates = {
       alert_confirm_account_email: {
         companyChangedUser: {
           title: ["Code confirming the email address"],
+        },
+      },
+      alert_delete_verified_phone: {
+        companyChangedUser: {
+          title: ["Phone number change canceled"],
+        },
+      },
+      alert_delete_verified_email: {
+        companyChangedUser: {
+          title: ["The change of e-mail address was canceled"],
         },
       },
       alert_deleted_account_success: {
