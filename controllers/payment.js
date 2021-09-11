@@ -1,4 +1,5 @@
 const Company = require("../models/company");
+const RaportSMS = require("../models/raportSMS");
 const Coins = require("../models/coins");
 const Invoice = require("../models/invoice");
 const { validationResult } = require("express-validator");
@@ -214,6 +215,7 @@ exports.updateOrderProcess = async (req, res, next) => {
             if (coinsDoc.length > 0) {
               if (event.data.object.payment_status === "paid") {
                 const bulkArrayToUpdate = [];
+                const bulkArrayToUpdateRaportSMS = [];
 
                 let allCountPremium = 0;
                 let allCountSMS = 0;
@@ -255,16 +257,16 @@ exports.updateOrderProcess = async (req, res, next) => {
                           notifactionNoSMS: false,
                         },
                       },
-                      $addToSet: {
-                        raportSMS: {
-                          year: new Date().getFullYear(),
-                          month: new Date().getMonth() + 1,
-                          count: allCountSMS,
-                          isAdd: true,
-                          title: "sms_added",
-                        },
-                      },
                     },
+                  });
+
+                  bulkArrayToUpdateRaportSMS.push({
+                    companyId: companyDoc._id,
+                    year: new Date().getFullYear(),
+                    month: new Date().getMonth() + 1,
+                    count: allCountSMS,
+                    isAdd: true,
+                    title: "sms_added",
                   });
                 }
 
@@ -291,7 +293,11 @@ exports.updateOrderProcess = async (req, res, next) => {
 
                 return Company.bulkWrite(bulkArrayToUpdate)
                   .then(() => {
-                    return companyDoc;
+                    return RaportSMS.insertMany(
+                      bulkArrayToUpdateRaportSMS
+                    ).then(() => {
+                      return companyDoc;
+                    });
                   })
                   .catch(() => {
                     const error = new Error(

@@ -7,6 +7,7 @@ const RegisterCompany = require("../models/registerCompany");
 const Opinion = require("../models/opinion");
 const Report = require("../models/reports");
 const Service = require("../models/service");
+const RaportSMS = require("../models/raportSMS");
 const Communiting = require("../models/Communiting");
 const mongoose = require("mongoose");
 const User = require("../models/user");
@@ -436,7 +437,6 @@ exports.registrationCompany = (req, res, next) => {
                       smsCommunitingChangedAvaible: false,
                       smsCommunitingCanceledAvaible: false,
                       sms: 0,
-                      raportSMS: [],
                       maps: null,
                       notifactionNoSMS: true,
                       notifactionNoPremium: true,
@@ -5152,18 +5152,6 @@ exports.companyStatistics = (req, res, next) => {
           user: 1,
           _id: 1,
         },
-        raportSMS: {
-          $filter: {
-            input: "$raportSMS",
-            as: "raport",
-            cond: {
-              $and: [
-                { $in: ["$$raport.month", months] },
-                { $eq: ["$$raport.year", year] },
-              ],
-            },
-          },
-        },
       },
     },
   ])
@@ -5222,36 +5210,42 @@ exports.companyStatistics = (req, res, next) => {
         .populate("toWorkerUserId", "name surname")
         .sort({ fullDate: 1 })
         .then((resultReserwation) => {
-          return Service.find({
+          return RaportSMS.find({
             companyId: companyId,
             month: { $in: months },
             year: { $eq: year },
-            statusValue: { $in: [3, 4] },
-            ...findOnlyWorkerSecond,
-          })
-            .select("companyId cost day month year isDeleted workerUserId")
-            .populate("workerUserId", "name surname")
-            .then((raportServices) => {
-              return Communiting.find({
-                companyId: companyId,
-                month: { $in: months },
-                year: { $eq: year },
-                ...findOnlyWorkerSecond,
-              })
-                .select(
-                  "companyId cost day month year isDeleted workerUserId timeEnd statusValue"
-                )
-                .populate("workerUserId", "name surname")
-                .then((raportCommunitings) => {
-                  return {
-                    resultReserwation: resultReserwation,
-                    services: result.resultCompanyDoc.services,
-                    raportSMS: result.resultCompanyDoc.raportSMS,
-                    raportServices: raportServices,
-                    raportCommunitings: raportCommunitings,
-                  };
-                });
-            });
+          }).then((allRaportSMS) => {
+            return Service.find({
+              companyId: companyId,
+              month: { $in: months },
+              year: { $eq: year },
+              statusValue: { $in: [3, 4] },
+              ...findOnlyWorkerSecond,
+            })
+              .select("companyId cost day month year isDeleted workerUserId")
+              .populate("workerUserId", "name surname")
+              .then((raportServices) => {
+                return Communiting.find({
+                  companyId: companyId,
+                  month: { $in: months },
+                  year: { $eq: year },
+                  ...findOnlyWorkerSecond,
+                })
+                  .select(
+                    "companyId cost day month year isDeleted workerUserId timeEnd statusValue"
+                  )
+                  .populate("workerUserId", "name surname")
+                  .then((raportCommunitings) => {
+                    return {
+                      resultReserwation: resultReserwation,
+                      services: result.resultCompanyDoc.services,
+                      raportSMS: allRaportSMS,
+                      raportServices: raportServices,
+                      raportCommunitings: raportCommunitings,
+                    };
+                  });
+              });
+          });
         });
     })
     .then((resultSave) => {
@@ -5951,15 +5945,6 @@ exports.companySMSSendClients = (req, res, next) => {
           $inc: {
             sms: -lengthCompanyClients,
           },
-          $addToSet: {
-            raportSMS: {
-              year: new Date().getFullYear(),
-              month: new Date().getMonth() + 1,
-              count: lengthCompanyClients,
-              isAdd: false,
-              title: "sms_client",
-            },
-          },
         },
         { upsert: true, safe: true },
         null
@@ -5996,7 +5981,20 @@ exports.companySMSSendClients = (req, res, next) => {
               });
             }
           }
-          return lengthCompanyClients;
+          const insertRaportSMS = [
+            {
+              companyId: companyId,
+              year: new Date().getFullYear(),
+              month: new Date().getMonth() + 1,
+              count: lengthCompanyClients,
+              isAdd: false,
+              title: "sms_clients",
+            },
+          ];
+
+          return RaportSMS.insertMany(insertRaportSMS).then(() => {
+            return lengthCompanyClients;
+          });
         })
         .catch((err) => {
           const error = new Error("Brak odpowiedniej ilosci sms.");

@@ -4,6 +4,7 @@ const Company = require("../models/company");
 const Service = require("../models/service");
 const Communiting = require("../models/Communiting");
 const Reserwation = require("../models/reserwation");
+const RaportSMS = require("../models/raportSMS");
 const webpush = require("web-push");
 const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
@@ -335,6 +336,7 @@ const sendVerifySMS = ({ phoneNumber = null, message = null }) => {
   }
 };
 
+/*
 const sendSMS = ({
   userId,
   companyId,
@@ -495,7 +497,7 @@ const sendSMS = ({
         return snsResult;
       });
   }
-};
+};*/
 
 const updateCompanyFunction = async ({
   companyId = null,
@@ -519,15 +521,6 @@ const updateCompanyFunction = async ({
         {
           $inc: {
             sms: -countItems,
-          },
-          $addToSet: {
-            raportSMS: {
-              year: new Date().getFullYear(),
-              month: new Date().getMonth() + 1,
-              count: countItems,
-              isAdd: false,
-              title: titleCompanySendSMSAlert,
-            },
           },
         },
         { upsert: true, safe: true },
@@ -611,6 +604,7 @@ const updateAllCollection = async ({
         const allUsersWithItems = [];
         const otherUsersWithoutAccount = [];
         const bulkArrayToUpdate = [];
+        const bulkArrayToUpdateCompanyRaportSMS = [];
         const allUpdatedItems = [];
         const allOpinionIdsToDelete = [];
         const companysItemsAndAvaibleSendSMSStatus = [];
@@ -812,6 +806,20 @@ const updateAllCollection = async ({
                     message: bodySMS,
                   });
 
+                  if (!!itemUser[companyField]) {
+                    if (!!itemUser[companyField]._id) {
+                      // add raport sms
+                      bulkArrayToUpdateCompanyRaportSMS.push({
+                        companyId: itemUser[companyField]._id,
+                        year: new Date().getFullYear(),
+                        month: new Date().getMonth() + 1,
+                        count: 1,
+                        isAdd: false,
+                        title: typeNotification,
+                      });
+                    }
+                  }
+
                   //update item collection when send sms success
                   if (!!resultSMS) {
                     bulkArrayToUpdate.push({
@@ -984,6 +992,20 @@ const updateAllCollection = async ({
                           message: bodySMS,
                         });
 
+                        if (!!itemUser[companyField]) {
+                          if (!!itemUser[companyField]._id) {
+                            // add raport sms
+                            bulkArrayToUpdateCompanyRaportSMS.push({
+                              companyId: itemUser[companyField]._id,
+                              year: new Date().getFullYear(),
+                              month: new Date().getMonth() + 1,
+                              count: 1,
+                              isAdd: false,
+                              title: typeNotification,
+                            });
+                          }
+                        }
+
                         //if sms success update item collection
                         if (!!resultSMS) {
                           bulkArrayToUpdate.push({
@@ -1051,6 +1073,11 @@ const updateAllCollection = async ({
                     }
                   );
                 }
+                if (bulkArrayToUpdateCompanyRaportSMS.length > 0) {
+                  RaportSMS.insertMany(bulkArrayToUpdateCompanyRaportSMS).then(
+                    () => {}
+                  );
+                }
                 return allUpdatedItems;
               })
               .catch((err) => {
@@ -1079,6 +1106,6 @@ const updateAllCollection = async ({
 
 exports.updateAllCollection = updateAllCollection;
 exports.sendVerifySMS = sendVerifySMS;
-exports.sendSMS = sendSMS;
+// exports.sendSMS = sendSMS;
 exports.sendEmail = sendEmail;
 exports.sendMultiAlert = sendMultiAlert;
