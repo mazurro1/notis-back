@@ -4,6 +4,7 @@ const CompanyAvailability = require("../models/companyAvailability");
 const Reserwation = require("../models/reserwation");
 const Geolocations = require("../models/geolocation");
 const RegisterCompany = require("../models/registerCompany");
+const NoConstantWorkingHours = require("../models/noConstantWorkingHours");
 const Opinion = require("../models/opinion");
 const Report = require("../models/reports");
 const Service = require("../models/service");
@@ -939,9 +940,7 @@ exports.getCompanyData = (req, res, next) => {
     accountPhoneVerified: true,
     accountEmailVerified: true,
   })
-    .select(
-      "-codeToVerified -raports -codeToActive -workers.noConstantWorkingHours -ownerData.noConstantWorkingHours"
-    )
+    .select("-codeToVerified -raports -codeToActive")
     .populate("owner", "name surname imageUrl")
     .populate("workers.user", "name surname email imageUrl")
     .then((companyDoc) => {
@@ -1072,8 +1071,6 @@ exports.getCompanyData = (req, res, next) => {
                   constantWorkingHours: item.constantWorkingHours
                     ? item.constantWorkingHours
                     : [],
-                  noConstantWorkingHours: [],
-
                   servicesCategory: item.servicesCategory
                     ? item.servicesCategory
                     : [],
@@ -1085,7 +1082,6 @@ exports.getCompanyData = (req, res, next) => {
                   permissions: dataCompany.ownerData.permissions,
                   constantWorkingHours:
                     dataCompany.ownerData.constantWorkingHours,
-                  noConstantWorkingHours: [],
                   specialization: dataCompany.ownerData.specialization,
                   servicesCategory: dataCompany.ownerData.servicesCategory,
                 },
@@ -3120,81 +3116,42 @@ exports.companyWorkersNoConstData = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  Company.aggregate([
-    {
-      $match: {
-        _id: mongoose.Types.ObjectId(companyId),
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        owner: 1,
-        workers: {
-          $filter: {
-            input: "$workers",
-            as: "workerFirstFilter",
-            cond: {
-              $and: [
-                {
-                  $eq: [
-                    "$$workerFirstFilter._id",
-                    mongoose.Types.ObjectId(workerId),
-                  ],
-                },
-              ],
-            },
-          },
-        },
-      },
-    },
-    { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        _id: 1,
-        owner: 1,
-        workers: {
-          permissions: 1,
-          user: 1,
-          _id: 1,
-          noConstantWorkingHours: {
-            $filter: {
-              input: "$workers.noConstantWorkingHours",
-              as: "item",
-              cond: {
-                $and: [
-                  { $eq: ["$$item.month", month] },
-                  { $eq: ["$$item.year", year] },
-                ],
-              },
-            },
-          },
-        },
-      },
-    },
-  ])
-    .then((resultCompanyDoc) => {
-      if (resultCompanyDoc.length > 0) {
-        const companyDoc = resultCompanyDoc[0];
-        if (!!companyDoc.workers._id) {
-          let hasPermission = companyDoc.owner == userId;
-          if (!hasPermission) {
-            hasPermission = companyDoc.workers.permissions.some(
+
+  Company.findOne({
+    _id: companyId,
+  })
+    .select("_id workers._id workers.permissions workers.user owner")
+    .then((companyDoc) => {
+      if (!!companyDoc) {
+        let hasPermission = companyDoc.owner == userId;
+        if (!hasPermission) {
+          const selectUserWorker = companyDoc.workers.find(
+            (itemWorker) => itemWorker.user == userId
+          );
+          if (!!selectUserWorker) {
+            hasPermission = selectUserWorker.permissions.some(
               (perm) => perm === 4
             );
-          }
-          if (hasPermission) {
-            return {
-              workerNoConstHours: companyDoc.workers.noConstantWorkingHours,
-            };
           } else {
-            const error = new Error("Brak dostępu.");
-            error.statusCode = 401;
+            const error = new Error("Brak pracownika.");
+            error.statusCode = 403;
             throw error;
           }
+        }
+        if (hasPermission) {
+          return NoConstantWorkingHours.find({
+            companyId: companyId,
+            workerUserId: workerId,
+            month: month,
+            year: year,
+          }).then((userNoConstWorkingHours) => {
+            return {
+              workerNoConstHours: userNoConstWorkingHours,
+            };
+          });
         } else {
-          const error = new Error("Brak pracownika.");
-          error.statusCode = 403;
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
           throw error;
         }
       } else {
@@ -3222,7 +3179,6 @@ exports.companyOwnerNoConstData = (req, res, next) => {
   const companyId = req.body.companyId;
   const year = req.body.year;
   const month = req.body.month;
-  const ownerId = req.body.ownerId;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -3230,41 +3186,17 @@ exports.companyOwnerNoConstData = (req, res, next) => {
     error.statusCode = 422;
     throw error;
   }
-  Company.aggregate([
-    {
-      $match: {
-        _id: mongoose.Types.ObjectId(companyId),
-        owner: mongoose.Types.ObjectId(ownerId),
-      },
-    },
-    { $unwind: "$ownerData" },
-    {
-      $project: {
-        _id: 1,
-        owner: 1,
-        ownerData: {
-          permissions: 1,
-          noConstantWorkingHours: {
-            $filter: {
-              input: "$ownerData.noConstantWorkingHours",
-              as: "itemOwner",
-              cond: {
-                $and: [
-                  { $eq: ["$$itemOwner.month", month] },
-                  { $eq: ["$$itemOwner.year", year] },
-                ],
-              },
-            },
-          },
-        },
-      },
-    },
-  ])
+
+  Company.findOne({
+    _id: companyId,
+    owner: userId,
+  })
+    .select("_id owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
-        let hasPermission = resultCompanyDoc[0].owner == ownerId;
+        let hasPermission = resultCompanyDoc.owner == userId;
         if (hasPermission) {
-          return resultCompanyDoc;
+          return true;
         } else {
           const error = new Error("Brak dostępu.");
           error.statusCode = 401;
@@ -3276,10 +3208,16 @@ exports.companyOwnerNoConstData = (req, res, next) => {
         throw error;
       }
     })
-    .then((resultCompanyDoc) => {
-      res.status(201).json({
-        noConstWorkingHours:
-          resultCompanyDoc[0].ownerData.noConstantWorkingHours,
+    .then(() => {
+      return NoConstantWorkingHours.find({
+        companyId: companyId,
+        workerUserId: userId,
+        month: month,
+        year: year,
+      }).then((userNoConstWorkingHours) => {
+        res.status(201).json({
+          noConstWorkingHours: userNoConstWorkingHours,
+        });
       });
     })
     .catch((err) => {
@@ -3301,106 +3239,49 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
   const dayMinus = new Date(dateStart.setDate(dateStart.getDate() - 1));
   const dayPlus = new Date(dateEnd.setDate(dateEnd.getDate() + 1));
 
-  const validIsOwner = workerId === "owner" ? userId : workerId;
-
-  let bulkArrayToUpdate = [];
-
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const error = new Error("Validation faild entered data is incorrect.");
     error.statusCode = 422;
     throw error;
   }
-  Company.aggregate([
-    {
-      $match: {
-        _id: mongoose.Types.ObjectId(companyId),
-        premium: {
-          $gte: new Date(),
-        },
-      },
+
+  Company.findOne({
+    _id: companyId,
+    premium: {
+      $gte: new Date(),
     },
-    { $unwind: "$ownerData" },
-    {
-      $project: {
-        ownerData: 1,
-        workers: {
-          $filter: {
-            input: "$workers",
-            as: "workerFirstFilter",
-            cond: {
-              $and: [
-                {
-                  $eq: [
-                    "$$workerFirstFilter.user",
-                    mongoose.Types.ObjectId(validIsOwner),
-                  ],
-                },
-              ],
-            },
-          },
-        },
-        owner: 1,
-        premium: 1,
-        _id: 1,
-      },
-    },
-    { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
-    {
-      $project: {
-        ownerData: {
-          _id: 1,
-          user: 1,
-          noConstantWorkingHours: {
-            $filter: {
-              input: "$ownerData.noConstantWorkingHours",
-              as: "itemOwner",
-              cond: {
-                $and: [
-                  { $gte: ["$$itemOwner.start", dayMinus] },
-                  { $lte: ["$$itemOwner.start", dayPlus] },
-                ],
-              },
-            },
-          },
-        },
-        workers: {
-          _id: 1,
-          user: 1,
-          permissions: 1,
-          noConstantWorkingHours: {
-            $filter: {
-              input: "$workers.noConstantWorkingHours",
-              as: "item",
-              cond: {
-                $and: [
-                  { $gte: ["$$item.start", dayMinus] },
-                  { $lte: ["$$item.start", dayPlus] },
-                ],
-              },
-            },
-          },
-        },
-        owner: 1,
-        premium: 1,
-        pauseCompany: 1,
-        _id: 1,
-      },
-    },
-  ])
-    .then((companyDoc) => {
-      if (companyDoc.length > 0) {
-        const resultCompanyDoc = companyDoc[0];
+  })
+    .select("_id premium owner workers._id workers.permissions workers.user")
+    .then((resultCompanyDoc) => {
+      if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
         if (!hasPermission) {
-          if (!!resultCompanyDoc.workers.permissions) {
-            hasPermission = resultCompanyDoc.workers.permissions.some(
-              (perm) => perm === 4
-            );
+          const selectWorker = resultCompanyDoc.workers.find(
+            (itemWorker) => itemWorker.user == workerId
+          );
+          if (!!selectWorker) {
+            hasPermission = selectWorker.permissions.some((perm) => perm === 4);
+          } else {
+            const error = new Error("Brak dostępu.");
+            error.statusCode = 401;
+            throw error;
           }
         }
         if (hasPermission) {
-          return resultCompanyDoc;
+          return NoConstantWorkingHours.find({
+            companyId: companyId,
+            workerUserId: workerId === "owner" ? userId : workerId,
+            start: {
+              $gte: dayMinus,
+              $lte: dayPlus,
+            },
+          }).then((userNoConstWorkingHours) => {
+            return {
+              userNoConstWorkingHours: userNoConstWorkingHours,
+              resultCompanyDoc: resultCompanyDoc,
+            };
+          });
         } else {
           const error = new Error("Brak dostępu.");
           error.statusCode = 401;
@@ -3412,195 +3293,68 @@ exports.companyWorkersAddNoConstData = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyDoc) => {
+    .then(({ userNoConstWorkingHours, resultCompanyDoc }) => {
       if (workerId === "owner") {
-        const selectedOtherDaysOwner =
-          companyDoc.ownerData.noConstantWorkingHours.find(
-            (item) => item.fullDate === newDate.fullDate
-          );
+        const selectedOtherDaysOwner = userNoConstWorkingHours.find(
+          (item) => item.fullDate === newDate.fullDate
+        );
         if (!!selectedOtherDaysOwner) {
-          bulkArrayToUpdate.push({
-            updateOne: {
-              filter: {
-                _id: companyId,
-              },
-              update: {
-                $pull: {
-                  "ownerData.noConstantWorkingHours": {
-                    _id: selectedOtherDaysOwner._id,
-                  },
-                },
-              },
-            },
-          });
-        }
-      } else {
-        if (!!companyDoc.workers._id) {
-          const selectedOtherDays =
-            companyDoc.workers.noConstantWorkingHours.find(
-              (item) => item.fullDate === newDate.fullDate
-            );
-          if (!!selectedOtherDays) {
-            bulkArrayToUpdate.push({
-              updateOne: {
-                filter: {
-                  _id: companyId,
-                  "workers._id": companyDoc.workers._id,
-                },
-                update: {
-                  $pull: {
-                    "workers.$.noConstantWorkingHours": {
-                      _id: selectedOtherDays._id,
-                    },
-                  },
-                },
-              },
-            });
-          }
-          return companyDoc;
-        }
-      }
-      return companyDoc;
-    })
-    .then(() => {
-      if (workerId === "owner") {
-        bulkArrayToUpdate.push({
-          updateOne: {
-            filter: {
-              _id: companyId,
-            },
-            update: {
-              $addToSet: {
-                "ownerData.noConstantWorkingHours": newDate,
-              },
-            },
-          },
-        });
-      } else {
-        bulkArrayToUpdate.push({
-          updateOne: {
-            filter: {
-              _id: companyId,
-              "workers.user": workerId,
-            },
-            update: {
-              $addToSet: {
-                "workers.$.noConstantWorkingHours": newDate,
-              },
-            },
-          },
-        });
-      }
-      return Company.bulkWrite(bulkArrayToUpdate)
-        .then(() => {
-          return true;
-        })
-        .catch((err) => {
-          console.log(err);
-          if (!err.statusCode) {
-            err.statusCode = 501;
-            err.message = "Błąd podczas aktualizacji noConstHours.";
-          }
-          next(err);
-        });
-    })
-    .then(() => {
-      return Company.aggregate([
-        {
-          $match: {
-            _id: mongoose.Types.ObjectId(companyId),
-            premium: {
-              $gte: new Date(),
-            },
-          },
-        },
-        { $unwind: "$ownerData" },
-        {
-          $project: {
-            ownerData: 1,
-            workers: {
-              $filter: {
-                input: "$workers",
-                as: "workerFirstFilter",
-                cond: {
-                  $and: [
-                    {
-                      $eq: [
-                        "$$workerFirstFilter.user",
-                        mongoose.Types.ObjectId(validIsOwner),
-                      ],
-                    },
-                  ],
-                },
-              },
-            },
-            owner: 1,
-            premium: 1,
-            _id: 1,
-          },
-        },
-        { $unwind: { path: "$workers", preserveNullAndEmptyArrays: true } },
-        {
-          $project: {
-            ownerData: {
-              _id: 1,
-              user: 1,
-              noConstantWorkingHours: {
-                $filter: {
-                  input: "$ownerData.noConstantWorkingHours",
-                  as: "itemOwner",
-                  cond: {
-                    $and: [{ $eq: ["$$itemOwner.fullDate", newDate.fullDate] }],
-                  },
-                },
-              },
-            },
-            workers: {
-              _id: 1,
-              user: 1,
-              permissions: 1,
-              noConstantWorkingHours: {
-                $filter: {
-                  input: "$workers.noConstantWorkingHours",
-                  as: "itemWorker",
-                  cond: {
-                    $and: [
-                      { $eq: ["$$itemWorker.fullDate", newDate.fullDate] },
-                    ],
-                  },
-                },
-              },
-            },
-            owner: 1,
-            premium: 1,
-            pauseCompany: 1,
-            _id: 1,
-          },
-        },
-      ]).then((resultSavedNoConst) => {
-        const savedNoConst = resultSavedNoConst[0];
-        bulkArrayToUpdate = [];
-        if (workerId === "owner") {
-          const findSelectedNoConstHoursOwner =
-            savedNoConst.ownerData.noConstantWorkingHours.find(
-              (hour) => hour.fullDate === newDate.fullDate
-            );
-          res.status(201).json({
-            noConstantDay: !!findSelectedNoConstHoursOwner
-              ? findSelectedNoConstHoursOwner
-              : [],
+          return NoConstantWorkingHours.deleteOne({
+            _id: selectedOtherDaysOwner._id,
+            companyId: companyId,
+            workerUserId: userId,
+          }).then(() => {
+            return resultCompanyDoc;
           });
         } else {
-          const findSelectedNoConstHours =
-            savedNoConst.workers.noConstantWorkingHours.find(
-              (hour) => hour.fullDate === newDate.fullDate
-            );
-          res.status(201).json({
-            noConstantDay: !!findSelectedNoConstHours
-              ? findSelectedNoConstHours
-              : [],
-          });
+          return resultCompanyDoc;
         }
+      } else {
+        const selectWorker = resultCompanyDoc.workers.find(
+          (itemWorker) => itemWorker.user == workerId
+        );
+        if (!!selectWorker) {
+          const selectedOtherDays = userNoConstWorkingHours.find(
+            (item) => item.fullDate === newDate.fullDate
+          );
+          if (!!selectedOtherDays) {
+            return NoConstantWorkingHours.deleteOne({
+              _id: selectedOtherDays._id,
+              companyId: companyId,
+              workerUserId: selectWorker.user,
+            }).then(() => {
+              return resultCompanyDoc;
+            });
+          } else {
+            return resultCompanyDoc;
+          }
+        } else {
+          const error = new Error("Brak dostępu.");
+          error.statusCode = 401;
+          throw error;
+        }
+      }
+    })
+    .then(() => {
+      let itemToSave = null;
+      if (workerId === "owner") {
+        itemToSave = new NoConstantWorkingHours({
+          ...newDate,
+          workerUserId: userId,
+          companyId: companyId,
+        });
+      } else {
+        itemToSave = new NoConstantWorkingHours({
+          ...newDate,
+          workerUserId: workerId,
+          companyId: companyId,
+        });
+      }
+      return itemToSave.save();
+    })
+    .then((savedNoConstWorkingHour) => {
+      res.status(201).json({
+        noConstantDay: savedNoConstWorkingHour,
       });
     })
     .catch((err) => {
@@ -3627,7 +3381,7 @@ exports.companyWorkersDeleteNoConstData = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id owner workers.permissions")
+    .select("_id owner workers._id workers.user workers.permissions")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
@@ -3656,18 +3410,11 @@ exports.companyWorkersDeleteNoConstData = (req, res, next) => {
     })
     .then(() => {
       if (workerId === "owner") {
-        return Company.updateOne(
-          {
-            _id: companyId,
-          },
-          {
-            $pull: {
-              "ownerData.noConstantWorkingHours": {
-                _id: noConstDateId,
-              },
-            },
-          }
-        )
+        return NoConstantWorkingHours.deleteOne({
+          _id: noConstDateId,
+          companyId: companyId,
+          workerUserId: userId,
+        })
           .then(() => {
             res.status(201).json({
               message: "Pomyślnie usunięto dzień pracy pracownika",
@@ -3679,19 +3426,11 @@ exports.companyWorkersDeleteNoConstData = (req, res, next) => {
             throw error;
           });
       } else {
-        return Company.updateOne(
-          {
-            _id: companyId,
-            "workers._id": workerId,
-          },
-          {
-            $pull: {
-              "workers.$.noConstantWorkingHours": {
-                _id: noConstDateId,
-              },
-            },
-          }
-        )
+        return NoConstantWorkingHours.deleteOne({
+          _id: noConstDateId,
+          companyId: companyId,
+          workerUserId: workerId,
+        })
           .then(() => {
             res.status(201).json({
               message: "Pomyślnie usunięto dzień pracy pracownika",
@@ -4597,18 +4336,6 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
           user: 1,
           permissions: 1,
           constantWorkingHours: 1,
-          noConstantWorkingHours: {
-            $filter: {
-              input: "$ownerData.noConstantWorkingHours",
-              as: "itemOwner",
-              cond: {
-                $and: [
-                  { $eq: ["$$itemOwner.month", month] },
-                  { $eq: ["$$itemOwner.year", year] },
-                ],
-              },
-            },
-          },
         },
         _id: 1,
         owner: 1,
@@ -4629,15 +4356,21 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
       },
     },
   ])
-
-    .then((resultCompanyDoc) => {
-      if (!!resultCompanyDoc) {
-        let hasPermission = resultCompanyDoc[0].owner == userId;
-        if (hasPermission) {
-          return resultCompanyDoc;
+    .then((companyDoc) => {
+      if (companyDoc.length > 0) {
+        const resultCompanyDoc = companyDoc[0];
+        if (!!resultCompanyDoc) {
+          let hasPermission = resultCompanyDoc.owner == userId;
+          if (hasPermission) {
+            return resultCompanyDoc;
+          } else {
+            const error = new Error("Brak dostępu.");
+            error.statusCode = 401;
+            throw error;
+          }
         } else {
-          const error = new Error("Brak dostępu.");
-          error.statusCode = 401;
+          const error = new Error("Brak wybranej firmy.");
+          error.statusCode = 403;
           throw error;
         }
       } else {
@@ -4646,12 +4379,15 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyDoc) => {
-      if (companyDoc.length > 0) {
-        const resultCompanyDoc = companyDoc[0];
+    .then((resultCompanyDoc) => {
+      return NoConstantWorkingHours.find({
+        companyId: companyId,
+        workerUserId: resultCompanyDoc.owner,
+        month: month,
+        year: year,
+      }).then((ownerNoConstWorkingHours) => {
         res.status(201).json({
-          noConstWorkingHours:
-            resultCompanyDoc.ownerData.noConstantWorkingHours,
+          noConstWorkingHours: ownerNoConstWorkingHours,
           constWorkingHours: resultCompanyDoc.ownerData.constantWorkingHours,
           daysOff: resultCompanyDoc.daysOff,
           openingDays: !!resultCompanyDoc.openingDays
@@ -4659,11 +4395,7 @@ exports.companyOwnerWorkingHours = (req, res, next) => {
             : null,
           reservationEveryTime: resultCompanyDoc.reservationEveryTime,
         });
-      } else {
-        const error = new Error("Brak wybranej firmy.");
-        error.statusCode = 403;
-        throw error;
-      }
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -4709,7 +4441,7 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
                 {
                   $eq: [
                     "$$workerFirstFilter.user",
-                    mongoose.Types.ObjectId(userId),
+                    mongoose.Types.ObjectId(workerId),
                   ],
                 },
               ],
@@ -4742,33 +4474,32 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
           user: 1,
           _id: 1,
           constantWorkingHours: 1,
-          noConstantWorkingHours: {
-            $filter: {
-              input: "$workers.noConstantWorkingHours",
-              as: "item",
-              cond: {
-                $and: [
-                  { $eq: ["$$item.month", month] },
-                  { $eq: ["$$item.year", year] },
-                ],
-              },
-            },
-          },
         },
       },
     },
   ])
     .then((resultCompanyDoc) => {
-      if (!!resultCompanyDoc) {
-        let hasPermission = resultCompanyDoc[0].owner == userId;
-        if (!hasPermission) {
-          hasPermission = resultCompanyDoc[0].workers.user == userId;
-        }
-        if (hasPermission) {
-          return resultCompanyDoc;
+      if (resultCompanyDoc.length > 0) {
+        const companyDoc = resultCompanyDoc[0];
+        if (!!companyDoc) {
+          let hasPermission = companyDoc.owner == userId;
+          if (!hasPermission) {
+            if (!!companyDoc.workers) {
+              if (!!companyDoc.workers.user) {
+                hasPermission = companyDoc.workers.user == userId;
+              }
+            }
+          }
+          if (hasPermission) {
+            return companyDoc;
+          } else {
+            const error = new Error("Brak dostępu.");
+            error.statusCode = 401;
+            throw error;
+          }
         } else {
-          const error = new Error("Brak dostępu.");
-          error.statusCode = 401;
+          const error = new Error("Brak wybranej firmy.");
+          error.statusCode = 403;
           throw error;
         }
       } else {
@@ -4778,22 +4509,20 @@ exports.companyWorkersWorkingHours = (req, res, next) => {
       }
     })
     .then((companyDoc) => {
-      if (companyDoc.length > 0) {
-        const resultCompanyDoc = companyDoc[0];
+      return NoConstantWorkingHours.find({
+        companyId: companyId,
+        workerUserId: companyDoc.workers.user,
+        month: month,
+        year: year,
+      }).then((workerNoConstWorkingHours) => {
         res.status(201).json({
-          noConstWorkingHours: resultCompanyDoc.workers.noConstantWorkingHours,
-          constWorkingHours: resultCompanyDoc.workers.constantWorkingHours,
-          daysOff: resultCompanyDoc.daysOff,
-          openingDays: !!resultCompanyDoc.openingDays
-            ? resultCompanyDoc.openingDays
-            : null,
-          reservationEveryTime: resultCompanyDoc.reservationEveryTime,
+          noConstWorkingHours: workerNoConstWorkingHours,
+          constWorkingHours: companyDoc.workers.constantWorkingHours,
+          daysOff: companyDoc.daysOff,
+          openingDays: !!companyDoc.openingDays ? companyDoc.openingDays : null,
+          reservationEveryTime: companyDoc.reservationEveryTime,
         });
-      } else {
-        const error = new Error("Brak wybranej firmy.");
-        error.statusCode = 403;
-        throw error;
-      }
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {

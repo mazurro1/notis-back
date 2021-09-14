@@ -6,7 +6,7 @@ const raportSMSSchema = new Schema(
     companyId: {
       type: Schema.Types.ObjectId,
       ref: "Companys",
-      required: false,
+      required: true,
     },
     year: {
       type: Number,

@@ -191,34 +191,6 @@ const companySchema = new Schema(
         type: String,
         required: false,
       },
-      noConstantWorkingHours: [
-        {
-          fullDate: {
-            type: String,
-            required: false,
-          },
-          start: {
-            type: Date,
-            required: false,
-          },
-          end: {
-            type: Date,
-            required: false,
-          },
-          holidays: {
-            type: Boolean,
-            required: false,
-          },
-          month: {
-            type: Number,
-            required: false,
-          },
-          year: {
-            type: Number,
-            required: false,
-          },
-        },
-      ],
       constantWorkingHours: [
         {
           dayOfTheWeek: {
@@ -413,34 +385,6 @@ const companySchema = new Schema(
           type: String,
           required: false,
         },
-        noConstantWorkingHours: [
-          {
-            fullDate: {
-              type: String,
-              required: false,
-            },
-            start: {
-              type: Date,
-              required: false,
-            },
-            end: {
-              type: Date,
-              required: false,
-            },
-            holidays: {
-              type: Boolean,
-              required: false,
-            },
-            month: {
-              type: Number,
-              required: false,
-            },
-            year: {
-              type: Number,
-              required: false,
-            },
-          },
-        ],
         constantWorkingHours: [
           {
             dayOfTheWeek: {

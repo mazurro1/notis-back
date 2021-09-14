@@ -6,11 +6,11 @@ const paymentsHistorySchema = new Schema(
     companyId: {
       type: Schema.Types.ObjectId,
       ref: "Companys",
-      required: false,
+      required: true,
     },
     sessionId: {
       type: String,
-      required: false,
+      required: true,
     },
     status: {
       type: String,
