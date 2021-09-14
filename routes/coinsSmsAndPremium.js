@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { body } = require("express-validator");
-const coins = require("../controllers/coins");
+const coins = require("../controllers/coinsSmsAndPremium");
 const isAuth = require("../middleware/is-auth");
 
 router.post(

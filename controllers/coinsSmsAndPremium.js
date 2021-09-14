@@ -1,4 +1,4 @@
-const Coins = require("../models/coins");
+const CoinsSmsAndPremium = require("../models/coinsSmsAndPremium");
 const { validationResult } = require("express-validator");
 
 exports.addCoins = (req, res, next) => {
@@ -18,13 +18,13 @@ exports.addCoins = (req, res, next) => {
     throw error;
   }
 
-  Coins.findOne({
+  CoinsSmsAndPremium.findOne({
     productId: productId,
     priceId: priceId,
   })
     .then((coinsDoc) => {
       if (!!!coinsDoc) {
-        const newCoins = new Coins({
+        const newCoins = new CoinsSmsAndPremium({
           productId: productId,
           priceId: priceId,
           price: price,
@@ -63,7 +63,7 @@ exports.getCoins = (req, res, next) => {
     throw error;
   }
 
-  Coins.find({
+  CoinsSmsAndPremium.find({
     disabled: false,
   })
     .select("-userCreated")

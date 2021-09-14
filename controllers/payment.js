@@ -1,6 +1,6 @@
 const Company = require("../models/company");
 const RaportSMS = require("../models/raportSMS");
-const Coins = require("../models/coins");
+const CoinsSmsAndPremium = require("../models/coinsSmsAndPremium");
 const Invoice = require("../models/invoice");
 const PaymentsHistory = require("../models/PaymentsHistory");
 const { validationResult } = require("express-validator");
@@ -41,7 +41,7 @@ exports.newOrderProcess = (req, res, next) => {
     .select("_id email customerStripeId name")
     .then((companyDoc) => {
       if (!!companyDoc) {
-        return Coins.find({
+        return CoinsSmsAndPremium.find({
           _id: { $in: coinsIds },
         }).then((coinsDoc) => {
           if (!!coinsDoc) {
@@ -171,7 +171,7 @@ exports.updateOrderProcess = async (req, res, next) => {
             const mapProductsIds = paymentHistory.productsInfo.map(
               (itemPayment) => itemPayment.coinsId
             );
-            return Coins.find({
+            return CoinsSmsAndPremium.find({
               _id: { $in: mapProductsIds },
             }).then((coinsDoc) => {
               if (coinsDoc.length > 0) {

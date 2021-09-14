@@ -5473,7 +5473,7 @@ exports.companyTransakcjonHistory = (req, res, next) => {
       return PaymentsHistory.find({
         companyId: companyId,
       })
-        .populate("coinsId", "-userCreated")
+        .populate("coinsSmsAndPremiumId", "-userCreated")
         .populate("invoiceId", "")
         .then((companyPayments) => {
           res.status(201).json({

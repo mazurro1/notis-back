@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
 
-const coinsSchema = new Schema(
+const coinsSmsAndPremiumSchema = new Schema(
   {
     productId: {
       type: String,
@@ -54,4 +54,4 @@ const coinsSchema = new Schema(
   }
 );
 
-module.exports = mongoose.model("Coins", coinsSchema);
+module.exports = mongoose.model("CoinsSmsAndPremium", coinsSmsAndPremiumSchema);

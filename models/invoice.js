@@ -34,9 +34,9 @@ const invoiceSchema = new Schema(
     },
     productsInfo: [
       {
-        coinsId: {
+        coinsSmsAndPremiumId: {
           type: Schema.Types.ObjectId,
-          ref: "Coins",
+          ref: "CoinsSmsAndPremium",
           required: true,
         },
         name: {
