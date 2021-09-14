@@ -156,46 +156,6 @@ const userSchema = new Schema(
       type: Number,
       required: false,
     },
-    alerts: [
-      {
-        alertDefaultCompanyId: {
-          type: Schema.Types.ObjectId,
-          ref: "Companys",
-          required: false,
-        },
-        reserwationId: {
-          type: Schema.Types.ObjectId,
-          ref: "Reserwations",
-          required: false,
-        },
-        serviceId: {
-          type: Schema.Types.ObjectId,
-          ref: "Services",
-          required: false,
-        },
-        communitingId: {
-          type: Schema.Types.ObjectId,
-          ref: "Communitings",
-          required: false,
-        },
-        active: {
-          type: Boolean,
-          required: false,
-        },
-        type: {
-          type: String,
-          required: false,
-        },
-        creationTime: {
-          type: Date,
-          required: false,
-        },
-        companyChanged: {
-          type: Boolean,
-          required: false,
-        },
-      },
-    ],
     vapidEndpoint: {
       endpoint: {
         type: String,

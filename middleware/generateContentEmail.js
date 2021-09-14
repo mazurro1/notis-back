@@ -280,9 +280,8 @@ exports.generateContentEmail = ({
 
     case "alert_payment_status": {
       alertColor = "orange";
-      if (isCompanyChanged) {
-        title = `${texts[alertType].companyChangedUser.title[0]}`;
-      }
+      title = `${texts[alertType].companyChangedUser.title[0]}`;
+
       break;
     }
 

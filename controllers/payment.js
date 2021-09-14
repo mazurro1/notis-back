@@ -2,6 +2,7 @@ const Company = require("../models/company");
 const RaportSMS = require("../models/raportSMS");
 const Coins = require("../models/coins");
 const Invoice = require("../models/invoice");
+const PaymentsHistory = require("../models/PaymentsHistory");
 const { validationResult } = require("express-validator");
 const {
   AWS_ACCESS_KEY_ID_APP,
@@ -14,7 +15,6 @@ const {
 const AWS = require("aws-sdk");
 const stripeLoader = require("stripe");
 const stripe = new stripeLoader(STRIPE_SECRET_KEY);
-const mongoose = require("mongoose");
 const generateEmail = require("../middleware/generateContentEmail");
 const notifications = require("../middleware/notifications");
 
@@ -38,7 +38,7 @@ exports.newOrderProcess = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id payments email customerStripeId name")
+    .select("_id email customerStripeId name")
     .then((companyDoc) => {
       if (!!companyDoc) {
         return Coins.find({
@@ -123,40 +123,26 @@ exports.newOrderProcess = (req, res, next) => {
         })
         .then((session) => {
           const paymentItem = {
+            companyId: companyId,
             sessionId: session.id,
-            coinsId: coinsDoc._id,
             status: "in_progress",
             buyingUserId: userId,
             productsInfo: mapItemsPayments,
             datePayment: new Date(),
+            invoiceId: null,
           };
 
-          return Company.updateOne(
-            {
-              _id: companyDoc._id,
-            },
-            {
-              $push: {
-                payments: {
-                  $each: [paymentItem],
-                  $position: 0,
-                },
-              },
-            }
-          )
-            .then(() => {
-              res.status(200).json({
-                paymentItem: paymentItem,
-              });
-            })
-            .catch((err) => {
-              if (!err.statusCode) {
-                err.statusCode = 501;
-                err.message = "Błąd podczas tworzenia sesji.";
-              }
-              next(err);
-            });
+          const newPaymentHistory = new PaymentsHistory({
+            ...paymentItem,
+          });
+
+          return newPaymentHistory.save();
         });
+    })
+    .then((paymentItem) => {
+      res.status(200).json({
+        paymentItem: paymentItem,
+      });
     })
     .catch((err) => {
       if (!err.statusCode) {
@@ -169,249 +155,221 @@ exports.newOrderProcess = (req, res, next) => {
 
 exports.updateOrderProcess = async (req, res, next) => {
   const event = req.body;
-  Company.aggregate([
-    {
-      $match: {
-        _id: mongoose.Types.ObjectId(event.data.object.metadata.companyId),
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        email: 1,
-        name: 1,
-        city: 1,
-        district: 1,
-        adress: 1,
-        code: 1,
-        nip: 1,
-        payments: {
-          $filter: {
-            input: "$payments",
-            as: "paymentsItem",
-            cond: {
-              $and: [
-                { $eq: ["$$paymentsItem.sessionId", event.data.object.id] },
-              ],
-            },
-          },
-        },
-      },
-    },
-  ])
-    .then((companyQuery) => {
-      if (companyQuery.length > 0) {
-        const companyDoc = companyQuery[0];
-        const findIndexPayment = companyDoc.payments.findIndex(
-          (item) => item.sessionId === event.data.object.id
-        );
-        if (findIndexPayment >= 0) {
-          const mapProductsIds = companyDoc.payments[
-            findIndexPayment
-          ].productsInfo.map((itemPayment) => itemPayment.coinsId);
-          return Coins.find({
-            _id: { $in: mapProductsIds },
-          }).then((coinsDoc) => {
-            if (coinsDoc.length > 0) {
-              if (event.data.object.payment_status === "paid") {
-                const bulkArrayToUpdate = [];
-                const bulkArrayToUpdateRaportSMS = [];
 
-                let allCountPremium = 0;
-                let allCountSMS = 0;
+  Company.findOne({
+    _id: event.data.object.metadata.companyId,
+  })
+    .select("_id email")
+    .then((companyDoc) => {
+      return PaymentsHistory.findOne({
+        companyId: event.data.object.metadata.companyId,
+        sessionId: event.data.object.id,
+        // status: "in_progress",
+      })
+        .then((paymentHistory) => {
+          if (!!paymentHistory && !!companyDoc) {
+            const mapProductsIds = paymentHistory.productsInfo.map(
+              (itemPayment) => itemPayment.coinsId
+            );
+            return Coins.find({
+              _id: { $in: mapProductsIds },
+            }).then((coinsDoc) => {
+              if (coinsDoc.length > 0) {
+                if (event.data.object.payment_status === "paid") {
+                  const bulkArrayToUpdate = [];
+                  const bulkArrayToUpdateRaportSMS = [];
 
-                bulkArrayToUpdate.push({
-                  updateOne: {
-                    filter: {
-                      _id: companyDoc._id,
-                      "payments.sessionId": event.data.object.id,
-                    },
-                    update: {
-                      $set: {
-                        "payments.$.status": event.data.object.payment_status,
-                      },
-                    },
-                  },
-                });
+                  let allCountPremium = 0;
+                  let allCountSMS = 0;
 
-                coinsDoc.forEach((coinsItem) => {
-                  if (!!coinsItem.countPremium) {
-                    allCountPremium =
-                      Number(allCountPremium) + Number(coinsItem.countPremium);
-                  }
-                  if (!!coinsItem.countSMS) {
-                    allCountSMS =
-                      Number(allCountSMS) + Number(coinsItem.countSMS);
-                  }
-                });
+                  coinsDoc.forEach((coinsItem) => {
+                    if (!!coinsItem.countPremium) {
+                      allCountPremium =
+                        Number(allCountPremium) +
+                        Number(coinsItem.countPremium);
+                    }
+                    if (!!coinsItem.countSMS) {
+                      allCountSMS =
+                        Number(allCountSMS) + Number(coinsItem.countSMS);
+                    }
+                  });
 
-                if (!!allCountSMS) {
-                  bulkArrayToUpdate.push({
-                    updateOne: {
-                      filter: {
-                        _id: companyDoc._id,
-                      },
-                      update: {
-                        $inc: { sms: allCountSMS },
-                        $set: {
-                          notifactionNoSMS: false,
+                  if (!!allCountSMS) {
+                    bulkArrayToUpdate.push({
+                      updateOne: {
+                        filter: {
+                          _id: companyDoc._id,
                         },
-                      },
-                    },
-                  });
-
-                  bulkArrayToUpdateRaportSMS.push({
-                    companyId: companyDoc._id,
-                    year: new Date().getFullYear(),
-                    month: new Date().getMonth() + 1,
-                    count: allCountSMS,
-                    isAdd: true,
-                    title: "sms_added",
-                  });
-                }
-
-                if (!!allCountPremium) {
-                  const oneWeek =
-                    Number(allCountPremium) * 30 * 24 * 60 * 60 * 1000;
-                  bulkArrayToUpdate.push({
-                    updateMany: {
-                      filter: {
-                        _id: companyDoc._id,
-                        premium: { $exists: true },
-                      },
-                      update: [
-                        {
+                        update: {
+                          $inc: { sms: allCountSMS },
                           $set: {
-                            premium: { $add: ["$premium", oneWeek] },
-                            notifactionNoPremium: false,
+                            notifactionNoSMS: false,
                           },
                         },
-                      ],
-                    },
-                  });
-                }
-
-                return Company.bulkWrite(bulkArrayToUpdate)
-                  .then(() => {
-                    return RaportSMS.insertMany(
-                      bulkArrayToUpdateRaportSMS
-                    ).then(() => {
-                      return companyDoc;
+                      },
                     });
-                  })
-                  .catch(() => {
-                    const error = new Error(
-                      "Błąd podczas dodawania przedmiotów firmie."
-                    );
-                    error.statusCode = 422;
-                    throw error;
-                  });
-              } else {
-                Company.updateOne(
-                  {
-                    _id: event.data.object.metadata.companyId,
-                    "payments.sessionId": event.data.object.id,
-                  },
-                  {
-                    $set: {
-                      "payments.$.status": event.data.object.payment_status,
-                    },
+
+                    bulkArrayToUpdateRaportSMS.push({
+                      companyId: companyDoc._id,
+                      year: new Date().getFullYear(),
+                      month: new Date().getMonth() + 1,
+                      count: allCountSMS,
+                      isAdd: true,
+                      title: "sms_added",
+                    });
                   }
-                ).then(() => {
-                  return false;
-                });
-                const error = new Error("Transakcja została odrzucona.");
-                error.statusCode = 444;
+
+                  if (!!allCountPremium) {
+                    const oneWeek =
+                      Number(allCountPremium) * 30 * 24 * 60 * 60 * 1000;
+                    bulkArrayToUpdate.push({
+                      updateMany: {
+                        filter: {
+                          _id: companyDoc._id,
+                          premium: { $exists: true },
+                        },
+                        update: [
+                          {
+                            $set: {
+                              premium: { $add: ["$premium", oneWeek] },
+                              notifactionNoPremium: false,
+                            },
+                          },
+                        ],
+                      },
+                    });
+                  }
+                  return Company.bulkWrite(bulkArrayToUpdate)
+                    .then(() => {
+                      return RaportSMS.insertMany(
+                        bulkArrayToUpdateRaportSMS
+                      ).then(() => {
+                        return PaymentsHistory.updateOne(
+                          {
+                            companyId: event.data.object.metadata.companyId,
+                            sessionId: event.data.object.id,
+                          },
+                          {
+                            $set: {
+                              status: event.data.object.payment_status,
+                            },
+                          }
+                        ).then(() => {
+                          return {
+                            paymentHistory: paymentHistory,
+                            companyDoc: companyDoc,
+                          };
+                        });
+                      });
+                    })
+                    .catch(() => {
+                      const error = new Error(
+                        "Błąd podczas dodawania przedmiotów firmie."
+                      );
+                      error.statusCode = 422;
+                      throw error;
+                    });
+                } else {
+                  PaymentsHistory.updateOne(
+                    {
+                      companyId: event.data.object.metadata.companyId,
+                      sessionId: event.data.object.id,
+                    },
+                    {
+                      $set: {
+                        status: event.data.object.payment_status,
+                      },
+                    }
+                  ).then(() => {
+                    return {
+                      paymentHistory: null,
+                      companyDoc: null,
+                    };
+                  });
+
+                  const error = new Error("Transakcja została odrzucona.");
+                  error.statusCode = 444;
+                  throw error;
+                }
+              } else {
+                const error = new Error("Brak wybranej oferty.");
+                error.statusCode = 410;
                 throw error;
               }
-            } else {
-              const error = new Error("Brak wybranej oferty.");
-              error.statusCode = 410;
-              throw error;
-            }
-          });
-        } else {
-          const error = new Error("Brak sesji transakcji.");
-          error.statusCode = 410;
-          throw error;
-        }
-      } else {
-        const error = new Error("Brak wybranej firmy.");
-        error.statusCode = 411;
-        throw error;
-      }
-    })
-    .then((resultCompanyDoc) => {
-      if (!!resultCompanyDoc) {
-        const dateInvoice = new Date();
-        return Invoice.findOne({
-          sessionId: event.data.object.id,
-        }).then((resultInvouices) => {
-          const findIndexPayment = resultCompanyDoc.payments.findIndex(
-            (item) => item.sessionId == event.data.object.id
-          );
-
-          let activeInvoice = null;
-          if (!!resultInvouices) {
-            activeInvoice = resultInvouices;
+            });
           } else {
-            const newInvoiceItem = new Invoice({
-              year: dateInvoice.getFullYear(),
-              month: dateInvoice.getMonth() + 1,
-              day: dateInvoice.getDate(),
-              link: null,
-              companyId: resultCompanyDoc._id,
+            const error = new Error(
+              "Brak wybranej firmy lub brak sesji transakcji."
+            );
+            error.statusCode = 411;
+            throw error;
+          }
+        })
+        .then(({ paymentHistory, companyDoc }) => {
+          if (!!paymentHistory) {
+            const dateInvoice = new Date();
+            return Invoice.findOne({
               sessionId: event.data.object.id,
-              invoiceNumber: null,
-              productsInfo:
-                findIndexPayment >= 0
-                  ? resultCompanyDoc.payments[findIndexPayment].productsInfo
-                  : null,
-            });
-            newInvoiceItem.save();
-            activeInvoice = newInvoiceItem;
-          }
-          if (findIndexPayment >= 0) {
-            return Company.updateOne(
-              {
-                _id: resultCompanyDoc._id,
-                "payments.sessionId": event.data.object.id,
-              },
-              {
-                $set: { "payments.$.invoiceId": activeInvoice._id },
+            }).then((resultInvouices) => {
+              let activeInvoice = null;
+              if (!!resultInvouices) {
+                activeInvoice = resultInvouices;
+              } else {
+                const newInvoiceItem = new Invoice({
+                  year: dateInvoice.getFullYear(),
+                  month: dateInvoice.getMonth() + 1,
+                  day: dateInvoice.getDate(),
+                  link: null,
+                  companyId: paymentHistory.companyId,
+                  sessionId: event.data.object.id,
+                  invoiceNumber: null,
+                  productsInfo: paymentHistory.productsInfo,
+                });
+                newInvoiceItem.save();
+                activeInvoice = newInvoiceItem;
               }
-            ).then(() => {
-              const propsGenerator = generateEmail.generateContentEmail({
-                alertType: "alert_payment_status",
-                companyChanged: true,
-                language: "PL",
-                itemAlert: null,
-                collection: "Default",
+              return PaymentsHistory.updateOne(
+                {
+                  companyId: paymentHistory.companyId,
+                  sessionId: event.data.object.id,
+                },
+                {
+                  $set: { invoiceId: activeInvoice._id },
+                }
+              ).then(() => {
+                return companyDoc;
               });
+            });
+          } else {
+            const error = new Error("Transakcja została odrzucona.");
+            error.statusCode = 422;
+            throw error;
+          }
+        })
+        .then((companyDoc) => {
+          if (!!companyDoc) {
+            const propsGenerator = generateEmail.generateContentEmail({
+              alertType: "alert_payment_status",
+              companyChanged: true,
+              language: "PL",
+              itemAlert: null,
+              collection: "Default",
+            });
 
-              notifications.sendEmail({
-                email: resultCompanyDoc.email,
-                ...propsGenerator,
-              });
-              return true;
+            notifications.sendEmail({
+              email: companyDoc.email,
+              ...propsGenerator,
             });
           }
+          res.json({ received: true });
+        })
+        .catch((err) => {
+          if (!err.statusCode) {
+            err.statusCode = 501;
+            err.message = "Błąd podczas aktualizacji zamówienia.";
+          }
+          next(err);
         });
-      } else {
-        const error = new Error("Transakcja została odrzucona.");
-        error.statusCode = 422;
-        throw error;
-      }
-    })
-    .then(() => {
-      res.json({ received: true });
-    })
-    .catch((err) => {
-      if (!err.statusCode) {
-        err.statusCode = 501;
-        err.message = "Błąd podczas aktualizacji zamówienia.";
-      }
-      next(err);
     });
 };
 

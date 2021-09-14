@@ -8,6 +8,7 @@ const Opinion = require("../models/opinion");
 const Report = require("../models/reports");
 const Service = require("../models/service");
 const RaportSMS = require("../models/raportSMS");
+const PaymentsHistory = require("../models/PaymentsHistory");
 const Communiting = require("../models/Communiting");
 const mongoose = require("mongoose");
 const User = require("../models/user");
@@ -5722,14 +5723,12 @@ exports.companyTransakcjonHistory = (req, res, next) => {
   Company.findOne({
     _id: companyId,
   })
-    .select("_id payments owner")
-    .populate("payments.coinsId", "-userCreated")
-    .populate("payments.invoiceId", "")
+    .select("_id owner")
     .then((resultCompanyDoc) => {
       if (!!resultCompanyDoc) {
         let hasPermission = resultCompanyDoc.owner == userId;
         if (hasPermission) {
-          return resultCompanyDoc;
+          return true;
         } else {
           const error = new Error("Brak dostępu.");
           error.statusCode = 401;
@@ -5741,10 +5740,17 @@ exports.companyTransakcjonHistory = (req, res, next) => {
         throw error;
       }
     })
-    .then((companyData) => {
-      res.status(201).json({
-        companyPayments: companyData.payments,
-      });
+    .then(() => {
+      return PaymentsHistory.find({
+        companyId: companyId,
+      })
+        .populate("coinsId", "-userCreated")
+        .populate("invoiceId", "")
+        .then((companyPayments) => {
+          res.status(201).json({
+            companyPayments: companyPayments,
+          });
+        });
     })
 
     .catch((err) => {
