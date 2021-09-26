@@ -4332,11 +4332,10 @@ exports.addWorkerClientReserwation = (req, res, next) => {
           "company",
           "linkPath name services._id services.serviceColor _id companyStamps"
         )
-        .populate("fromUser", "name surname _id stamps")
         .populate(
           {
-            path: "toWorkerUserId",
-            select: "name surname _id",
+            path: "fromUser",
+            select: "name surname _id stamps",
           },
           async (err, resultReserwationPopulate) => {
             await notifications.updateAllCollection({
