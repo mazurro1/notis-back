@@ -1008,7 +1008,7 @@ exports.edit = (req, res, next) => {
                     ).toString("base64");
                     return User.countDocuments({
                       phone: hashedPhoneNumber,
-                    }).then((countUsersPhone) => {
+                    }).then(async (countUsersPhone) => {
                       if (!!!countUsersPhone) {
                         const isPhoneInWhiteList =
                           user.whiteListVerifiedPhones.some(
@@ -1016,6 +1016,57 @@ exports.edit = (req, res, next) => {
                           );
                         if (isPhoneInWhiteList) {
                           user.phoneVerified = true;
+
+                          await Communiting.updateMany(
+                            {
+                              userId: null,
+                              phone: hashedPhoneNumber,
+                              isDeleted: { $in: [false, null] },
+                            },
+                            {
+                              $set: {
+                                userId: user._id,
+                                email: null,
+                                phone: null,
+                                name: null,
+                                surname: null,
+                              },
+                            }
+                          );
+
+                          await Service.updateMany(
+                            {
+                              userId: null,
+                              phone: hashedPhoneNumber,
+                              isDeleted: { $in: [false, null] },
+                            },
+                            {
+                              $set: {
+                                userId: user._id,
+                                email: null,
+                                phone: null,
+                                name: null,
+                                surname: null,
+                              },
+                            }
+                          );
+
+                          await Reserwation.updateMany(
+                            {
+                              fromUser: null,
+                              phone: hashedPhoneNumber,
+                              isDeleted: { $in: [false, null] },
+                            },
+                            {
+                              $set: {
+                                fromUser: user._id,
+                                email: null,
+                                phone: null,
+                                name: null,
+                                surname: null,
+                              },
+                            }
+                          );
                         } else {
                           const randomCode = makeid(6);
                           const dateVerifiedPhoneCompany = new Date(
@@ -2211,12 +2262,8 @@ exports.verifiedUserPhone = (req, res, next) => {
     .then((userData) => {
       if (!!userData) {
         if (!!userData.codeVerifiedPhone) {
-          const unhashedPhone = Buffer.from(userData.phone, "base64").toString(
-            "utf-8"
-          );
-
           return User.countDocuments({
-            phone: unhashedPhone,
+            phone: userData.phone,
           }).then((countUsersWithThisPhone) => {
             if (!!!countUsersWithThisPhone) {
               const codeToVerified = Buffer.from(
@@ -2267,6 +2314,66 @@ exports.verifiedUserPhone = (req, res, next) => {
       userData.phoneVerified = true;
       userData.whiteListVerifiedPhones.push(userData.phone);
       return userData.save();
+    })
+    .then((userDoc) => {
+      return Communiting.updateMany(
+        {
+          userId: null,
+          phone: userDoc.phone,
+          isDeleted: { $in: [false, null] },
+        },
+        {
+          $set: {
+            userId: userDoc._id,
+            email: null,
+            phone: null,
+            name: null,
+            surname: null,
+          },
+        }
+      ).then(() => {
+        return userDoc;
+      });
+    })
+    .then((userDoc) => {
+      return Service.updateMany(
+        {
+          userId: null,
+          phone: userDoc.phone,
+          isDeleted: { $in: [false, null] },
+        },
+        {
+          $set: {
+            userId: userDoc._id,
+            email: null,
+            phone: null,
+            name: null,
+            surname: null,
+          },
+        }
+      ).then(() => {
+        return userDoc;
+      });
+    })
+    .then((userDoc) => {
+      return Reserwation.updateMany(
+        {
+          fromUser: null,
+          phone: userDoc.phone,
+          isDeleted: { $in: [false, null] },
+        },
+        {
+          $set: {
+            fromUser: userDoc._id,
+            email: null,
+            phone: null,
+            name: null,
+            surname: null,
+          },
+        }
+      ).then(() => {
+        return userDoc;
+      });
     })
     .then((userDoc) => {
       const propsGenerator = generateEmail.generateContentEmail({
