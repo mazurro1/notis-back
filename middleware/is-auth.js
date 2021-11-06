@@ -13,7 +13,7 @@ module.exports = (req, res, next) => {
   try {
     decodedToken = jwt.verify(token, TOKEN_PASSWORD); // wprowadzamy tajne hasło dzięki któremu możemy zdekodowac
   } catch (err) {
-    err.statusCode = 500;
+    err.statusCode = 401;
     throw err;
   }
   if (!!!decodedToken) {
